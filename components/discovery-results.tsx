@@ -7,12 +7,14 @@ interface DiscoveryResultsProps {
 
 const statusLabel: Record<string, string> = {
   panel: "Panel detected",
+  "not-panel": "Not Cubixx",
   "no-response": "No response",
   error: "Error",
 };
 
 const badgeClass: Record<string, string> = {
   panel: styles.badgePanel,
+  "not-panel": styles.badgeNotPanel,
   "no-response": styles.badgeNoResponse,
   error: styles.badgeError,
 };
@@ -34,6 +36,10 @@ export default function DiscoveryResults({ data }: DiscoveryResultsProps) {
         <div className={styles.summaryItem}>
           <h4>Panels found</h4>
           <p className={styles.summaryPanel}>{summary.panelsFound}</p>
+        </div>
+        <div className={styles.summaryItem}>
+          <h4>Non Cubixx (HTTP 200)</h4>
+          <p className={styles.summaryNeutral}>{summary.notPanels}</p>
         </div>
         <div className={styles.summaryItem}>
           <h4>No response</h4>

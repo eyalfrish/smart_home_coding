@@ -8,7 +8,10 @@ import type {
 
 export const runtime = "nodejs";
 
-const REQUEST_TIMEOUT_MS = 1200;
+const REQUEST_TIMEOUT_MS = 1600;
+const MAX_CONCURRENCY = 10;
+const RETRY_LIMIT = 1;
+const RETRY_DELAY_MS = 200;
 const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 export async function POST(request: Request) {
@@ -28,12 +31,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: validationError }, { status: 400 });
   }
 
-  const targets: Promise<DiscoveryResult>[] = [];
+  const targets: string[] = [];
   for (let lastOctet = body.start; lastOctet <= body.end; lastOctet += 1) {
-    targets.push(checkHost(`${body.baseIp}.${lastOctet}`));
+    targets.push(`${body.baseIp}.${lastOctet}`);
   }
 
-  const results = await Promise.all(targets);
+  const results = await runDiscovery(targets);
   const summary = buildSummary(body, results);
 
   const response: DiscoveryResponse = {
@@ -82,6 +85,46 @@ function validatePayload(payload: DiscoveryRequest): string | null {
   return null;
 }
 
+async function runDiscovery(targets: string[]): Promise<DiscoveryResult[]> {
+  const results: DiscoveryResult[] = Array(targets.length);
+  let nextIndex = 0;
+
+  const workers = Array.from({
+    length: Math.min(MAX_CONCURRENCY, targets.length),
+  }).map(async () => {
+    while (true) {
+      const currentIndex = nextIndex;
+      if (currentIndex >= targets.length) {
+        break;
+      }
+      nextIndex += 1;
+
+      const ip = targets[currentIndex];
+      results[currentIndex] = await checkHostWithRetry(ip);
+      // slight pause to avoid hammering all panels simultaneously
+      await delay(20);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+async function checkHostWithRetry(ip: string): Promise<DiscoveryResult> {
+  let attempt = 0;
+  while (attempt <= RETRY_LIMIT) {
+    const result = await checkHost(ip);
+    if (result.status !== "no-response" || attempt === RETRY_LIMIT) {
+      return result;
+    }
+    attempt += 1;
+    await delay(RETRY_DELAY_MS);
+  }
+
+  // Should not reach here, but return a fallback if it does.
+  return { ip, status: "no-response", errorMessage: "No response" };
+}
+
 async function checkHost(ip: string): Promise<DiscoveryResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -95,7 +138,14 @@ async function checkHost(ip: string): Promise<DiscoveryResult> {
     });
 
     if (response.status === 200) {
-      return { ip, status: "panel", httpStatus: response.status };
+      const html = await response.text();
+      const panel = isPanelHtml(html);
+      return {
+        ip,
+        status: panel ? "panel" : "not-panel",
+        httpStatus: response.status,
+        errorMessage: panel ? undefined : "HTML does not look like Cubixx",
+      };
     }
 
     return {
@@ -123,6 +173,10 @@ async function checkHost(ip: string): Promise<DiscoveryResult> {
   }
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function buildSummary(
   payload: DiscoveryRequest,
   results: DiscoveryResult[]
@@ -133,6 +187,7 @@ function buildSummary(
     end: payload.end,
     totalChecked: results.length,
     panelsFound: 0,
+    notPanels: 0,
     noResponse: 0,
     errors: 0,
   };
@@ -140,6 +195,8 @@ function buildSummary(
   for (const result of results) {
     if (result.status === "panel") {
       summary.panelsFound += 1;
+    } else if (result.status === "not-panel") {
+      summary.notPanels += 1;
     } else if (result.status === "no-response") {
       summary.noResponse += 1;
     } else if (result.status === "error") {
@@ -148,5 +205,13 @@ function buildSummary(
   }
 
   return summary;
+}
+
+// Treat an IP as a "panel" only if its HTML clearly looks like a Cubixx controller.
+// This is intentionally strict: any non-Cubixx page (including Control4 or other devices)
+// will be classified as "not-panel" even if it returns HTTP 200.
+function isPanelHtml(html: string): boolean {
+  const lower = html.toLowerCase();
+  return lower.includes("cubixx") || lower.includes("cubixx controller");
 }
 

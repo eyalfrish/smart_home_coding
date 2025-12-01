@@ -1,4 +1,4 @@
-export type DiscoveryStatus = "panel" | "no-response" | "error";
+export type DiscoveryStatus = "panel" | "not-panel" | "no-response" | "error";
 
 export interface DiscoveryRequest {
   baseIp: string;
@@ -19,6 +19,7 @@ export interface DiscoverySummary {
   end: number;
   totalChecked: number;
   panelsFound: number;
+  notPanels: number;
   noResponse: number;
   errors: number;
 }

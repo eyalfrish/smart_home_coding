@@ -38,6 +38,14 @@ The Next.js dev server runs on `http://localhost:3000` by default.
 2. Adjust the base IP or last-octet range if needed (defaults: `10.88.99.201-244`).
 3. Click **Discover**.
 4. Watch the summary counters and per-IP table update once the scan finishes.
+5. Re-run discovery whenever you need a fresh snapshot—the scanner only performs HTTP GETs and never modifies the panels.
+
+### Discovery behavior
+
+- Requests are issued from the server in small batches with short delays to avoid overwhelming embedded devices.
+- Each IP is retried once if it fails to respond, reducing flaky “no response” results while still completing quickly.
+- A 1.6 s timeout guards every request so the whole scan stays responsive even if certain IPs never answer.
+- An address is marked as a panel only when the HTML clearly mentions “Cubixx” (case-insensitive); any other HTTP 200 page is reported as “Not Cubixx”.
 
 ## Future Plans
 
