@@ -1,43 +1,47 @@
-# Smart Home Panels Dashboard
+# Smart Lighting Dashboard
 
-A dashboard that discovers and aggregates all smart switch-panels in the house, displays their metadata, and allows navigation into each panel’s local Web UI and back. This repo will eventually support batch operations, device scanning, and reverse-engineered communication (REST/WebSocket) with each switch panel.
+This repository will grow into a smart-lighting hub that discovers every smart switch-panel on the local network, aggregates their metadata, and eventually lets you jump into each panel’s native UI and return to a unified dashboard experience.
 
-## Overview
+## Current App: IP Discovery
 
-The Smart Home Panels Dashboard will orchestrate discovery, monitoring, and control flows for every network-connected switch panel on the property. The project will unify metadata aggregation, quick navigation to per-panel UIs, and future automation hooks into a single experience tailored for advanced smart-home setups.
+Iteration 1 focuses on a simple LAN scanner:
 
-## Planned Architecture (high-level)
+- Configure a base IP (three octets) and a start/end range for the final octet.
+- Trigger a discovery run to probe each IP from the server with a short timeout.
+- Review how many IPs responded with HTTP 200 (considered “panels”) versus those that failed or timed out.
+- Inspect a per-IP status table that shows HTTP codes or any error returned by the scan.
 
-- Lightweight Python services handle device discovery, metadata collection, and communication protocol experiments.
-- A modern React/Vite/Next.js frontend renders a responsive dashboard for viewing all panels, drilling into details, and launching local UI sessions.
-- Shared data contracts (REST/WebSocket) will keep the frontend synchronized with discovery updates and batch command responses.
-- Modular adapters will make it easy to add new panel vendors or custom firmware integrations over time.
+The clean API response plus the standalone results table are intentionally designed so that future iterations can render each panel as a card, open it in an iframe, and provide “enter panel” / “back to dashboard” navigation without reworking the discovery flow.
 
-## Expected Features
+## Prerequisites
 
-- Automatic discovery of all smart switch panels on the home network, with metadata refreshes.
-- Central dashboard with quick navigation into each panel’s local Web UI and a simple path back to the aggregate view.
-- Batch operations for firmware updates, configuration pushes, or diagnostics across multiple panels simultaneously.
-- Extensible communication layer supporting REST, WebSocket, and reverse-engineered protocols as they surface.
+- Node.js >= 18
+- npm >= 9 (bundled with Node)
 
-## Folder Structure
+## Installation
 
-```text
-smart_home_coding/
-├─ backend/          # Python services for discovery and protocol handling (planned)
-├─ frontend/         # React/Vite/Next.js dashboard application (planned)
-├─ docs/             # Design notes, protocol research, and future specifications (planned)
-└─ scripts/          # Utilities for scanning, testing, and deployment workflows (planned)
+```bash
+npm install
 ```
 
-## Setup Instructions
+## Running in Development
 
-Setup scripts and environment configuration will be provided once the backend and frontend scaffolding land. For now, ensure you have Python 3.11+, Node.js 20+, and a modern package manager (npm, pnpm, or yarn) ready to go.
+```bash
+npm run dev
+```
 
-## Roadmap
+The Next.js dev server runs on `http://localhost:3000` by default.
 
-1. Establish automated device discovery service and persistence layer.
-2. Scaffold the frontend dashboard with mock data and navigation flows.
-3. Implement live metadata updates via REST/WebSocket contracts.
-4. Add batch operation tooling with auditing and graceful failure handling.
-5. Expand protocol support based on reverse-engineering findings and vendor collaboration.
+## Usage
+
+1. Open `http://localhost:3000`.
+2. Adjust the base IP or last-octet range if needed (defaults: `10.88.99.201-244`).
+3. Click **Discover**.
+4. Watch the summary counters and per-IP table update once the scan finishes.
+
+## Future Plans
+
+- Show each discovered panel as a card that can launch the live panel UI inside an iframe while offering a “return to dashboard” action.
+- Gradually expand the dashboard to include metadata, health indicators, and navigation among multiple rooms/floors.
+- Add batch operations (e.g., “reset all panels”, “push config”) built on top of the discovery and monitoring primitives established here.
+

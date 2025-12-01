@@ -1,0 +1,24 @@
+:root {
+  --background: #f5f5f5;
+  --foreground: #0f172a;
+  --accent: #2563eb;
+  --panel: #16a34a;
+  --warning: #ea580c;
+  --muted: #94a3b8;
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+main {
+  min-height: 100vh;
+}
+
