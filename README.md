@@ -22,7 +22,7 @@ The Smart Home Panels Dashboard will orchestrate discovery, monitoring, and cont
 
 ## Folder Structure
 
-```
+```text
 smart_home_coding/
 ├─ backend/          # Python services for discovery and protocol handling (planned)
 ├─ frontend/         # React/Vite/Next.js dashboard application (planned)
@@ -41,4 +41,3 @@ Setup scripts and environment configuration will be provided once the backend an
 3. Implement live metadata updates via REST/WebSocket contracts.
 4. Add batch operation tooling with auditing and graceful failure handling.
 5. Expand protocol support based on reverse-engineering findings and vendor collaboration.
-
