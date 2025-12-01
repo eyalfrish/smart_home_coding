@@ -1,0 +1,34 @@
+# Python Artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+build/
+dist/
+pip-wheel-metadata/
+.venv/
+venv/
+
+# Node / JavaScript Artifacts
+node_modules/
+.next/
+dist/
+build/
+
+# Environment Files
+.env
+.env.*
+*.env.local
+
+# IDE and Editor Settings
+.vscode/
+.idea/
+*.swp
+
+# Operating System Files
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
