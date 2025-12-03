@@ -148,6 +148,7 @@ async function checkHost(ip: string): Promise<DiscoveryResult> {
         httpStatus: response.status,
         errorMessage: panel ? undefined : "HTML does not look like Cubixx",
         name: panel ? panelName : undefined,
+        panelHtml: panel ? html : undefined,
       };
     }
 

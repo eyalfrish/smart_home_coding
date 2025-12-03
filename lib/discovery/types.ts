@@ -17,6 +17,7 @@ export interface DiscoveryResult {
   httpStatus?: number;
   errorMessage?: string;
   name?: string | null;
+  panelHtml?: string;
 }
 
 export interface DiscoverySummary {
@@ -33,5 +34,15 @@ export interface DiscoverySummary {
 export interface DiscoveryResponse {
   summary: DiscoverySummary;
   results: DiscoveryResult[];
+}
+
+export interface PanelInfo {
+  ip: string;
+  isCubixx: boolean;
+  name?: string;
+  link?: string;
+  baselineFingerprint?: string | null;
+  lastFingerprint?: string | null;
+  touched?: boolean;
 }
 

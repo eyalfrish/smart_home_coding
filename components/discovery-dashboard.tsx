@@ -8,7 +8,10 @@ import styles from "./discovery-dashboard.module.css";
 import type {
   DiscoveryRequest,
   DiscoveryResponse,
+  DiscoveryResult,
+  PanelInfo,
 } from "@/lib/discovery/types";
+import { computePanelFingerprint } from "@/lib/discovery/panel-fingerprint";
 
 const DEFAULTS: DiscoveryRequest = {
   baseIp: "10.88.99",
@@ -58,6 +61,11 @@ export default function DiscoveryDashboard() {
     useState<DiscoveryFormValues>(INITIAL_FORM_VALUES);
   const [lastRequest, setLastRequest] = useState<DiscoveryRequest | null>(null);
   const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(0);
+  const [panelInfoMap, setPanelInfoMap] = useState<Record<string, PanelInfo>>(
+    {}
+  );
+  const [showOnlyCubixx, setShowOnlyCubixx] = useState(false);
+  const [showOnlyTouched, setShowOnlyTouched] = useState(false);
 
   const executeDiscovery = useCallback(
     async (payload: DiscoveryRequest, options?: { background?: boolean }) => {
@@ -67,6 +75,7 @@ export default function DiscoveryDashboard() {
         setError(null);
         setView("discovery");
         setSearchQuery("");
+        setPanelInfoMap({});
       } else {
         setIsRefreshing(true);
       }
@@ -96,7 +105,16 @@ export default function DiscoveryDashboard() {
         }
 
         const body = (await res.json()) as DiscoveryResponse;
-        setResponse(body);
+        setPanelInfoMap((prev) =>
+          mergePanelInfoState(body.results, prev, {
+            resetBaselines: !isBackground,
+          })
+        );
+        const sanitizedResults = body.results.map(({ panelHtml, ...rest }) => rest) as DiscoveryResult[];
+        setResponse({
+          summary: body.summary,
+          results: sanitizedResults,
+        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Unexpected error occurred.";
@@ -236,10 +254,84 @@ export default function DiscoveryDashboard() {
             onPanelsSummaryClick={handlePanelsSummaryClick}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            panelInfoMap={panelInfoMap}
+            showOnlyCubixx={showOnlyCubixx}
+            showOnlyTouched={showOnlyTouched}
+            onShowOnlyCubixxChange={setShowOnlyCubixx}
+            onShowOnlyTouchedChange={setShowOnlyTouched}
           />
         </>
       )}
     </div>
   );
+}
+
+function mergePanelInfoState(
+  results: DiscoveryResult[],
+  existing: Record<string, PanelInfo>,
+  options: { resetBaselines: boolean }
+): Record<string, PanelInfo> {
+  if (results.length === 0) {
+    return options.resetBaselines ? {} : existing;
+  }
+
+  const next: Record<string, PanelInfo> = options.resetBaselines
+    ? {}
+    : { ...existing };
+
+  for (const result of results) {
+    const previous = options.resetBaselines ? undefined : existing[result.ip];
+    next[result.ip] = buildPanelInfoFromResult(result, previous, {
+      resetBaseline: options.resetBaselines,
+    });
+  }
+
+  return next;
+}
+
+function buildPanelInfoFromResult(
+  result: DiscoveryResult,
+  previous?: PanelInfo,
+  options?: { resetBaseline?: boolean }
+): PanelInfo {
+  const isCubixx = result.status === "panel";
+  const resolvedName = result.name ?? previous?.name;
+  const link = isCubixx ? `http://${result.ip}/` : previous?.link;
+  const shouldReset = options?.resetBaseline ?? false;
+  const hasPanelHtml = Boolean(isCubixx && result.panelHtml);
+
+  let baselineFingerprint = previous?.baselineFingerprint ?? null;
+  let lastFingerprint = previous?.lastFingerprint ?? null;
+  let touched = previous?.touched ?? false;
+
+  if (shouldReset || !previous) {
+    if (hasPanelHtml && result.panelHtml) {
+      const fingerprint = computePanelFingerprint(result.panelHtml);
+      baselineFingerprint = fingerprint;
+      lastFingerprint = fingerprint;
+    } else {
+      baselineFingerprint = null;
+      lastFingerprint = null;
+    }
+    touched = false;
+  } else if (hasPanelHtml && result.panelHtml) {
+    const fingerprint = computePanelFingerprint(result.panelHtml);
+    if (!baselineFingerprint) {
+      baselineFingerprint = fingerprint;
+    } else if (fingerprint !== baselineFingerprint) {
+      touched = true;
+    }
+    lastFingerprint = fingerprint;
+  }
+
+  return {
+    ip: result.ip,
+    isCubixx,
+    name: resolvedName ?? undefined,
+    link,
+    baselineFingerprint,
+    lastFingerprint,
+    touched,
+  };
 }
 
