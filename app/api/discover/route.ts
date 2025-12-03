@@ -9,6 +9,7 @@ import type {
 export const runtime = "nodejs";
 
 const REQUEST_TIMEOUT_MS = 1600;
+const SETTINGS_REQUEST_TIMEOUT_MS = 1500;
 const MAX_CONCURRENCY = 10;
 const RETRY_LIMIT = 1;
 const RETRY_DELAY_MS = 200;
@@ -140,11 +141,13 @@ async function checkHost(ip: string): Promise<DiscoveryResult> {
     if (response.status === 200) {
       const html = await response.text();
       const panel = isPanelHtml(html);
+      const panelName = panel ? await fetchPanelName(ip) : null;
       return {
         ip,
         status: panel ? "panel" : "not-panel",
         httpStatus: response.status,
         errorMessage: panel ? undefined : "HTML does not look like Cubixx",
+        name: panel ? panelName : undefined,
       };
     }
 
@@ -175,6 +178,41 @@ async function checkHost(ip: string): Promise<DiscoveryResult> {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Best-effort scrape of the hostn input on /settings. The main page does not expose
+// the name, so we read it from the settings form when possible.
+async function fetchPanelName(ip: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    SETTINGS_REQUEST_TIMEOUT_MS
+  );
+
+  try {
+    const response = await fetch(`http://${ip}/settings`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    const match = html.match(/id=["']hostn["'][^>]*value=["']([^"']*)["']/i);
+    if (!match) {
+      return null;
+    }
+
+    const rawName = match[1].trim();
+    return rawName || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function buildSummary(

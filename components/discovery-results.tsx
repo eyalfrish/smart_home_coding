@@ -1,8 +1,12 @@
+'use client';
+
+import type { KeyboardEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
 import type { DiscoveryResponse } from "@/lib/discovery/types";
 
 interface DiscoveryResultsProps {
   data: DiscoveryResponse | null;
+  onPanelsSummaryClick?: () => void;
 }
 
 const statusLabel: Record<string, string> = {
@@ -19,12 +23,29 @@ const badgeClass: Record<string, string> = {
   error: styles.badgeError,
 };
 
-export default function DiscoveryResults({ data }: DiscoveryResultsProps) {
+export default function DiscoveryResults({
+  data,
+  onPanelsSummaryClick,
+}: DiscoveryResultsProps) {
   if (!data) {
     return null;
   }
 
   const { summary, results } = data;
+  const canOpenPanelsView =
+    typeof onPanelsSummaryClick === "function" && summary.panelsFound > 0;
+
+  const handlePanelsSummaryKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>
+  ) => {
+    if (!canOpenPanelsView || !onPanelsSummaryClick) {
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onPanelsSummaryClick();
+    }
+  };
 
   return (
     <>
@@ -33,7 +54,16 @@ export default function DiscoveryResults({ data }: DiscoveryResultsProps) {
           <h4>Total IPs checked</h4>
           <p className={styles.summaryAccent}>{summary.totalChecked}</p>
         </div>
-        <div className={styles.summaryItem}>
+        <div
+          className={`${styles.summaryItem} ${
+            canOpenPanelsView ? styles.summaryItemInteractive : ""
+          }`}
+          onClick={canOpenPanelsView ? onPanelsSummaryClick : undefined}
+          onKeyDown={handlePanelsSummaryKeyDown}
+          role={canOpenPanelsView ? "button" : undefined}
+          tabIndex={canOpenPanelsView ? 0 : undefined}
+          aria-disabled={!canOpenPanelsView}
+        >
           <h4>Panels found</h4>
           <p className={styles.summaryPanel}>{summary.panelsFound}</p>
         </div>
@@ -56,6 +86,7 @@ export default function DiscoveryResults({ data }: DiscoveryResultsProps) {
           <thead>
             <tr>
               <th>IP</th>
+              <th>Name</th>
               <th>Status</th>
               <th>HTTP</th>
               <th>Notes</th>
@@ -65,6 +96,7 @@ export default function DiscoveryResults({ data }: DiscoveryResultsProps) {
             {results.map((result) => (
               <tr key={result.ip}>
                 <td>{result.ip}</td>
+                <td>{result.name ?? "—"}</td>
                 <td>
                   <span className={`${styles.badge} ${badgeClass[result.status]}`}>
                     {statusLabel[result.status]}

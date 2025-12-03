@@ -11,6 +11,7 @@ export interface DiscoveryResult {
   status: DiscoveryStatus;
   httpStatus?: number;
   errorMessage?: string;
+  name?: string | null;
 }
 
 export interface DiscoverySummary {

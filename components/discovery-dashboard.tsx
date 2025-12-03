@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DiscoveryForm from "./discovery-form";
 import DiscoveryResults from "./discovery-results";
+import AllPanelsView from "./all-panels-view";
 import styles from "./discovery-dashboard.module.css";
 import type {
   DiscoveryRequest,
@@ -19,10 +20,12 @@ export default function DiscoveryDashboard() {
   const [data, setData] = useState<DiscoveryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [view, setView] = useState<"discovery" | "panels-grid">("discovery");
 
   const handleSubmit = async (payload: DiscoveryRequest) => {
     setIsLoading(true);
     setError(null);
+    setView("discovery");
     try {
       const response = await fetch("/api/discover", {
         method: "POST",
@@ -56,17 +59,38 @@ export default function DiscoveryDashboard() {
     }
   };
 
+  const handlePanelsSummaryClick = () => {
+    if (!data || data.summary.panelsFound === 0) {
+      return;
+    }
+    setView("panels-grid");
+  };
+
+  const handleBackToDiscovery = () => {
+    setView("discovery");
+  };
+
+  const panelResults = data?.results ?? [];
+
   return (
     <div className={styles.card}>
-      <DiscoveryForm
-        defaults={DEFAULTS}
-        disabled={isLoading}
-        isLoading={isLoading}
-        onSubmit={handleSubmit}
-      />
-      {error && <div className={styles.errorBox}>{error}</div>}
-      {/* In a future iteration these results will drive per-panel cards & iframes. */}
-      <DiscoveryResults data={data} />
+      {view === "panels-grid" ? (
+        <AllPanelsView panels={panelResults} onBack={handleBackToDiscovery} />
+      ) : (
+        <>
+          <DiscoveryForm
+            defaults={DEFAULTS}
+            disabled={isLoading}
+            isLoading={isLoading}
+            onSubmit={handleSubmit}
+          />
+          {error && <div className={styles.errorBox}>{error}</div>}
+          <DiscoveryResults
+            data={data}
+            onPanelsSummaryClick={handlePanelsSummaryClick}
+          />
+        </>
+      )}
     </div>
   );
 }
