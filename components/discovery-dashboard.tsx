@@ -21,11 +21,13 @@ export default function DiscoveryDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<"discovery" | "panels-grid">("discovery");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleSubmit = async (payload: DiscoveryRequest) => {
     setIsLoading(true);
     setError(null);
     setView("discovery");
+    setSearchQuery("");
     try {
       const response = await fetch("/api/discover", {
         method: "POST",
@@ -75,7 +77,12 @@ export default function DiscoveryDashboard() {
   return (
     <div className={styles.card}>
       {view === "panels-grid" ? (
-        <AllPanelsView panels={panelResults} onBack={handleBackToDiscovery} />
+        <AllPanelsView
+          panels={panelResults}
+          onBack={handleBackToDiscovery}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
       ) : (
         <>
           <DiscoveryForm
@@ -88,6 +95,8 @@ export default function DiscoveryDashboard() {
           <DiscoveryResults
             data={data}
             onPanelsSummaryClick={handlePanelsSummaryClick}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
         </>
       )}

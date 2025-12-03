@@ -5,10 +5,10 @@ export default function Home() {
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
-        <h1>Smart Lighting Discovery</h1>
+        <h1>Cubixx Panel Explorer</h1>
         <p>
-          Scan a range of LAN IPs, discover which addresses host smart switch
-          panels, and review their status in seconds.
+          Scan LAN ranges, pinpoint genuine Cubixx panels, preview their live
+          UI, and jump straight into management from one dashboard.
         </p>
       </section>
       <section className={styles.content}>

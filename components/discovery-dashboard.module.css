@@ -123,6 +123,26 @@
   overflow-x: auto;
 }
 
+.searchRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 1rem 0;
+  min-width: 220px;
+}
+
+.searchLabel {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.searchInput {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  font-size: 0.95rem;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -222,7 +242,7 @@
 
 .panelGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
 }
 
@@ -255,7 +275,7 @@
 
 .panelFrame {
   width: 100%;
-  min-height: 240px;
+  min-height: 320px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 12px;
   background: #f8fafc;

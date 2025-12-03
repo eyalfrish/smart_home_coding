@@ -7,6 +7,8 @@ import type { DiscoveryResponse } from "@/lib/discovery/types";
 interface DiscoveryResultsProps {
   data: DiscoveryResponse | null;
   onPanelsSummaryClick?: () => void;
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
 }
 
 const statusLabel: Record<string, string> = {
@@ -26,6 +28,8 @@ const badgeClass: Record<string, string> = {
 export default function DiscoveryResults({
   data,
   onPanelsSummaryClick,
+  searchQuery,
+  onSearchChange,
 }: DiscoveryResultsProps) {
   if (!data) {
     return null;
@@ -34,6 +38,19 @@ export default function DiscoveryResults({
   const { summary, results } = data;
   const canOpenPanelsView =
     typeof onPanelsSummaryClick === "function" && summary.panelsFound > 0;
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredResults = results.filter((result) => {
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    const name = result.name?.toLowerCase() ?? "";
+    return (
+      result.ip.toLowerCase().includes(normalizedQuery) ||
+      name.includes(normalizedQuery)
+    );
+  });
 
   const handlePanelsSummaryKeyDown = (
     event: KeyboardEvent<HTMLDivElement>
@@ -82,6 +99,19 @@ export default function DiscoveryResults({
       </div>
 
       <div className={styles.tableWrapper}>
+        <div className={styles.searchRow}>
+          <label className={styles.searchLabel} htmlFor="results-search">
+            Search
+          </label>
+          <input
+            id="results-search"
+            type="text"
+            className={styles.searchInput}
+            placeholder="Filter by IP or name"
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -93,19 +123,27 @@ export default function DiscoveryResults({
             </tr>
           </thead>
           <tbody>
-            {results.map((result) => (
-              <tr key={result.ip}>
-                <td>{result.ip}</td>
-                <td>{result.name ?? "—"}</td>
-                <td>
-                  <span className={`${styles.badge} ${badgeClass[result.status]}`}>
-                    {statusLabel[result.status]}
-                  </span>
-                </td>
-                <td>{result.httpStatus ?? "—"}</td>
-                <td>{result.errorMessage ?? "—"}</td>
+            {filteredResults.length === 0 ? (
+              <tr>
+                <td colSpan={5}>No entries match that search.</td>
               </tr>
-            ))}
+            ) : (
+              filteredResults.map((result) => (
+                <tr key={result.ip}>
+                  <td>{result.ip}</td>
+                  <td>{result.name ?? "—"}</td>
+                  <td>
+                    <span
+                      className={`${styles.badge} ${badgeClass[result.status]}`}
+                    >
+                      {statusLabel[result.status]}
+                    </span>
+                  </td>
+                  <td>{result.httpStatus ?? "—"}</td>
+                  <td>{result.errorMessage ?? "—"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
