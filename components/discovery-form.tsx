@@ -1,33 +1,36 @@
 'use client';
 
-import { FormEvent, useState } from "react";
+import { FormEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryRequest } from "@/lib/discovery/types";
+
+export interface DiscoveryFormValues {
+  baseIp: string;
+  start: string;
+  end: string;
+}
 
 interface DiscoveryFormProps {
-  defaults: DiscoveryRequest;
+  values: DiscoveryFormValues;
   disabled: boolean;
   isLoading: boolean;
-  onSubmit: (payload: DiscoveryRequest) => void;
+  onChange: (values: DiscoveryFormValues) => void;
+  onSubmit: () => void;
 }
 
 export default function DiscoveryForm({
-  defaults,
+  values,
   disabled,
   isLoading,
+  onChange,
   onSubmit,
 }: DiscoveryFormProps) {
-  const [baseIp, setBaseIp] = useState(defaults.baseIp);
-  const [start, setStart] = useState<string>(String(defaults.start));
-  const [end, setEnd] = useState<string>(String(defaults.end));
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSubmit({
-      baseIp: baseIp.trim(),
-      start: Number(start),
-      end: Number(end),
-    });
+    onSubmit();
+  };
+
+  const handleFieldChange = (field: keyof DiscoveryFormValues, value: string) => {
+    onChange({ ...values, [field]: value });
   };
 
   return (
@@ -40,8 +43,8 @@ export default function DiscoveryForm({
             name="baseIp"
             inputMode="numeric"
             autoComplete="off"
-            value={baseIp}
-            onChange={(event) => setBaseIp(event.target.value)}
+            value={values.baseIp}
+            onChange={(event) => handleFieldChange("baseIp", event.target.value)}
             disabled={disabled}
             placeholder="10.88.99"
             required
@@ -54,8 +57,8 @@ export default function DiscoveryForm({
             name="start"
             min={0}
             max={254}
-            value={start}
-            onChange={(event) => setStart(event.target.value)}
+            value={values.start}
+            onChange={(event) => handleFieldChange("start", event.target.value)}
             disabled={disabled}
             required
           />
@@ -67,8 +70,8 @@ export default function DiscoveryForm({
             name="end"
             min={0}
             max={254}
-            value={end}
-            onChange={(event) => setEnd(event.target.value)}
+            value={values.end}
+            onChange={(event) => handleFieldChange("end", event.target.value)}
             disabled={disabled}
             required
           />

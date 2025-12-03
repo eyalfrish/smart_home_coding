@@ -37,23 +37,21 @@ export default function AllPanelsView({
         ← Back to discovery
       </button>
       <div className={styles.panelsHeader}>
-        <div>
-          <h2>All Cubixx Panels</h2>
-          <p>{count === 1 ? "1 panel shown" : `${count} panels shown`}</p>
-        </div>
-        <div className={styles.searchRow}>
-          <label className={styles.searchLabel} htmlFor="panels-search">
-            Search
-          </label>
-          <input
-            id="panels-search"
-            type="text"
-            className={styles.searchInput}
-            placeholder="Filter by IP or name"
-            value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-          />
-        </div>
+        <h2>All Cubixx Panels</h2>
+        <p>{count === 1 ? "1 panel shown" : `${count} panels shown`}</p>
+      </div>
+      <div className={styles.searchRow}>
+        <label className={styles.searchLabel} htmlFor="panels-search">
+          Search
+        </label>
+        <input
+          id="panels-search"
+          type="text"
+          className={styles.searchInput}
+          placeholder="Filter by IP or name"
+          value={searchQuery}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
       </div>
       {count === 0 ? (
         <div className={styles.emptyPanelsState}>

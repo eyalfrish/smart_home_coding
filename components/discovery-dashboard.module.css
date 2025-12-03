@@ -129,6 +129,7 @@
   gap: 0.35rem;
   margin: 1rem 0;
   min-width: 220px;
+  width: 100%;
 }
 
 .searchLabel {
@@ -141,6 +142,7 @@
   border-radius: 8px;
   border: 1px solid rgba(15, 23, 42, 0.18);
   font-size: 0.95rem;
+  width: 100%;
 }
 
 .table {
@@ -189,6 +191,20 @@
   color: var(--warning);
 }
 
+.badgePending {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--muted);
+}
+
+.panelLink {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.panelLink:hover {
+  text-decoration: none;
+}
+
 .errorBox {
   margin-top: 1rem;
   padding: 1rem;
@@ -196,6 +212,30 @@
   border: 1px solid rgba(234, 88, 12, 0.4);
   border-radius: 12px;
   color: var(--warning);
+}
+
+.refreshControls {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.refreshLabel {
+  font-weight: 600;
+}
+
+.refreshInput {
+  width: 110px;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+}
+
+.refreshHint {
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .panelsView {
@@ -216,10 +256,9 @@
 
 .panelsHeader {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
 }
 
 .panelsHeader h2 {

@@ -16,6 +16,7 @@ const statusLabel: Record<string, string> = {
   "not-panel": "Not Cubixx",
   "no-response": "No response",
   error: "Error",
+  pending: "Scanning…",
 };
 
 const badgeClass: Record<string, string> = {
@@ -23,6 +24,7 @@ const badgeClass: Record<string, string> = {
   "not-panel": styles.badgeNotPanel,
   "no-response": styles.badgeNoResponse,
   error: styles.badgeError,
+  pending: styles.badgePending,
 };
 
 export default function DiscoveryResults({
@@ -130,7 +132,20 @@ export default function DiscoveryResults({
             ) : (
               filteredResults.map((result) => (
                 <tr key={result.ip}>
-                  <td>{result.ip}</td>
+                  <td>
+                    {result.status === "panel" ? (
+                      <a
+                        href={`http://${result.ip}/`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={styles.panelLink}
+                      >
+                        {result.ip}
+                      </a>
+                    ) : (
+                      result.ip
+                    )}
+                  </td>
                   <td>{result.name ?? "—"}</td>
                   <td>
                     <span
