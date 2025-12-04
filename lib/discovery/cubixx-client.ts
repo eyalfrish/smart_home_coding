@@ -228,6 +228,11 @@ export class CubixxClient {
       switch (event) {
         case "full_state":
           this.fullState = this.parseFullState(parsed);
+          // Debug: log relay/curtain structure to understand configuration
+          console.log(`[${this.ip}] Full state - Relays:`, 
+            this.fullState.relays.map(r => ({ idx: r.index, name: r.name, state: r.state })));
+          console.log(`[${this.ip}] Full state - Curtains:`, 
+            this.fullState.curtains.map(c => ({ idx: c.index, name: c.name, state: c.state })));
           this.onMessage("full_state", this.fullState);
           break;
 

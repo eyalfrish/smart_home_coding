@@ -115,6 +115,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Debug: log connected panels in registry
+  const connectedIps = registry.getConnectedPanelIps();
+  console.log(`[Command] Target IPs: ${targetIps.join(", ")}`);
+  console.log(`[Command] Connected in registry: ${connectedIps.join(", ") || "(none)"}`);
+  console.log(`[Command] Sending: ${JSON.stringify(panelCommand)}`);
+
   // Send the command
   const resultMap = registry.sendCommandToMany(targetIps, panelCommand);
 

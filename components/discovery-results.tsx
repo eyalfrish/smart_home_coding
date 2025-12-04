@@ -1,8 +1,8 @@
 'use client';
 
-import type { KeyboardEvent } from "react";
+import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryResponse, PanelInfo, LivePanelState } from "@/lib/discovery/types";
+import type { DiscoveryResponse, PanelInfo, LivePanelState, PanelCommand } from "@/lib/discovery/types";
 
 interface DiscoveryResultsProps {
   data: DiscoveryResponse | null;
@@ -15,6 +15,7 @@ interface DiscoveryResultsProps {
   showOnlyTouched: boolean;
   onShowOnlyCubixxChange: (value: boolean) => void;
   onShowOnlyTouchedChange: (value: boolean) => void;
+  onSendCommand?: (ip: string, command: PanelCommand) => Promise<boolean>;
 }
 
 // Short status indicators with icons
@@ -38,7 +39,63 @@ export default function DiscoveryResults({
   showOnlyTouched,
   onShowOnlyCubixxChange,
   onShowOnlyTouchedChange,
+  onSendCommand,
 }: DiscoveryResultsProps) {
+  const [pendingCommands, setPendingCommands] = useState<Set<string>>(new Set());
+
+  const handleLightToggle = useCallback(async (
+    e: MouseEvent,
+    ip: string,
+    relayIndex: number
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!onSendCommand) return;
+    
+    const key = `${ip}-L${relayIndex}`;
+    setPendingCommands(prev => new Set(prev).add(key));
+    
+    try {
+      await onSendCommand(ip, { command: "toggle_relay", index: relayIndex });
+    } finally {
+      setPendingCommands(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, [onSendCommand]);
+
+  const handleShadeAction = useCallback(async (
+    e: MouseEvent,
+    ip: string,
+    curtainIndex: number,
+    requestedAction: "open" | "close",
+    currentState?: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!onSendCommand) return;
+    
+    // If shade is currently moving, send "stop" instead
+    const isMoving = currentState === "opening" || currentState === "closing";
+    const action = isMoving ? "stop" : requestedAction;
+    
+    const key = `${ip}-S${curtainIndex}-${requestedAction}`;
+    setPendingCommands(prev => new Set(prev).add(key));
+    
+    try {
+      await onSendCommand(ip, { command: "curtain", index: curtainIndex, action });
+    } finally {
+      setPendingCommands(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, [onSendCommand]);
 
   if (!data) {
     return null;
@@ -210,34 +267,95 @@ export default function DiscoveryResults({
                     </td>
                     <td>
                       {liveState?.fullState ? (
-                        <div className={styles.entityStates}>
-                          {liveState.fullState.relays.slice(0, 6).map((relay) => (
-                            <span
-                              key={`r${relay.index}`}
-                              className={`${styles.entityBadge} ${relay.state ? styles.on : styles.off}`}
-                              title={relay.name || `Relay ${relay.index + 1}`}
-                            >
-                              R{relay.index + 1}: {relay.state ? "ON" : "OFF"}
-                            </span>
-                          ))}
-                          {liveState.fullState.curtains.slice(0, 4).map((curtain) => (
-                            <span
-                              key={`c${curtain.index}`}
-                              className={`${styles.entityBadge} ${
-                                curtain.state === "open" ? styles.open :
-                                curtain.state === "closed" ? styles.closed : ""
-                              }`}
-                              title={curtain.name || `Curtain ${curtain.index + 1}`}
-                            >
-                              C{curtain.index + 1}: {curtain.state}
-                            </span>
-                          ))}
-                          {liveState.fullState.relays.length > 6 && (
-                            <span className={styles.entityBadge}>
-                              +{liveState.fullState.relays.length - 6} more
-                            </span>
-                          )}
-                        </div>
+                        (() => {
+                          // Hardware constraints:
+                          // - Each panel has 6 relay slots total
+                          // - Each LIGHT uses 1 slot
+                          // - Each SHADE uses 2 slots (for up/down motors)
+                          // So max_shades = floor((6 - light_count) / 2)
+                          
+                          const TOTAL_RELAY_SLOTS = 6;
+                          const SLOTS_PER_SHADE = 2;
+                          
+                          // A relay is a "light" if its name is NOT a generic "Relay N" pattern
+                          const isConfiguredRelay = (relay: { name?: string }) => {
+                            if (!relay.name || relay.name.trim() === "") return false;
+                            // Generic unconfigured names match "Relay N" where N is a number
+                            if (/^Relay\s+\d+$/i.test(relay.name.trim())) return false;
+                            return true;
+                          };
+                          
+                          // A curtain is configured if its name is NOT a generic "Curtain N" pattern
+                          const isConfiguredCurtain = (curtain: { name?: string }) => {
+                            if (!curtain.name || curtain.name.trim() === "") return false;
+                            // Generic unconfigured names match "Curtain N" where N is a number
+                            if (/^Curtain\s+\d+$/i.test(curtain.name.trim())) return false;
+                            return true;
+                          };
+                          
+                          const lightRelays = liveState.fullState.relays.filter(isConfiguredRelay);
+                          const configuredCurtains = liveState.fullState.curtains.filter(isConfiguredCurtain);
+                          
+                          // Calculate max possible shades based on remaining relay slots
+                          const usedSlots = lightRelays.length;
+                          const availableSlots = TOTAL_RELAY_SLOTS - usedSlots;
+                          const maxPossibleShades = Math.floor(availableSlots / SLOTS_PER_SHADE);
+                          
+                          // Only show curtains up to the max possible (in case of phantom entries)
+                          const validCurtains = configuredCurtains.slice(0, maxPossibleShades);
+                          
+                          return (
+                            <div className={styles.entityStates}>
+                              {/* Lights (Relays that are actual lights) */}
+                              {lightRelays.map((relay) => {
+                                const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
+                                return (
+                                  <button
+                                    key={`L${relay.index}`}
+                                    className={`${styles.lightButton} ${relay.state ? styles.lightOn : styles.lightOff} ${isPending ? styles.pending : ""}`}
+                                    title={`${relay.name} - Click to toggle`}
+                                    onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
+                                    disabled={isPending || !onSendCommand}
+                                  >
+                                    L{relay.index + 1}
+                                  </button>
+                                );
+                              })}
+                              {/* Shades (Curtains) */}
+                              {validCurtains.map((curtain) => {
+                                const openPending = pendingCommands.has(`${result.ip}-S${curtain.index}-open`);
+                                const closePending = pendingCommands.has(`${result.ip}-S${curtain.index}-close`);
+                                const isOpen = curtain.state === "open";
+                                const isClosed = curtain.state === "closed";
+                                const isMoving = curtain.state === "opening" || curtain.state === "closing";
+                                return (
+                                  <span key={`S${curtain.index}`} className={styles.shadeGroup}>
+                                    <button
+                                      className={`${styles.shadeButton} ${isOpen ? styles.shadeActive : ""} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
+                                      title={`${curtain.name} - ${isMoving ? "Stop" : "Open"}`}
+                                      onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
+                                      disabled={openPending || !onSendCommand}
+                                    >
+                                      {isMoving ? "■" : `S${curtain.index + 1}↑`}
+                                    </button>
+                                    <button
+                                      className={`${styles.shadeButton} ${isClosed ? styles.shadeActive : ""} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
+                                      title={`${curtain.name} - ${isMoving ? "Stop" : "Close"}`}
+                                      onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
+                                      disabled={closePending || !onSendCommand}
+                                    >
+                                      {isMoving ? "■" : `S${curtain.index + 1}↓`}
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                              {/* Show dash if no configured entities */}
+                              {lightRelays.length === 0 && validCurtains.length === 0 && (
+                                <span style={{ color: "var(--muted)" }}>—</span>
+                              )}
+                            </div>
+                          );
+                        })()
                       ) : result.status === "panel" ? (
                         <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
                           Connecting...

@@ -11,6 +11,7 @@ import type {
   DiscoveryResult,
   PanelInfo,
   LivePanelState,
+  PanelCommand,
 } from "@/lib/discovery/types";
 import { usePanelStream } from "@/lib/hooks/use-panel-stream";
 
@@ -279,6 +280,31 @@ export default function DiscoveryDashboard() {
     setView("discovery");
   };
 
+  // Send a command to a specific panel
+  const sendCommand = useCallback(async (ip: string, command: PanelCommand): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/panels/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ips: [ip],
+          ...command,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error(`[Command] Failed to send ${command.command} to ${ip}: HTTP ${res.status}`);
+        return false;
+      }
+
+      const data = await res.json();
+      return data.successCount > 0;
+    } catch (err) {
+      console.error(`[Command] Error sending ${command.command} to ${ip}:`, err);
+      return false;
+    }
+  }, []);
+
   const panelResults = response?.results ?? [];
 
   return (
@@ -329,6 +355,7 @@ export default function DiscoveryDashboard() {
             showOnlyTouched={showOnlyTouched}
             onShowOnlyCubixxChange={setShowOnlyCubixx}
             onShowOnlyTouchedChange={setShowOnlyTouched}
+            onSendCommand={sendCommand}
           />
         </>
       )}

@@ -284,15 +284,22 @@ class PanelRegistryImpl {
   }
 }
 
-// Singleton instance
-let registryInstance: PanelRegistryImpl | null = null;
+// Use globalThis to ensure the singleton persists across Next.js API routes
+// This is necessary because Next.js may create separate module instances for each route
+const REGISTRY_KEY = Symbol.for("smart_home_panel_registry");
+
+interface GlobalWithRegistry {
+  [REGISTRY_KEY]?: PanelRegistryImpl;
+}
 
 /** Get the global panel registry instance */
 export function getPanelRegistry(): PanelRegistryImpl {
-  if (!registryInstance) {
-    registryInstance = new PanelRegistryImpl();
+  const globalObj = globalThis as GlobalWithRegistry;
+  if (!globalObj[REGISTRY_KEY]) {
+    console.log("[Registry] Creating new global panel registry instance");
+    globalObj[REGISTRY_KEY] = new PanelRegistryImpl();
   }
-  return registryInstance;
+  return globalObj[REGISTRY_KEY];
 }
 
 // Export type for use elsewhere
