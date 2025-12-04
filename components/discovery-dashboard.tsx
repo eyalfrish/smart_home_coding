@@ -109,8 +109,8 @@ export default function DiscoveryDashboard() {
     });
   }, []);
 
-  // Real-time panel stream - only connect AFTER discovery is complete
-  // This prevents constant reconnections during scanning
+  // Real-time panel stream
+  // We wait until discovery completes to avoid constant reconnections as IPs are found
   const { isConnected: isStreamConnected, panelStates, error: streamError } = usePanelStream({
     ips: discoveredPanelIps,
     enabled: !isLoading && discoveredPanelIps.length > 0,
@@ -202,6 +202,45 @@ export default function DiscoveryDashboard() {
                 }
               }
 
+              setResponse({
+                summary: { ...summary },
+                results: orderedResults,
+              });
+            } else if (message.type === "update") {
+              // Rescue pass found a panel that was previously missed
+              const result = message.data as DiscoveryResult;
+              const previousResult = resultsMap.get(result.ip);
+              
+              // Update summary counts (subtract old, add new)
+              if (previousResult?.status === "no-response") summary.noResponse--;
+              if (result.status === "panel") summary.panelsFound++;
+              else if (result.status === "not-panel") summary.notPanels++;
+              else if (result.status === "error") summary.errors++;
+              
+              resultsMap.set(result.ip, result);
+              console.log(`[Discovery] Rescue found: ${result.ip} = ${result.status}`);
+              
+              // Update panel info map if it's a panel
+              if (result.status === "panel") {
+                setPanelInfoMap((prev) => ({
+                  ...prev,
+                  [result.ip]: buildPanelInfoFromResult(result, undefined, { resetBaseline: true }),
+                }));
+              }
+              
+              // Rebuild results
+              const orderedResults: DiscoveryResult[] = [];
+              for (let octet = payload.start; octet <= payload.end; octet++) {
+                const ip = `${payload.baseIp}.${octet}`;
+                const existing = resultsMap.get(ip);
+                if (existing) {
+                  const { panelHtml, ...rest } = existing;
+                  orderedResults.push(rest as DiscoveryResult);
+                } else {
+                  orderedResults.push({ ip, status: "initial" });
+                }
+              }
+              
               setResponse({
                 summary: { ...summary },
                 results: orderedResults,
@@ -331,7 +370,7 @@ export default function DiscoveryDashboard() {
                 {isLoading
                   ? "○ Scanning network..."
                   : isStreamConnected
-                    ? `● Live: ${panelStates.size}/${discoveredPanelIps.length} panels connected`
+                    ? `● Live: ${discoveredPanelIps.filter(ip => panelStates.get(ip)?.connectionStatus === "connected").length}/${discoveredPanelIps.length} panels connected`
                     : "○ Connecting to panels..."}
               </span>
               {streamError && !isLoading && (

@@ -87,6 +87,15 @@ export async function GET(request: NextRequest) {
       // Register listener
       registry.addListener(listener);
 
+      // Disconnect panels not in the new list (cleanup stale connections)
+      const currentIps = new Set(ips);
+      const connectedIps = registry.getConnectedPanelIps();
+      const staleIps = connectedIps.filter(ip => !currentIps.has(ip));
+      if (staleIps.length > 0) {
+        console.log(`[SSE] Cleaning up ${staleIps.length} stale panels`);
+        staleIps.forEach(ip => registry.disconnectPanel(ip));
+      }
+
       // Connect to requested panels
       console.log(`[SSE] Connecting to panels: ${ips.join(", ")}`);
       registry.connectPanels(ips);
@@ -96,11 +105,9 @@ export async function GET(request: NextRequest) {
         console.log("[SSE] Client disconnected");
         registry.removeListener(listener);
         
-        // Only disconnect panels if no other listeners are active
-        if (registry.getListenerCount() === 0) {
-          console.log("[SSE] No more listeners, disconnecting panels");
-          registry.disconnectAllPanels();
-        }
+        // Keep panel connections alive for faster reconnection
+        // They'll be cleaned up after a timeout or when server restarts
+        // This allows quick recovery when client reconnects
         
         try {
           controller.close();

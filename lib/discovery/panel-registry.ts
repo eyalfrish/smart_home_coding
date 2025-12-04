@@ -32,16 +32,19 @@ class PanelRegistryImpl {
   addListener(listener: SSEListener): void {
     this.listeners.add(listener);
 
-    // Send current state of all connected panels to the new listener
+    // Immediately send current state of ALL panels (including connecting ones)
+    // This allows UI to show progress while panels are still connecting
+    const connectedCount = Array.from(this.states.values())
+      .filter(s => s.connectionStatus === "connected" && s.fullState).length;
+    console.log(`[Registry] New listener added. ${connectedCount}/${this.states.size} panels already connected`);
+    
     Array.from(this.states.entries()).forEach(([ip, state]) => {
-      if (state.connectionStatus === "connected" && state.fullState) {
-        listener({
-          type: "panel_state",
-          ip,
-          timestamp: Date.now(),
-          data: state,
-        });
-      }
+      listener({
+        type: "panel_state",
+        ip,
+        timestamp: Date.now(),
+        data: state,
+      });
     });
   }
 

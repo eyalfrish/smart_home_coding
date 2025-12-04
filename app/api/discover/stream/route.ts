@@ -4,11 +4,12 @@ import type { DiscoveryResult } from "@/lib/discovery/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REQUEST_TIMEOUT_MS = 1600;
-const SETTINGS_REQUEST_TIMEOUT_MS = 1500;
-const MAX_CONCURRENCY = 15;
-const RETRY_LIMIT = 1;
-const RETRY_DELAY_MS = 200;
+const REQUEST_TIMEOUT_MS = 2000;          // Reliable timeout for panels
+const RESCUE_TIMEOUT_MS = 1500;           // Rescue timeout
+const SETTINGS_REQUEST_TIMEOUT_MS = 1200;
+const MAX_CONCURRENCY = 10;               // Lower concurrency = more reliable
+const RETRY_LIMIT = 2;                    // 3 total attempts
+const RETRY_DELAYS_MS = [200, 400, 600];  // Backoff delays
 const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 /**
@@ -89,6 +90,9 @@ export async function GET(request: NextRequest) {
       // Send initial heartbeat to confirm connection
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "heartbeat" })}\n\n`));
 
+      // Track results for final rescue pass
+      const resultsMap = new Map<string, DiscoveryResult>();
+      
       // Worker function - processes IPs from the shared queue
       const worker = async () => {
         while (true) {
@@ -96,6 +100,7 @@ export async function GET(request: NextRequest) {
           if (!ip) break;
 
           const result = await checkHostWithRetry(ip);
+          resultsMap.set(ip, result);
           sendResult(result);
         }
       };
@@ -105,6 +110,33 @@ export async function GET(request: NextRequest) {
       const workers = Array.from({ length: workerCount }, () => worker());
 
       await Promise.all(workers);
+      
+      // Final rescue pass: retry no-response IPs in PARALLEL
+      // This catches panels that were temporarily busy during initial scan
+      const noResponseIps = Array.from(resultsMap.entries())
+        .filter(([, result]) => result.status === "no-response")
+        .map(([ip]) => ip);
+      
+      // Always do rescue pass if we have failures (up to 15 IPs for speed)
+      if (noResponseIps.length > 0 && noResponseIps.length <= 25) {
+        const rescueIps = noResponseIps.slice(0, 15);
+        console.log(`[Discovery] Rescue pass for ${rescueIps.length}/${noResponseIps.length} IPs (parallel)`);
+        
+        // Run rescue checks in parallel
+        const rescueResults = await Promise.all(
+          rescueIps.map(ip => checkHostFast(ip))
+        );
+        
+        for (const result of rescueResults) {
+          if (result.status !== "no-response") {
+            resultsMap.set(result.ip, result);
+            const message = { type: "update", data: result };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
+            console.log(`[Discovery] Rescue found: ${result.ip} = ${result.status}`);
+          }
+        }
+      }
+      
       sendComplete();
     },
   });
@@ -121,19 +153,73 @@ export async function GET(request: NextRequest) {
 
 async function checkHostWithRetry(ip: string): Promise<DiscoveryResult> {
   let attempt = 0;
+  let lastResult: DiscoveryResult = { ip, status: "no-response", errorMessage: "No response" };
+  
   while (attempt <= RETRY_LIMIT) {
     const result = await checkHost(ip);
-    if (result.status !== "no-response" || attempt === RETRY_LIMIT) {
+    lastResult = result;
+    
+    // Success or definitive result - return immediately
+    if (result.status === "panel" || result.status === "not-panel") {
       return result;
     }
+    
+    // If error (not timeout), might be worth retrying
+    // If no-response (timeout), definitely retry
+    if (attempt < RETRY_LIMIT) {
+      const delayMs = RETRY_DELAYS_MS[attempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+      await delay(delayMs);
+    }
     attempt++;
-    await delay(RETRY_DELAY_MS);
   }
-  return { ip, status: "no-response", errorMessage: "No response after retries" };
+  
+  return lastResult;
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Fast check for rescue pass - shorter timeout, no panel name fetch */
+async function checkHostFast(ip: string): Promise<DiscoveryResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RESCUE_TIMEOUT_MS);
+  const url = `http://${ip}/`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (response.status === 200) {
+      const html = await response.text();
+      const panel = isPanelHtml(html);
+      return {
+        ip,
+        status: panel ? "panel" : "not-panel",
+        httpStatus: response.status,
+        errorMessage: panel ? undefined : "HTML does not look like Cubixx",
+        // Skip name fetch for speed
+      };
+    }
+
+    return {
+      ip,
+      status: "error",
+      httpStatus: response.status,
+      errorMessage: `Unexpected HTTP ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      ip,
+      status: "no-response",
+      errorMessage: (error as Error).name === "AbortError" ? "Request timed out" : (error as Error).message,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function checkHost(ip: string): Promise<DiscoveryResult> {

@@ -43,7 +43,7 @@ interface UsePanelStreamReturn {
   disconnect: () => void;
 }
 
-const RECONNECT_DELAY_MS = 3000;
+const RECONNECT_DELAY_MS = 1500;
 
 export function usePanelStream(
   options: UsePanelStreamOptions
@@ -305,23 +305,31 @@ export function usePanelStream(
     connect();
   }, [connect, disconnect]);
 
-  // Clear panel states when IPs change (new discovery)
+  // Track IPs to detect changes
   const ipsKey = ips.join(",");
   const prevIpsKeyRef = useRef<string>("");
   
+  // Connect/disconnect based on enabled state and ips
   useEffect(() => {
-    if (prevIpsKeyRef.current !== ipsKey) {
-      // IPs changed - clear old panel states
+    const ipsChanged = prevIpsKeyRef.current !== ipsKey;
+    
+    if (ipsChanged) {
+      // IPs changed - disconnect and clear states to start fresh
+      if (eventSourceRef.current) {
+        console.log("[usePanelStream] IPs changed, reconnecting...");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
       setPanelStates(new Map());
       prevIpsKeyRef.current = ipsKey;
     }
-  }, [ipsKey]);
-
-  // Connect/disconnect based on enabled state and ips
-  useEffect(() => {
+    
     if (enabled && ips.length > 0) {
       shouldReconnectRef.current = true;
-      connect();
+      // Only connect if not already connected (or just disconnected above)
+      if (!eventSourceRef.current) {
+        connect();
+      }
     } else {
       disconnect();
     }
