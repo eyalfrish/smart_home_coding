@@ -122,7 +122,7 @@ export function usePanelStream(
         case "relay_update":
           if (data && "index" in data && "state" in data) {
             const relay = data as RelayState;
-            // Update local state
+            // Update local state and notify
             setPanelStates((prev) => {
               const next = new Map(prev);
               const existing = next.get(ip);
@@ -136,6 +136,8 @@ export function usePanelStream(
                     ...relay,
                   };
                   existing.lastUpdated = Date.now();
+                  // Notify onPanelState so touched detection works
+                  callbacksRef.current.onPanelState?.(ip, existing);
                 }
               }
               return next;
@@ -160,6 +162,8 @@ export function usePanelStream(
                     ...curtain,
                   };
                   existing.lastUpdated = Date.now();
+                  // Notify onPanelState so touched detection works
+                  callbacksRef.current.onPanelState?.(ip, existing);
                 }
               }
               return next;
@@ -184,6 +188,8 @@ export function usePanelStream(
                     ...contact,
                   };
                   existing.lastUpdated = Date.now();
+                  // Notify onPanelState so touched detection works
+                  callbacksRef.current.onPanelState?.(ip, existing);
                 }
               }
               return next;

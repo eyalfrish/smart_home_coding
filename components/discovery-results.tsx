@@ -17,20 +17,13 @@ interface DiscoveryResultsProps {
   onShowOnlyTouchedChange: (value: boolean) => void;
 }
 
-const statusLabel: Record<string, string> = {
-  panel: "Panel detected",
-  "not-panel": "Not Cubixx",
-  "no-response": "No response",
-  error: "Error",
-  pending: "Scanning…",
-};
-
-const badgeClass: Record<string, string> = {
-  panel: styles.badgePanel,
-  "not-panel": styles.badgeNotPanel,
-  "no-response": styles.badgeNoResponse,
-  error: styles.badgeError,
-  pending: styles.badgePending,
+// Short status indicators with icons
+const statusConfig: Record<string, { icon: string; label: string; className: string }> = {
+  panel: { icon: "●", label: "Panel", className: "statusPanel" },
+  "not-panel": { icon: "○", label: "Other", className: "statusOther" },
+  "no-response": { icon: "○", label: "None", className: "statusNone" },
+  error: { icon: "⚠", label: "Error", className: "statusError" },
+  pending: { icon: "◌", label: "Scan", className: "statusPending" },
 };
 
 export default function DiscoveryResults({
@@ -207,14 +200,10 @@ export default function DiscoveryResults({
                     </td>
                     <td>
                       {liveState?.connectionStatus === "connected" ? (
-                        <span className={styles.liveIndicator}>● LIVE</span>
+                        <span className={styles.statusLive}>● LIVE</span>
                       ) : (
-                        <span
-                          className={`${styles.badge} ${
-                            badgeClass[result.status]
-                          }`}
-                        >
-                          {statusLabel[result.status]}
+                        <span className={styles[statusConfig[result.status]?.className ?? "statusNone"]}>
+                          {statusConfig[result.status]?.icon ?? "○"} {statusConfig[result.status]?.label ?? "—"}
                         </span>
                       )}
                     </td>
