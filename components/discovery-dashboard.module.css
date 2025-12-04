@@ -411,28 +411,18 @@
 .liveIndicator {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--panel);
-}
-
-.liveIndicator::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--panel);
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
-    transform: scale(1);
   }
   50% {
-    opacity: 0.5;
-    transform: scale(0.9);
+    opacity: 0.6;
   }
 }
 

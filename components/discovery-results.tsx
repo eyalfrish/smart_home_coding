@@ -206,15 +206,16 @@ export default function DiscoveryResults({
                       {liveState?.fullState?.hostname ?? metadata?.name ?? result.name ?? "—"}
                     </td>
                     <td>
-                      <span
-                        className={`${styles.badge} ${
-                          badgeClass[result.status]
-                        }`}
-                      >
-                        {statusLabel[result.status]}
-                      </span>
-                      {liveState?.connectionStatus === "connected" && (
-                        <span className={styles.liveIndicator}>LIVE</span>
+                      {liveState?.connectionStatus === "connected" ? (
+                        <span className={styles.liveIndicator}>● LIVE</span>
+                      ) : (
+                        <span
+                          className={`${styles.badge} ${
+                            badgeClass[result.status]
+                          }`}
+                        >
+                          {statusLabel[result.status]}
+                        </span>
                       )}
                     </td>
                     <td>

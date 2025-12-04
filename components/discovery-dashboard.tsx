@@ -13,7 +13,6 @@ import type {
   LivePanelState,
 } from "@/lib/discovery/types";
 import { usePanelStream } from "@/lib/hooks/use-panel-stream";
-import { computePanelFingerprint } from "@/lib/discovery/panel-fingerprint";
 
 const DEFAULTS: DiscoveryRequest = {
   baseIp: "10.88.99",
@@ -80,7 +79,7 @@ export default function DiscoveryDashboard() {
       const existing = prev[ip];
       if (!existing) return prev;
 
-      // Update with real-time data
+      // Compute current state fingerprint from live data
       const relayFingerprint = state.fullState?.relays
         ?.map((r) => `${r.index}:${r.state}`)
         .join(",") ?? "";
@@ -89,10 +88,13 @@ export default function DiscoveryDashboard() {
         .join(",") ?? "";
       const currentFingerprint = `relays=[${relayFingerprint}],curtains=[${curtainFingerprint}]`;
 
-      const wasBaseline = existing.baselineFingerprint === existing.lastFingerprint;
-      const touched = existing.baselineFingerprint
-        ? currentFingerprint !== existing.baselineFingerprint
-        : false;
+      // If no baseline yet, this is the first live state - capture it as baseline
+      const isFirstLiveState = !existing.baselineFingerprint;
+      const newBaseline = isFirstLiveState ? currentFingerprint : existing.baselineFingerprint;
+      
+      // Once touched, stay touched until next discovery
+      // Mark as touched if state differs from baseline (and we have a baseline)
+      const touched = existing.touched || (!isFirstLiveState && currentFingerprint !== newBaseline);
 
       return {
         ...prev,
@@ -100,9 +102,7 @@ export default function DiscoveryDashboard() {
           ...existing,
           name: state.fullState?.hostname ?? existing.name,
           lastFingerprint: currentFingerprint,
-          baselineFingerprint: wasBaseline && !existing.baselineFingerprint
-            ? currentFingerprint
-            : existing.baselineFingerprint,
+          baselineFingerprint: newBaseline,
           touched,
         },
       };
@@ -288,40 +288,30 @@ function buildPanelInfoFromResult(
   const resolvedName = result.name ?? previous?.name;
   const link = isCubixx ? `http://${result.ip}/` : previous?.link;
   const shouldReset = options?.resetBaseline ?? false;
-  const hasPanelHtml = Boolean(isCubixx && result.panelHtml);
 
-  let baselineFingerprint = previous?.baselineFingerprint ?? null;
-  let lastFingerprint = previous?.lastFingerprint ?? null;
-  let touched = previous?.touched ?? false;
-
+  // When resetting or new panel, initialize with null baseline
+  // The baseline will be captured from the first live state update
   if (shouldReset || !previous) {
-    if (hasPanelHtml && result.panelHtml) {
-      const fingerprint = computePanelFingerprint(result.panelHtml);
-      baselineFingerprint = fingerprint;
-      lastFingerprint = fingerprint;
-    } else {
-      baselineFingerprint = null;
-      lastFingerprint = null;
-    }
-    touched = false;
-  } else if (hasPanelHtml && result.panelHtml) {
-    const fingerprint = computePanelFingerprint(result.panelHtml);
-    if (!baselineFingerprint) {
-      baselineFingerprint = fingerprint;
-    } else if (fingerprint !== baselineFingerprint) {
-      touched = true;
-    }
-    lastFingerprint = fingerprint;
+    return {
+      ip: result.ip,
+      isCubixx,
+      name: resolvedName ?? undefined,
+      link,
+      baselineFingerprint: null,
+      lastFingerprint: null,
+      touched: false,
+    };
   }
 
+  // Keep existing state for non-reset scenarios
   return {
     ip: result.ip,
     isCubixx,
     name: resolvedName ?? undefined,
     link,
-    baselineFingerprint,
-    lastFingerprint,
-    touched,
+    baselineFingerprint: previous.baselineFingerprint,
+    lastFingerprint: previous.lastFingerprint,
+    touched: previous.touched,
   };
 }
 
