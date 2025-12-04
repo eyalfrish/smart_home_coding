@@ -609,17 +609,25 @@
 
 /* FW Version colors */
 .versionLatest {
+  display: inline-block;
+  background: rgba(22, 163, 74, 0.15);
   color: var(--panel);
   font-weight: 600;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
 }
 
 .versionOutdated {
+  display: inline-block;
+  background: rgba(220, 38, 38, 0.15);
   color: #dc2626;
   font-weight: 600;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
 }
 
 .versionUnknown {
