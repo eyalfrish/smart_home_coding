@@ -129,6 +129,30 @@ export default function DiscoveryResults({
     }
   }, [onSendCommand]);
 
+  const handleBacklightToggle = useCallback(async (
+    e: MouseEvent,
+    ip: string,
+    currentState: boolean
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!onSendCommand) return;
+    
+    const key = `${ip}-BL`;
+    setPendingCommands(prev => new Set(prev).add(key));
+    
+    try {
+      await onSendCommand(ip, { command: "backlight", state: !currentState });
+    } finally {
+      setPendingCommands(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, [onSendCommand]);
+
   if (!data) {
     return null;
   }
@@ -368,6 +392,7 @@ export default function DiscoveryResults({
                   {sortColumn === "signal" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
                 </span>
               </th>
+              <th>Backlight</th>
               <th>Live State</th>
               <th 
                 className={styles.sortableHeader} 
@@ -384,7 +409,7 @@ export default function DiscoveryResults({
           <tbody>
             {sortedResults.length === 0 ? (
               <tr>
-                <td colSpan={9}>No entries match that search.</td>
+                <td colSpan={10}>No entries match that search.</td>
               </tr>
             ) : (
               sortedResults.map((result) => {
@@ -453,6 +478,28 @@ export default function DiscoveryResults({
                         <span className={styles.signalUnknown}>...</span>
                       ) : (
                         <span className={styles.signalUnknown}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {liveState?.fullState?.statusLedOn != null ? (
+                        (() => {
+                          const isOn = liveState.fullState.statusLedOn;
+                          const isPending = pendingCommands.has(`${result.ip}-BL`);
+                          return (
+                            <button
+                              className={`${styles.backlightButton} ${isOn ? styles.backlightOn : styles.backlightOff} ${isPending ? styles.pending : ""}`}
+                              title={`Backlight ${isOn ? "On" : "Off"} - Click to toggle`}
+                              onClick={(e) => handleBacklightToggle(e, result.ip, isOn)}
+                              disabled={isPending || !onSendCommand}
+                            >
+                              {isOn ? "On" : "Off"}
+                            </button>
+                          );
+                        })()
+                      ) : result.status === "panel" ? (
+                        <span className={styles.backlightUnknown}>...</span>
+                      ) : (
+                        <span className={styles.backlightUnknown}>—</span>
                       )}
                     </td>
                     <td>

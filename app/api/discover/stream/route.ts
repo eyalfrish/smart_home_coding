@@ -4,12 +4,12 @@ import type { DiscoveryResult } from "@/lib/discovery/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REQUEST_TIMEOUT_MS = 800;           // Timeout for initial check
-const RESCUE_TIMEOUT_MS = 600;            // Rescue timeout
-const SETTINGS_REQUEST_TIMEOUT_MS = 500;  // Settings request timeout
-const MAX_CONCURRENCY = 12;               // Slightly higher concurrency
+const REQUEST_TIMEOUT_MS = 1000;          // Timeout for initial check
+const RESCUE_TIMEOUT_MS = 800;            // Rescue timeout
+const SETTINGS_REQUEST_TIMEOUT_MS = 600;  // Settings request timeout
+const MAX_CONCURRENCY = 10;               // Lower concurrency for reliability
 const RETRY_LIMIT = 2;                    // 3 total attempts
-const RETRY_DELAYS_MS = [100, 150, 200];  // Backoff delays
+const RETRY_DELAYS_MS = [150, 250, 350];  // Backoff delays
 const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 /**
@@ -117,9 +117,9 @@ export async function GET(request: NextRequest) {
         .filter(([, result]) => result.status === "no-response")
         .map(([ip]) => ip);
       
-      // Always do rescue pass if we have failures (up to 15 IPs for speed)
-      if (noResponseIps.length > 0 && noResponseIps.length <= 25) {
-        const rescueIps = noResponseIps.slice(0, 15);
+      // Always do rescue pass if we have failures (up to 20 IPs for reliability)
+      if (noResponseIps.length > 0 && noResponseIps.length <= 30) {
+        const rescueIps = noResponseIps.slice(0, 20);
         console.log(`[Discovery] Rescue pass for ${rescueIps.length}/${noResponseIps.length} IPs (parallel)`);
         
         // Run rescue checks in parallel

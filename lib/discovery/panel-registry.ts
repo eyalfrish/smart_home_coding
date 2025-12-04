@@ -211,6 +211,16 @@ class PanelRegistryImpl {
         });
         break;
 
+      case "backlight_update":
+        // Broadcast updated full state so UI reflects the change
+        this.broadcast({
+          type: "panel_state",
+          ip,
+          timestamp: Date.now(),
+          data: state,
+        });
+        break;
+
       // Other events can be handled here as needed
     }
   }
