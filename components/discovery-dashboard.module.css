@@ -635,3 +635,63 @@
   font-size: 0.85rem;
 }
 
+/* Signal strength colors */
+.signalGood {
+  display: inline-block;
+  background: rgba(22, 163, 74, 0.15);
+  color: var(--panel);
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.signalMedium {
+  display: inline-block;
+  background: rgba(245, 158, 11, 0.2);
+  color: #b45309;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.signalWeak {
+  display: inline-block;
+  background: rgba(220, 38, 38, 0.15);
+  color: #dc2626;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.signalUnknown {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Sortable table headers */
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.sortableHeader:hover {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.sortIndicator {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.sortIndicatorActive {
+  opacity: 1;
+}
+

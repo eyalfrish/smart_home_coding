@@ -43,6 +43,10 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+// Sortable column types
+type SortColumn = "ip" | "name" | "status" | "version" | "signal" | "touched" | null;
+type SortDirection = "asc" | "desc";
+
 export default function DiscoveryResults({
   data,
   onPanelsSummaryClick,
@@ -57,6 +61,19 @@ export default function DiscoveryResults({
   onSendCommand,
 }: DiscoveryResultsProps) {
   const [pendingCommands, setPendingCommands] = useState<Set<string>>(new Set());
+  const [sortColumn, setSortColumn] = useState<SortColumn>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const handleSort = useCallback((column: SortColumn) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      // New column, start with ascending
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  }, [sortColumn]);
 
   const handleLightToggle = useCallback(async (
     e: MouseEvent,
@@ -120,11 +137,14 @@ export default function DiscoveryResults({
   const canOpenPanelsView =
     typeof onPanelsSummaryClick === "function" && summary.panelsFound > 0;
 
-  // Calculate the highest firmware version from all connected panels
+  // Calculate the highest firmware version from panels in current discovery results only
   const highestVersion = (() => {
-    if (!livePanelStates) return null;
+    if (!livePanelStates || !results) return null;
     let highest: string | null = null;
-    livePanelStates.forEach((state) => {
+    // Only consider panels that are in the current discovery results
+    const currentResultIps = new Set(results.map(r => r.ip));
+    livePanelStates.forEach((state, ip) => {
+      if (!currentResultIps.has(ip)) return; // Skip panels not in current discovery
       const version = state.fullState?.version;
       if (version) {
         if (!highest || compareVersions(version, highest) > 0) {
@@ -158,6 +178,64 @@ export default function DiscoveryResults({
       result.ip.toLowerCase().includes(normalizedQuery) ||
       name.includes(normalizedQuery)
     );
+  });
+
+  // Sort filtered results
+  const sortedResults = [...filteredResults].sort((a, b) => {
+    if (!sortColumn) return 0;
+    
+    const liveStateA = livePanelStates?.get(a.ip);
+    const liveStateB = livePanelStates?.get(b.ip);
+    const metadataA = panelInfoMap[a.ip];
+    const metadataB = panelInfoMap[b.ip];
+    
+    let comparison = 0;
+    
+    switch (sortColumn) {
+      case "ip": {
+        // Sort IP addresses numerically by last octet
+        const lastOctetA = parseInt(a.ip.split('.').pop() ?? "0", 10);
+        const lastOctetB = parseInt(b.ip.split('.').pop() ?? "0", 10);
+        comparison = lastOctetA - lastOctetB;
+        break;
+      }
+      case "name": {
+        const nameA = liveStateA?.fullState?.hostname ?? metadataA?.name ?? a.name ?? "";
+        const nameB = liveStateB?.fullState?.hostname ?? metadataB?.name ?? b.name ?? "";
+        comparison = nameA.localeCompare(nameB);
+        break;
+      }
+      case "status": {
+        const statusOrder = { panel: 0, "not-panel": 1, error: 2, "no-response": 3, pending: 4, initial: 5 };
+        const statusA = liveStateA?.connectionStatus === "connected" ? -1 : (statusOrder[a.status as keyof typeof statusOrder] ?? 5);
+        const statusB = liveStateB?.connectionStatus === "connected" ? -1 : (statusOrder[b.status as keyof typeof statusOrder] ?? 5);
+        comparison = statusA - statusB;
+        break;
+      }
+      case "version": {
+        const versionA = liveStateA?.fullState?.version ?? "";
+        const versionB = liveStateB?.fullState?.version ?? "";
+        if (!versionA && !versionB) comparison = 0;
+        else if (!versionA) comparison = 1;
+        else if (!versionB) comparison = -1;
+        else comparison = compareVersions(versionA, versionB);
+        break;
+      }
+      case "signal": {
+        const signalA = liveStateA?.fullState?.wifiQuality ?? -1;
+        const signalB = liveStateB?.fullState?.wifiQuality ?? -1;
+        comparison = signalA - signalB;
+        break;
+      }
+      case "touched": {
+        const touchedA = metadataA?.touched === true ? 1 : 0;
+        const touchedB = metadataB?.touched === true ? 1 : 0;
+        comparison = touchedA - touchedB;
+        break;
+      }
+    }
+    
+    return sortDirection === "asc" ? comparison : -comparison;
   });
 
   const handlePanelsSummaryKeyDown = (
@@ -245,22 +323,71 @@ export default function DiscoveryResults({
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>IP</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>FW Version</th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("ip")}
+              >
+                IP
+                <span className={`${styles.sortIndicator} ${sortColumn === "ip" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "ip" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("name")}
+              >
+                Name
+                <span className={`${styles.sortIndicator} ${sortColumn === "name" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "name" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("status")}
+              >
+                Status
+                <span className={`${styles.sortIndicator} ${sortColumn === "status" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "status" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("version")}
+              >
+                FW Version
+                <span className={`${styles.sortIndicator} ${sortColumn === "version" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "version" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("signal")}
+              >
+                Signal
+                <span className={`${styles.sortIndicator} ${sortColumn === "signal" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "signal" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
               <th>Live State</th>
-              <th>Touched</th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("touched")}
+              >
+                Touched
+                <span className={`${styles.sortIndicator} ${sortColumn === "touched" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "touched" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
               <th>Notes</th>
             </tr>
           </thead>
           <tbody>
-            {filteredResults.length === 0 ? (
+            {sortedResults.length === 0 ? (
               <tr>
-                <td colSpan={8}>No entries match that search.</td>
+                <td colSpan={9}>No entries match that search.</td>
               </tr>
             ) : (
-              filteredResults.map((result) => {
+              sortedResults.map((result) => {
                 const metadata = panelInfoMap[result.ip];
                 const liveState = livePanelStates?.get(result.ip);
                 const touched = metadata?.touched === true;
@@ -309,6 +436,23 @@ export default function DiscoveryResults({
                         <span className={styles.versionUnknown}>...</span>
                       ) : (
                         <span className={styles.versionUnknown}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {liveState?.fullState?.wifiQuality != null ? (
+                        <span className={
+                          liveState.fullState.wifiQuality >= 70
+                            ? styles.signalGood
+                            : liveState.fullState.wifiQuality >= 40
+                            ? styles.signalMedium
+                            : styles.signalWeak
+                        }>
+                          {liveState.fullState.wifiQuality}%
+                        </span>
+                      ) : result.status === "panel" ? (
+                        <span className={styles.signalUnknown}>...</span>
+                      ) : (
+                        <span className={styles.signalUnknown}>—</span>
                       )}
                     </td>
                     <td>
