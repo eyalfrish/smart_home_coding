@@ -118,10 +118,16 @@ export default function DiscoveryDashboard() {
 
   const executeDiscovery = useCallback(
     async (payload: DiscoveryRequest) => {
+      // Clear all state at the very start, synchronously
       setIsLoading(true);
       setError(null);
       setView("discovery");
       setSearchQuery("");
+      setResponse(null); // Clear response first
+      setPanelInfoMap({}); // Clear panel info
+
+      // Give React a chance to process the clears before we start receiving data
+      await new Promise(resolve => setTimeout(resolve, 0));
 
       // Track results as they stream in
       const resultsMap = new Map<string, DiscoveryResult>();
@@ -136,6 +142,9 @@ export default function DiscoveryDashboard() {
         errors: 0,
       };
 
+      // Set initial placeholder after clears are processed
+      setResponse(buildPlaceholderResponse(payload));
+
       try {
         const url = `/api/discover/stream?baseIp=${encodeURIComponent(payload.baseIp)}&start=${payload.start}&end=${payload.end}`;
         const eventSource = new EventSource(url);
@@ -146,11 +155,18 @@ export default function DiscoveryDashboard() {
 
             // Ignore heartbeat messages (used to ensure connection is ready)
             if (message.type === "heartbeat") {
+              console.log("[Discovery] Heartbeat received, connection ready");
               return;
             }
 
             if (message.type === "result") {
               const result = message.data as DiscoveryResult;
+              
+              // Debug: log first few results
+              if (resultsMap.size < 3) {
+                console.log(`[Discovery] Result ${resultsMap.size + 1}: ${result.ip} = ${result.status}`);
+              }
+              
               resultsMap.set(result.ip, result);
 
               // Update summary counts
@@ -159,11 +175,13 @@ export default function DiscoveryDashboard() {
               else if (result.status === "no-response") summary.noResponse++;
               else if (result.status === "error") summary.errors++;
 
-              // Update panel info map for this result
-              setPanelInfoMap((prev) => ({
-                ...prev,
-                [result.ip]: buildPanelInfoFromResult(result, undefined, { resetBaseline: true }),
-              }));
+              // Update panel info map for this result (only for panels)
+              if (result.status === "panel") {
+                setPanelInfoMap((prev) => ({
+                  ...prev,
+                  [result.ip]: buildPanelInfoFromResult(result, undefined, { resetBaseline: true }),
+                }));
+              }
 
               // Build ordered results array
               const orderedResults: DiscoveryResult[] = [];
@@ -188,6 +206,26 @@ export default function DiscoveryDashboard() {
                 results: orderedResults,
               });
             } else if (message.type === "complete") {
+              console.log(`[Discovery] Complete. Total results: ${resultsMap.size}, Panels found: ${summary.panelsFound}`);
+              
+              // Final verification - rebuild one more time to ensure all results are captured
+              const finalResults: DiscoveryResult[] = [];
+              for (let octet = payload.start; octet <= payload.end; octet++) {
+                const ip = `${payload.baseIp}.${octet}`;
+                const existing = resultsMap.get(ip);
+                if (existing) {
+                  const { panelHtml, ...rest } = existing;
+                  finalResults.push(rest as DiscoveryResult);
+                } else {
+                  finalResults.push({ ip, status: "no-response", errorMessage: "No result received" });
+                }
+              }
+              
+              setResponse({
+                summary: { ...summary },
+                results: finalResults,
+              });
+              
               eventSource.close();
               setIsLoading(false);
             }
@@ -226,10 +264,7 @@ export default function DiscoveryDashboard() {
       end: String(payload.end),
     });
 
-    // Always reset to placeholder/scanning state when clicking Discover
-    setResponse(buildPlaceholderResponse(payload));
-    setPanelInfoMap({});
-
+    // State clearing is now done inside executeDiscovery to avoid race conditions
     executeDiscovery(payload);
   };
 

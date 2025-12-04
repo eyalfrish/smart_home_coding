@@ -65,6 +65,10 @@ export async function GET(request: NextRequest) {
 
       const sendResult = (result: DiscoveryResult) => {
         completedCount++;
+        // Log first result to verify it's being sent
+        if (completedCount === 1) {
+          console.log(`[Discovery Stream] First result: ${result.ip} = ${result.status}`);
+        }
         const message = {
           type: "result",
           data: result,
