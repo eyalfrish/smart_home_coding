@@ -2,7 +2,7 @@
 
 import type { KeyboardEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryResponse, PanelInfo } from "@/lib/discovery/types";
+import type { DiscoveryResponse, PanelInfo, LivePanelState } from "@/lib/discovery/types";
 
 interface DiscoveryResultsProps {
   data: DiscoveryResponse | null;
@@ -10,6 +10,7 @@ interface DiscoveryResultsProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   panelInfoMap: Record<string, PanelInfo>;
+  livePanelStates?: Map<string, LivePanelState>;
   showOnlyCubixx: boolean;
   showOnlyTouched: boolean;
   onShowOnlyCubixxChange: (value: boolean) => void;
@@ -38,6 +39,7 @@ export default function DiscoveryResults({
   searchQuery,
   onSearchChange,
   panelInfoMap,
+  livePanelStates,
   showOnlyCubixx,
   showOnlyTouched,
   onShowOnlyCubixxChange,
@@ -165,19 +167,20 @@ export default function DiscoveryResults({
               <th>IP</th>
               <th>Name</th>
               <th>Status</th>
+              <th>Live State</th>
               <th>Touched</th>
-              <th>HTTP</th>
               <th>Notes</th>
             </tr>
           </thead>
           <tbody>
             {filteredResults.length === 0 ? (
               <tr>
-                <td colSpan={6}>No entries match that search.</td>
+                <td colSpan={7}>No entries match that search.</td>
               </tr>
             ) : (
               filteredResults.map((result) => {
                 const metadata = panelInfoMap[result.ip];
+                const liveState = livePanelStates?.get(result.ip);
                 const touched = metadata?.touched === true;
                 const touchedClass = touched
                   ? styles.touchedYes
@@ -199,7 +202,9 @@ export default function DiscoveryResults({
                         result.ip
                       )}
                     </td>
-                    <td>{metadata?.name ?? result.name ?? "—"}</td>
+                    <td>
+                      {liveState?.fullState?.hostname ?? metadata?.name ?? result.name ?? "—"}
+                    </td>
                     <td>
                       <span
                         className={`${styles.badge} ${
@@ -208,13 +213,53 @@ export default function DiscoveryResults({
                       >
                         {statusLabel[result.status]}
                       </span>
+                      {liveState?.connectionStatus === "connected" && (
+                        <span className={styles.liveIndicator}>LIVE</span>
+                      )}
+                    </td>
+                    <td>
+                      {liveState?.fullState ? (
+                        <div className={styles.entityStates}>
+                          {liveState.fullState.relays.slice(0, 6).map((relay) => (
+                            <span
+                              key={`r${relay.index}`}
+                              className={`${styles.entityBadge} ${relay.state ? styles.on : styles.off}`}
+                              title={relay.name || `Relay ${relay.index + 1}`}
+                            >
+                              R{relay.index + 1}: {relay.state ? "ON" : "OFF"}
+                            </span>
+                          ))}
+                          {liveState.fullState.curtains.slice(0, 4).map((curtain) => (
+                            <span
+                              key={`c${curtain.index}`}
+                              className={`${styles.entityBadge} ${
+                                curtain.state === "open" ? styles.open :
+                                curtain.state === "closed" ? styles.closed : ""
+                              }`}
+                              title={curtain.name || `Curtain ${curtain.index + 1}`}
+                            >
+                              C{curtain.index + 1}: {curtain.state}
+                            </span>
+                          ))}
+                          {liveState.fullState.relays.length > 6 && (
+                            <span className={styles.entityBadge}>
+                              +{liveState.fullState.relays.length - 6} more
+                            </span>
+                          )}
+                        </div>
+                      ) : result.status === "panel" ? (
+                        <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                          Connecting...
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td>
                       <span className={`${styles.touchedBadge} ${touchedClass}`}>
                         {touched ? "Yes" : "No"}
                       </span>
                     </td>
-                    <td>{result.httpStatus ?? "—"}</td>
                     <td>{result.errorMessage ?? "—"}</td>
                   </tr>
                 );

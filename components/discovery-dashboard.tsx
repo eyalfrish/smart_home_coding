@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import DiscoveryForm, { type DiscoveryFormValues } from "./discovery-form";
 import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
@@ -10,7 +10,9 @@ import type {
   DiscoveryResponse,
   DiscoveryResult,
   PanelInfo,
+  LivePanelState,
 } from "@/lib/discovery/types";
+import { usePanelStream } from "@/lib/hooks/use-panel-stream";
 import { computePanelFingerprint } from "@/lib/discovery/panel-fingerprint";
 
 const DEFAULTS: DiscoveryRequest = {
@@ -54,33 +56,73 @@ export default function DiscoveryDashboard() {
   const [response, setResponse] = useState<DiscoveryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [view, setView] = useState<"discovery" | "panels-grid">("discovery");
   const [searchQuery, setSearchQuery] = useState("");
   const [formValues, setFormValues] =
     useState<DiscoveryFormValues>(INITIAL_FORM_VALUES);
-  const [lastRequest, setLastRequest] = useState<DiscoveryRequest | null>(null);
-  const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(0);
   const [panelInfoMap, setPanelInfoMap] = useState<Record<string, PanelInfo>>(
     {}
   );
   const [showOnlyCubixx, setShowOnlyCubixx] = useState(false);
   const [showOnlyTouched, setShowOnlyTouched] = useState(false);
 
-  const executeDiscovery = useCallback(
-    async (payload: DiscoveryRequest, options?: { background?: boolean }) => {
-      const isBackground = options?.background ?? false;
-      if (!isBackground) {
-        setIsLoading(true);
-        setError(null);
-        setView("discovery");
-        setSearchQuery("");
-        setPanelInfoMap({});
-      } else {
-        setIsRefreshing(true);
-      }
+  // Get list of discovered Cubixx panel IPs for real-time streaming
+  const discoveredPanelIps = useMemo(() => {
+    if (!response) return [];
+    return response.results
+      .filter((r) => r.status === "panel")
+      .map((r) => r.ip);
+  }, [response]);
 
-      setLastRequest(payload);
+  // Handle real-time panel state updates
+  const handlePanelState = useCallback((ip: string, state: LivePanelState) => {
+    setPanelInfoMap((prev) => {
+      const existing = prev[ip];
+      if (!existing) return prev;
+
+      // Update with real-time data
+      const relayFingerprint = state.fullState?.relays
+        ?.map((r) => `${r.index}:${r.state}`)
+        .join(",") ?? "";
+      const curtainFingerprint = state.fullState?.curtains
+        ?.map((c) => `${c.index}:${c.state}`)
+        .join(",") ?? "";
+      const currentFingerprint = `relays=[${relayFingerprint}],curtains=[${curtainFingerprint}]`;
+
+      const wasBaseline = existing.baselineFingerprint === existing.lastFingerprint;
+      const touched = existing.baselineFingerprint
+        ? currentFingerprint !== existing.baselineFingerprint
+        : false;
+
+      return {
+        ...prev,
+        [ip]: {
+          ...existing,
+          name: state.fullState?.hostname ?? existing.name,
+          lastFingerprint: currentFingerprint,
+          baselineFingerprint: wasBaseline && !existing.baselineFingerprint
+            ? currentFingerprint
+            : existing.baselineFingerprint,
+          touched,
+        },
+      };
+    });
+  }, []);
+
+  // Real-time panel stream (always enabled when panels are discovered)
+  const { isConnected: isStreamConnected, panelStates, error: streamError } = usePanelStream({
+    ips: discoveredPanelIps,
+    enabled: discoveredPanelIps.length > 0,
+    onPanelState: handlePanelState,
+  });
+
+  const executeDiscovery = useCallback(
+    async (payload: DiscoveryRequest) => {
+      setIsLoading(true);
+      setError(null);
+      setView("discovery");
+      setSearchQuery("");
+      setPanelInfoMap({});
 
       try {
         const res = await fetch("/api/discover", {
@@ -105,11 +147,7 @@ export default function DiscoveryDashboard() {
         }
 
         const body = (await res.json()) as DiscoveryResponse;
-        setPanelInfoMap((prev) =>
-          mergePanelInfoState(body.results, prev, {
-            resetBaselines: !isBackground,
-          })
-        );
+        setPanelInfoMap(mergePanelInfoState(body.results, {}, { resetBaselines: true }));
         const sanitizedResults = body.results.map(({ panelHtml, ...rest }) => rest) as DiscoveryResult[];
         setResponse({
           summary: body.summary,
@@ -118,17 +156,9 @@ export default function DiscoveryDashboard() {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Unexpected error occurred.";
-        if (!isBackground) {
-          setError(message);
-        } else {
-          console.warn("Background refresh failed:", message);
-        }
+        setError(message);
       } finally {
-        if (!isBackground) {
-          setIsLoading(false);
-        } else {
-          setIsRefreshing(false);
-        }
+        setIsLoading(false);
       }
     },
     []
@@ -158,42 +188,6 @@ export default function DiscoveryDashboard() {
     }
 
     executeDiscovery(payload);
-  };
-
-  useEffect(() => {
-    if (
-      !autoRefreshSeconds ||
-      autoRefreshSeconds <= 0 ||
-      !lastRequest ||
-      isLoading ||
-      isRefreshing
-    ) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      if (!lastRequest) {
-        return;
-      }
-      executeDiscovery(lastRequest, { background: true });
-    }, autoRefreshSeconds * 1000);
-
-    return () => window.clearInterval(interval);
-  }, [
-    autoRefreshSeconds,
-    lastRequest,
-    isLoading,
-    isRefreshing,
-    executeDiscovery,
-  ]);
-
-  const handleAutoRefreshChange = (value: string) => {
-    const next = Number(value);
-    if (Number.isNaN(next)) {
-      setAutoRefreshSeconds(0);
-      return;
-    }
-    setAutoRefreshSeconds(Math.max(0, Math.floor(next)));
   };
 
   const handlePanelsSummaryClick = () => {
@@ -227,27 +221,22 @@ export default function DiscoveryDashboard() {
             onChange={setFormValues}
             onSubmit={handleFormSubmit}
           />
-          <div className={styles.refreshControls}>
-            <label className={styles.refreshLabel} htmlFor="auto-refresh">
-              Auto refresh (seconds)
-            </label>
-            <input
-              id="auto-refresh"
-              type="number"
-              min={0}
-              className={styles.refreshInput}
-              value={autoRefreshSeconds}
-              onChange={(event) => handleAutoRefreshChange(event.target.value)}
-            />
-            <span className={styles.refreshHint}>
-              {autoRefreshSeconds > 0
-                ? `Refreshing every ${autoRefreshSeconds}s`
-                : "Enter 0 to disable auto refresh"}
-            </span>
-            {isRefreshing && (
-              <span className={styles.status}>Auto-refreshing…</span>
-            )}
-          </div>
+          {discoveredPanelIps.length > 0 && (
+            <div className={styles.streamStatus}>
+              <span className={isStreamConnected ? styles.statusConnected : styles.statusDisconnected}>
+                {isStreamConnected
+                  ? `● Live: Connected to ${panelStates.size} panel${panelStates.size !== 1 ? "s" : ""}`
+                  : "○ Connecting to panels..."}
+              </span>
+              {streamError && (
+                <span className={styles.streamError}>
+                  {streamError.includes("npm install") 
+                    ? "⚠️ " + streamError
+                    : `(${streamError})`}
+                </span>
+              )}
+            </div>
+          )}
           {error && <div className={styles.errorBox}>{error}</div>}
           <DiscoveryResults
             data={response}
@@ -255,6 +244,7 @@ export default function DiscoveryDashboard() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             panelInfoMap={panelInfoMap}
+            livePanelStates={panelStates}
             showOnlyCubixx={showOnlyCubixx}
             showOnlyTouched={showOnlyTouched}
             onShowOnlyCubixxChange={setShowOnlyCubixx}
