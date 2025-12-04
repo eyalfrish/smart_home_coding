@@ -447,6 +447,13 @@
   animation: pulse 1.5s infinite;
 }
 
+.statusInitial {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 0.3;
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;

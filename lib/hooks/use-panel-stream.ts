@@ -305,6 +305,18 @@ export function usePanelStream(
     connect();
   }, [connect, disconnect]);
 
+  // Clear panel states when IPs change (new discovery)
+  const ipsKey = ips.join(",");
+  const prevIpsKeyRef = useRef<string>("");
+  
+  useEffect(() => {
+    if (prevIpsKeyRef.current !== ipsKey) {
+      // IPs changed - clear old panel states
+      setPanelStates(new Map());
+      prevIpsKeyRef.current = ipsKey;
+    }
+  }, [ipsKey]);
+
   // Connect/disconnect based on enabled state and ips
   useEffect(() => {
     if (enabled && ips.length > 0) {
@@ -317,7 +329,7 @@ export function usePanelStream(
     return () => {
       disconnect();
     };
-  }, [enabled, ips.join(","), connect, disconnect]);
+  }, [enabled, ipsKey, connect, disconnect]);
 
   return {
     isConnected,

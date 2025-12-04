@@ -24,6 +24,7 @@ const statusConfig: Record<string, { icon: string; label: string; className: str
   "no-response": { icon: "○", label: "None", className: "statusNone" },
   error: { icon: "⚠", label: "Error", className: "statusError" },
   pending: { icon: "◌", label: "Scan", className: "statusPending" },
+  initial: { icon: "·", label: "", className: "statusInitial" },
 };
 
 export default function DiscoveryResults({
@@ -141,7 +142,7 @@ export default function DiscoveryResults({
                 onShowOnlyCubixxChange(event.target.checked)
               }
             />
-            Show only Cubixx panels
+            Show only Live Cubixx panels
           </label>
           <label className={styles.checkboxLabel}>
             <input

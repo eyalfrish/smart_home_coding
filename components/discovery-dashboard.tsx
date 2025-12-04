@@ -31,8 +31,7 @@ function buildPlaceholderResponse(payload: DiscoveryRequest): DiscoveryResponse 
   for (let octet = payload.start; octet <= payload.end; octet += 1) {
     results.push({
       ip: `${payload.baseIp}.${octet}`,
-      status: "pending" as const,
-      errorMessage: "Scanning…",
+      status: "initial" as DiscoveryResult["status"],
     });
   }
 
@@ -62,7 +61,7 @@ export default function DiscoveryDashboard() {
   const [panelInfoMap, setPanelInfoMap] = useState<Record<string, PanelInfo>>(
     {}
   );
-  const [showOnlyCubixx, setShowOnlyCubixx] = useState(false);
+  const [showOnlyCubixx, setShowOnlyCubixx] = useState(true);
   const [showOnlyTouched, setShowOnlyTouched] = useState(false);
 
   // Get list of discovered Cubixx panel IPs for real-time streaming
@@ -109,10 +108,11 @@ export default function DiscoveryDashboard() {
     });
   }, []);
 
-  // Real-time panel stream (always enabled when panels are discovered)
+  // Real-time panel stream - only connect AFTER discovery is complete
+  // This prevents constant reconnections during scanning
   const { isConnected: isStreamConnected, panelStates, error: streamError } = usePanelStream({
     ips: discoveredPanelIps,
-    enabled: discoveredPanelIps.length > 0,
+    enabled: !isLoading && discoveredPanelIps.length > 0,
     onPanelState: handlePanelState,
   });
 
@@ -122,42 +122,86 @@ export default function DiscoveryDashboard() {
       setError(null);
       setView("discovery");
       setSearchQuery("");
-      setPanelInfoMap({});
+
+      // Track results as they stream in
+      const resultsMap = new Map<string, DiscoveryResult>();
+      const summary = {
+        baseIp: payload.baseIp,
+        start: payload.start,
+        end: payload.end,
+        totalChecked: payload.end - payload.start + 1,
+        panelsFound: 0,
+        notPanels: 0,
+        noResponse: 0,
+        errors: 0,
+      };
 
       try {
-        const res = await fetch("/api/discover", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
+        const url = `/api/discover/stream?baseIp=${encodeURIComponent(payload.baseIp)}&start=${payload.start}&end=${payload.end}`;
+        const eventSource = new EventSource(url);
 
-        if (!res.ok) {
-          let message = "Failed to reach discovery service.";
+        eventSource.onmessage = (event) => {
           try {
-            const body = await res.json();
-            if (body?.message) {
-              message = body.message;
-            }
-          } catch {
-            // ignore JSON parse issues here
-          }
-          throw new Error(message);
-        }
+            const message = JSON.parse(event.data);
 
-        const body = (await res.json()) as DiscoveryResponse;
-        setPanelInfoMap(mergePanelInfoState(body.results, {}, { resetBaselines: true }));
-        const sanitizedResults = body.results.map(({ panelHtml, ...rest }) => rest) as DiscoveryResult[];
-        setResponse({
-          summary: body.summary,
-          results: sanitizedResults,
-        });
+            if (message.type === "result") {
+              const result = message.data as DiscoveryResult;
+              resultsMap.set(result.ip, result);
+
+              // Update summary counts
+              if (result.status === "panel") summary.panelsFound++;
+              else if (result.status === "not-panel") summary.notPanels++;
+              else if (result.status === "no-response") summary.noResponse++;
+              else if (result.status === "error") summary.errors++;
+
+              // Update panel info map for this result
+              setPanelInfoMap((prev) => ({
+                ...prev,
+                [result.ip]: buildPanelInfoFromResult(result, undefined, { resetBaseline: true }),
+              }));
+
+              // Build ordered results array
+              const orderedResults: DiscoveryResult[] = [];
+              for (let octet = payload.start; octet <= payload.end; octet++) {
+                const ip = `${payload.baseIp}.${octet}`;
+                const existing = resultsMap.get(ip);
+                if (existing) {
+                  // Remove panelHtml for state storage
+                  const { panelHtml, ...rest } = existing;
+                  orderedResults.push(rest as DiscoveryResult);
+                } else {
+                  // Not yet scanned - show as initial/blank
+                  orderedResults.push({
+                    ip,
+                    status: "initial",
+                  });
+                }
+              }
+
+              setResponse({
+                summary: { ...summary },
+                results: orderedResults,
+              });
+            } else if (message.type === "complete") {
+              eventSource.close();
+              setIsLoading(false);
+            }
+          } catch (e) {
+            console.error("[Discovery] Failed to parse message:", e);
+          }
+        };
+
+        eventSource.onerror = () => {
+          eventSource.close();
+          setIsLoading(false);
+          if (resultsMap.size === 0) {
+            setError("Failed to connect to discovery service.");
+          }
+        };
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Unexpected error occurred.";
         setError(message);
-      } finally {
         setIsLoading(false);
       }
     },
@@ -177,15 +221,9 @@ export default function DiscoveryDashboard() {
       end: String(payload.end),
     });
 
-    const rangeChanged =
-      !response ||
-      response.summary.baseIp !== payload.baseIp ||
-      response.summary.start !== payload.start ||
-      response.summary.end !== payload.end;
-
-    if (rangeChanged) {
-      setResponse(buildPlaceholderResponse(payload));
-    }
+    // Always reset to placeholder/scanning state when clicking Discover
+    setResponse(buildPlaceholderResponse(payload));
+    setPanelInfoMap({});
 
     executeDiscovery(payload);
   };
@@ -224,11 +262,13 @@ export default function DiscoveryDashboard() {
           {discoveredPanelIps.length > 0 && (
             <div className={styles.streamStatus}>
               <span className={isStreamConnected ? styles.statusConnected : styles.statusDisconnected}>
-                {isStreamConnected
-                  ? `● Live: Connected to ${panelStates.size} panel${panelStates.size !== 1 ? "s" : ""}`
-                  : "○ Connecting to panels..."}
+                {isLoading
+                  ? "○ Scanning network..."
+                  : isStreamConnected
+                    ? `● Live: ${panelStates.size}/${discoveredPanelIps.length} panels connected`
+                    : "○ Connecting to panels..."}
               </span>
-              {streamError && (
+              {streamError && !isLoading && (
                 <span className={styles.streamError}>
                   {streamError.includes("npm install") 
                     ? "⚠️ " + streamError
