@@ -55,7 +55,13 @@ export async function GET(request: NextRequest) {
     async start(controller) {
       const encoder = new TextEncoder();
       let completedCount = 0;
-      let nextIndex = 0;
+      
+      // Use a queue with mutex-like behavior to avoid race conditions
+      const pendingTargets = [...targets];
+      
+      const getNextTarget = (): string | null => {
+        return pendingTargets.shift() ?? null;
+      };
 
       const sendResult = (result: DiscoveryResult) => {
         completedCount++;
@@ -73,14 +79,18 @@ export async function GET(request: NextRequest) {
         controller.close();
       };
 
+      // Small delay to ensure SSE connection is established on client
+      await delay(50);
+      
+      // Send initial heartbeat to confirm connection
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "heartbeat" })}\n\n`));
+
       // Worker function - processes IPs from the shared queue
       const worker = async () => {
         while (true) {
-          const currentIndex = nextIndex;
-          if (currentIndex >= targets.length) break;
-          nextIndex++;
+          const ip = getNextTarget();
+          if (!ip) break;
 
-          const ip = targets[currentIndex];
           const result = await checkHostWithRetry(ip);
           sendResult(result);
         }

@@ -144,6 +144,11 @@ export default function DiscoveryDashboard() {
           try {
             const message = JSON.parse(event.data);
 
+            // Ignore heartbeat messages (used to ensure connection is ready)
+            if (message.type === "heartbeat") {
+              return;
+            }
+
             if (message.type === "result") {
               const result = message.data as DiscoveryResult;
               resultsMap.set(result.ip, result);
