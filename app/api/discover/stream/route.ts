@@ -4,12 +4,12 @@ import type { DiscoveryResult } from "@/lib/discovery/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REQUEST_TIMEOUT_MS = 2000;          // Reliable timeout for panels
-const RESCUE_TIMEOUT_MS = 1500;           // Rescue timeout
-const SETTINGS_REQUEST_TIMEOUT_MS = 1200;
+const REQUEST_TIMEOUT_MS = 1000;          // Reliable timeout for panels (halved)
+const RESCUE_TIMEOUT_MS = 750;            // Rescue timeout (halved)
+const SETTINGS_REQUEST_TIMEOUT_MS = 600;  // Settings request timeout (halved)
 const MAX_CONCURRENCY = 10;               // Lower concurrency = more reliable
 const RETRY_LIMIT = 2;                    // 3 total attempts
-const RETRY_DELAYS_MS = [200, 400, 600];  // Backoff delays
+const RETRY_DELAYS_MS = [100, 200, 300];  // Backoff delays (halved)
 const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 /**

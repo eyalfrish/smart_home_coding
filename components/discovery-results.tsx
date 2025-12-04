@@ -28,6 +28,21 @@ const statusConfig: Record<string, { icon: string; label: string; className: str
   initial: { icon: "·", label: "", className: "statusInitial" },
 };
 
+// Compare two semver-like version strings, returns positive if a > b, negative if a < b, 0 if equal
+function compareVersions(a: string, b: string): number {
+  const partsA = a.split('.').map(Number);
+  const partsB = b.split('.').map(Number);
+  const maxLen = Math.max(partsA.length, partsB.length);
+  
+  for (let i = 0; i < maxLen; i++) {
+    const numA = partsA[i] ?? 0;
+    const numB = partsB[i] ?? 0;
+    if (numA > numB) return 1;
+    if (numA < numB) return -1;
+  }
+  return 0;
+}
+
 export default function DiscoveryResults({
   data,
   onPanelsSummaryClick,
@@ -104,6 +119,21 @@ export default function DiscoveryResults({
   const { summary, results } = data;
   const canOpenPanelsView =
     typeof onPanelsSummaryClick === "function" && summary.panelsFound > 0;
+
+  // Calculate the highest firmware version from all connected panels
+  const highestVersion = (() => {
+    if (!livePanelStates) return null;
+    let highest: string | null = null;
+    livePanelStates.forEach((state) => {
+      const version = state.fullState?.version;
+      if (version) {
+        if (!highest || compareVersions(version, highest) > 0) {
+          highest = version;
+        }
+      }
+    });
+    return highest;
+  })();
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredResults = results.filter((result) => {
@@ -218,6 +248,7 @@ export default function DiscoveryResults({
               <th>IP</th>
               <th>Name</th>
               <th>Status</th>
+              <th>FW Version</th>
               <th>Live State</th>
               <th>Touched</th>
               <th>Notes</th>
@@ -226,7 +257,7 @@ export default function DiscoveryResults({
           <tbody>
             {filteredResults.length === 0 ? (
               <tr>
-                <td colSpan={7}>No entries match that search.</td>
+                <td colSpan={8}>No entries match that search.</td>
               </tr>
             ) : (
               filteredResults.map((result) => {
@@ -263,6 +294,21 @@ export default function DiscoveryResults({
                         <span className={styles[statusConfig[result.status]?.className ?? "statusNone"]}>
                           {statusConfig[result.status]?.icon ?? "○"} {statusConfig[result.status]?.label ?? "—"}
                         </span>
+                      )}
+                    </td>
+                    <td>
+                      {liveState?.fullState?.version ? (
+                        <span className={
+                          highestVersion && compareVersions(liveState.fullState.version, highestVersion) === 0
+                            ? styles.versionLatest
+                            : styles.versionOutdated
+                        }>
+                          {liveState.fullState.version}
+                        </span>
+                      ) : result.status === "panel" ? (
+                        <span className={styles.versionUnknown}>...</span>
+                      ) : (
+                        <span className={styles.versionUnknown}>—</span>
                       )}
                     </td>
                     <td>

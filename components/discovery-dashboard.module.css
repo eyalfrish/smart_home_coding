@@ -177,6 +177,11 @@
   text-align: left;
 }
 
+.table th:nth-child(3),
+.table td:nth-child(3) {
+  min-width: 5.5rem;
+}
+
 .table th {
   background: rgba(15, 23, 42, 0.03);
   font-weight: 600;
@@ -600,5 +605,25 @@
   color: var(--muted);
   font-weight: 500;
   padding: 0.1rem 0.3rem;
+}
+
+/* FW Version colors */
+.versionLatest {
+  color: var(--panel);
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+}
+
+.versionOutdated {
+  color: #dc2626;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+}
+
+.versionUnknown {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
