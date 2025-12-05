@@ -18,8 +18,8 @@ interface BatchOperationsViewProps {
 type PanelBatchStatus = "idle" | "in-progress" | "success" | "failed";
 
 // Types of operations
-type DirectOperationType = "restart" | "scenes-all-off" | "smart-toggle" | "toggle-backlight";
-type VirtualOperationType = "virtual-backlight-on" | "virtual-backlight-off" | "virtual-all-lights-on" | "virtual-all-lights-off";
+type DirectOperationType = "restart" | "scenes-all-off" | "toggle-all" | "toggle-backlight";
+type VirtualOperationType = "virtual-backlight-on" | "virtual-backlight-off" | "virtual-all-lights-on" | "virtual-all-lights-off" | "virtual-all-switches-off";
 type BatchOperationType = DirectOperationType | VirtualOperationType;
 
 interface BatchOperation {
@@ -49,8 +49,8 @@ const DIRECT_OPERATIONS: BatchOperation[] = [
     variant: "danger",
   },
   {
-    id: "smart-toggle",
-    label: "Smart Toggle",
+    id: "toggle-all",
+    label: "Toggle All",
     command: { command: "toggle_all" },
     variant: "default",
     tooltip: "If ANY relay is ON → turns all OFF. Only if ALL relays are OFF → turns all ON.",
@@ -93,6 +93,13 @@ const VIRTUAL_OPERATIONS: BatchOperation[] = [
     isVirtual: true,
     variant: "default",
     tooltip: "Turns OFF all configured light relays on each panel",
+  },
+  {
+    id: "virtual-all-switches-off",
+    label: "All Switches Off",
+    isVirtual: true,
+    variant: "danger",
+    tooltip: "Turns OFF ALL relays (lights + unconfigured switches) on each panel",
   },
 ];
 
@@ -266,7 +273,7 @@ export default function BatchOperationsView({
           return { ip, success };
         }
 
-        // Handle all lights operations
+        // Handle all lights operations (configured relays only)
         if (operation.id === "virtual-all-lights-on" || operation.id === "virtual-all-lights-off") {
           const targetState = operation.id === "virtual-all-lights-on";
           const panelState = livePanelStates?.get(ip);
@@ -286,6 +293,37 @@ export default function BatchOperationsView({
           // Send set_relay command for each configured relay
           const relayPromises = configuredRelays.map(relay =>
             onSendCommand(ip, { command: "set_relay", index: relay.index, state: targetState })
+          );
+
+          const results = await Promise.all(relayPromises);
+          const allSuccess = results.every(r => r);
+
+          setPanelStatuses(prev => {
+            const next = new Map(prev);
+            next.set(ip, allSuccess ? "success" : "failed");
+            return next;
+          });
+          return { ip, success: allSuccess };
+        }
+
+        // Handle all switches off (ALL relays, including unconfigured)
+        if (operation.id === "virtual-all-switches-off") {
+          const panelState = livePanelStates?.get(ip);
+          const relays = panelState?.fullState?.relays ?? [];
+
+          if (relays.length === 0) {
+            // No relays, mark as success (nothing to do)
+            setPanelStatuses(prev => {
+              const next = new Map(prev);
+              next.set(ip, "success");
+              return next;
+            });
+            return { ip, success: true };
+          }
+
+          // Send set_relay OFF command for ALL relays
+          const relayPromises = relays.map(relay =>
+            onSendCommand(ip, { command: "set_relay", index: relay.index, state: false })
           );
 
           const results = await Promise.all(relayPromises);
@@ -415,6 +453,7 @@ export default function BatchOperationsView({
               >
                 Restart
               </button>
+              <span className={styles.buttonGroupSpacer}></span>
               <button
                 type="button"
                 className={`${styles.batchControlButton} ${styles.batchControlDanger}`}
@@ -423,15 +462,17 @@ export default function BatchOperationsView({
               >
                 Scenes All Off
               </button>
+              <span className={styles.buttonGroupSpacer}></span>
               <button
                 type="button"
                 className={styles.batchControlButton}
-                onClick={() => handleOperationClick(getDirectOp("smart-toggle"))}
+                onClick={() => handleOperationClick(getDirectOp("toggle-all"))}
                 disabled={isRunning || count === 0}
-                title={getDirectOp("smart-toggle").tooltip}
+                title={getDirectOp("toggle-all").tooltip}
               >
-                Smart Toggle
+                Toggle All
               </button>
+              <span className={styles.buttonGroupSpacer}></span>
               <button
                 type="button"
                 className={styles.batchControlButton}
@@ -453,41 +494,59 @@ export default function BatchOperationsView({
           </div>
           <div className={styles.batchControlsArea}>
             <div className={styles.batchControlsRow}>
+              {/* Backlight group */}
+              <div className={styles.buttonGroup}>
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => handleOperationClick(getVirtualOp("virtual-backlight-on"))}
+                  disabled={isRunning || count === 0}
+                  title={getVirtualOp("virtual-backlight-on").tooltip}
+                >
+                  Backlight On
+                </button>
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => handleOperationClick(getVirtualOp("virtual-backlight-off"))}
+                  disabled={isRunning || count === 0}
+                  title={getVirtualOp("virtual-backlight-off").tooltip}
+                >
+                  Backlight Off
+                </button>
+              </div>
+              <span className={styles.buttonGroupSpacer}></span>
+              {/* All Lights group */}
+              <div className={styles.buttonGroup}>
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => handleOperationClick(getVirtualOp("virtual-all-lights-on"))}
+                  disabled={isRunning || count === 0}
+                  title={getVirtualOp("virtual-all-lights-on").tooltip}
+                >
+                  All Lights On
+                </button>
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => handleOperationClick(getVirtualOp("virtual-all-lights-off"))}
+                  disabled={isRunning || count === 0}
+                  title={getVirtualOp("virtual-all-lights-off").tooltip}
+                >
+                  All Lights Off
+                </button>
+              </div>
+              <span className={styles.buttonGroupSpacer}></span>
+              {/* All Switches Off (standalone) */}
               <button
                 type="button"
-                className={styles.batchControlButton}
-                onClick={() => handleOperationClick(getVirtualOp("virtual-backlight-on"))}
+                className={`${styles.batchControlButton} ${styles.batchControlDanger}`}
+                onClick={() => handleOperationClick(getVirtualOp("virtual-all-switches-off"))}
                 disabled={isRunning || count === 0}
-                title={getVirtualOp("virtual-backlight-on").tooltip}
+                title={getVirtualOp("virtual-all-switches-off").tooltip}
               >
-                Backlight On
-              </button>
-              <button
-                type="button"
-                className={styles.batchControlButton}
-                onClick={() => handleOperationClick(getVirtualOp("virtual-backlight-off"))}
-                disabled={isRunning || count === 0}
-                title={getVirtualOp("virtual-backlight-off").tooltip}
-              >
-                Backlight Off
-              </button>
-              <button
-                type="button"
-                className={styles.batchControlButton}
-                onClick={() => handleOperationClick(getVirtualOp("virtual-all-lights-on"))}
-                disabled={isRunning || count === 0}
-                title={getVirtualOp("virtual-all-lights-on").tooltip}
-              >
-                All Lights On
-              </button>
-              <button
-                type="button"
-                className={styles.batchControlButton}
-                onClick={() => handleOperationClick(getVirtualOp("virtual-all-lights-off"))}
-                disabled={isRunning || count === 0}
-                title={getVirtualOp("virtual-all-lights-off").tooltip}
-              >
-                All Lights Off
+                All Switches Off
               </button>
             </div>
           </div>

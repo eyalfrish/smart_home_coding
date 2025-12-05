@@ -914,6 +914,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  align-items: center;
+}
+
+.buttonGroup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.buttonGroupSpacer {
+  width: 1rem;
 }
 
 .batchControlButton {
