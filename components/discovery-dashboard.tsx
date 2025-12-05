@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import DiscoveryForm, { type DiscoveryFormValues } from "./discovery-form";
 import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
+import BatchOperationsView from "./batch-operations-view";
 import styles from "./discovery-dashboard.module.css";
 import type {
   DiscoveryRequest,
@@ -55,7 +56,7 @@ export default function DiscoveryDashboard() {
   const [response, setResponse] = useState<DiscoveryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState<"discovery" | "panels-grid">("discovery");
+  const [view, setView] = useState<"discovery" | "panels-grid" | "batch-operations">("discovery");
   const [searchQuery, setSearchQuery] = useState("");
   const [formValues, setFormValues] =
     useState<DiscoveryFormValues>(INITIAL_FORM_VALUES);
@@ -64,6 +65,8 @@ export default function DiscoveryDashboard() {
   );
   const [showOnlyCubixx, setShowOnlyCubixx] = useState(true);
   const [showOnlyTouched, setShowOnlyTouched] = useState(false);
+  // Selection state for batch operations - persists across filters/views
+  const [selectedPanelIps, setSelectedPanelIps] = useState<Set<string>>(new Set());
 
   // Get list of discovered Cubixx panel IPs for real-time streaming
   const discoveredPanelIps = useMemo(() => {
@@ -126,6 +129,7 @@ export default function DiscoveryDashboard() {
       setSearchQuery("");
       setResponse(null); // Clear response first
       setPanelInfoMap({}); // Clear panel info
+      setSelectedPanelIps(new Set()); // Clear selection on new discovery
 
       // Give React a chance to process the clears before we start receiving data
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -319,6 +323,32 @@ export default function DiscoveryDashboard() {
     setView("discovery");
   };
 
+  const handleBatchOperationsClick = () => {
+    if (selectedPanelIps.size === 0) return;
+    setView("batch-operations");
+  };
+
+  // Selection handlers
+  const handlePanelSelectionChange = useCallback((ip: string, selected: boolean) => {
+    setSelectedPanelIps(prev => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(ip);
+      } else {
+        next.delete(ip);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback((ips: string[]) => {
+    setSelectedPanelIps(new Set(ips));
+  }, []);
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedPanelIps(new Set());
+  }, []);
+
   // Send a command to a specific panel
   const sendCommand = useCallback(async (ip: string, command: PanelCommand): Promise<boolean> => {
     try {
@@ -346,6 +376,14 @@ export default function DiscoveryDashboard() {
 
   const panelResults = response?.results ?? [];
 
+  // Get list of Cubixx panel IPs for selection purposes
+  const cubixxPanelIps = useMemo(() => {
+    if (!response) return [];
+    return response.results
+      .filter((r) => r.status === "panel")
+      .map((r) => r.ip);
+  }, [response]);
+
   return (
     <div className={styles.card}>
       {view === "panels-grid" ? (
@@ -355,6 +393,16 @@ export default function DiscoveryDashboard() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
         />
+      ) : view === "batch-operations" ? (
+        <BatchOperationsView
+          selectedPanelIps={selectedPanelIps}
+          panelResults={panelResults}
+          panelInfoMap={panelInfoMap}
+          livePanelStates={panelStates}
+          onBack={handleBackToDiscovery}
+          onSelectionChange={handlePanelSelectionChange}
+          onSendCommand={sendCommand}
+        />
       ) : (
         <>
           <DiscoveryForm
@@ -363,6 +411,8 @@ export default function DiscoveryDashboard() {
             isLoading={isLoading}
             onChange={setFormValues}
             onSubmit={handleFormSubmit}
+            selectedCount={selectedPanelIps.size}
+            onBatchOperationsClick={handleBatchOperationsClick}
           />
           {discoveredPanelIps.length > 0 && (
             <div className={styles.streamStatus}>
@@ -395,6 +445,11 @@ export default function DiscoveryDashboard() {
             onShowOnlyCubixxChange={setShowOnlyCubixx}
             onShowOnlyTouchedChange={setShowOnlyTouched}
             onSendCommand={sendCommand}
+            selectedPanelIps={selectedPanelIps}
+            onPanelSelectionChange={handlePanelSelectionChange}
+            onSelectAll={handleSelectAll}
+            onDeselectAll={handleDeselectAll}
+            cubixxPanelIps={cubixxPanelIps}
           />
         </>
       )}

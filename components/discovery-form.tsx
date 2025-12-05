@@ -15,6 +15,8 @@ interface DiscoveryFormProps {
   isLoading: boolean;
   onChange: (values: DiscoveryFormValues) => void;
   onSubmit: () => void;
+  selectedCount?: number;
+  onBatchOperationsClick?: () => void;
 }
 
 export default function DiscoveryForm({
@@ -23,6 +25,8 @@ export default function DiscoveryForm({
   isLoading,
   onChange,
   onSubmit,
+  selectedCount = 0,
+  onBatchOperationsClick,
 }: DiscoveryFormProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -32,6 +36,8 @@ export default function DiscoveryForm({
   const handleFieldChange = (field: keyof DiscoveryFormValues, value: string) => {
     onChange({ ...values, [field]: value });
   };
+
+  const hasBatchSelection = selectedCount > 0;
 
   return (
     <form onSubmit={handleSubmit}>
@@ -85,6 +91,14 @@ export default function DiscoveryForm({
           aria-busy={isLoading}
         >
           {isLoading ? "Scanning…" : "Discover"}
+        </button>
+        <button
+          type="button"
+          className={`${styles.batchButton} ${hasBatchSelection ? styles.batchButtonActive : ""}`}
+          disabled={!hasBatchSelection || isLoading}
+          onClick={onBatchOperationsClick}
+        >
+          Batch Operations{hasBatchSelection ? ` (${selectedCount})` : ""}
         </button>
         {isLoading && <span className={styles.status}>Scanning range…</span>}
       </div>

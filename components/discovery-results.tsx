@@ -16,6 +16,12 @@ interface DiscoveryResultsProps {
   onShowOnlyCubixxChange: (value: boolean) => void;
   onShowOnlyTouchedChange: (value: boolean) => void;
   onSendCommand?: (ip: string, command: PanelCommand) => Promise<boolean>;
+  // Selection props for batch operations
+  selectedPanelIps?: Set<string>;
+  onPanelSelectionChange?: (ip: string, selected: boolean) => void;
+  onSelectAll?: (ips: string[]) => void;
+  onDeselectAll?: () => void;
+  cubixxPanelIps?: string[];
 }
 
 // Short status indicators with icons
@@ -59,10 +65,34 @@ export default function DiscoveryResults({
   onShowOnlyCubixxChange,
   onShowOnlyTouchedChange,
   onSendCommand,
+  selectedPanelIps,
+  onPanelSelectionChange,
+  onSelectAll,
+  onDeselectAll,
+  cubixxPanelIps = [],
 }: DiscoveryResultsProps) {
   const [pendingCommands, setPendingCommands] = useState<Set<string>>(new Set());
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  // Selection helpers
+  const handleCheckboxChange = useCallback((ip: string, checked: boolean) => {
+    onPanelSelectionChange?.(ip, checked);
+  }, [onPanelSelectionChange]);
+
+  const handleSelectAllChange = useCallback((checked: boolean) => {
+    if (checked) {
+      onSelectAll?.(cubixxPanelIps);
+    } else {
+      onDeselectAll?.();
+    }
+  }, [onSelectAll, onDeselectAll, cubixxPanelIps]);
+
+  // Calculate if all Cubixx panels are selected (for the header checkbox)
+  const allCubixxSelected = cubixxPanelIps.length > 0 && 
+    cubixxPanelIps.every(ip => selectedPanelIps?.has(ip));
+  const someCubixxSelected = cubixxPanelIps.some(ip => selectedPanelIps?.has(ip));
+  const isIndeterminate = someCubixxSelected && !allCubixxSelected;
 
   const handleSort = useCallback((column: SortColumn) => {
     if (sortColumn === column) {
@@ -347,6 +377,18 @@ export default function DiscoveryResults({
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className={styles.checkboxHeader}>
+                <input
+                  type="checkbox"
+                  checked={allCubixxSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isIndeterminate;
+                  }}
+                  onChange={(e) => handleSelectAllChange(e.target.checked)}
+                  title={allCubixxSelected ? "Deselect all panels" : "Select all panels"}
+                  className={styles.selectAllCheckbox}
+                />
+              </th>
               <th 
                 className={styles.sortableHeader} 
                 onClick={() => handleSort("ip")}
@@ -409,7 +451,7 @@ export default function DiscoveryResults({
           <tbody>
             {sortedResults.length === 0 ? (
               <tr>
-                <td colSpan={10}>No entries match that search.</td>
+                <td colSpan={11}>No entries match that search.</td>
               </tr>
             ) : (
               sortedResults.map((result) => {
@@ -419,9 +461,23 @@ export default function DiscoveryResults({
                 const touchedClass = touched
                   ? styles.touchedYes
                   : styles.touchedNo;
+                const isPanel = result.status === "panel";
+                const isSelected = selectedPanelIps?.has(result.ip) ?? false;
 
                 return (
-                  <tr key={result.ip}>
+                  <tr key={result.ip} className={isSelected ? styles.selectedRow : ""}>
+                    <td className={styles.checkboxCell}>
+                      {isPanel ? (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleCheckboxChange(result.ip, e.target.checked)}
+                          className={styles.rowCheckbox}
+                        />
+                      ) : (
+                        <span className={styles.noCheckbox}></span>
+                      )}
+                    </td>
                     <td>
                       {result.status === "panel" ? (
                         <a
