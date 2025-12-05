@@ -17,55 +17,82 @@ interface BatchOperationsViewProps {
 // Status for each panel during batch operation
 type PanelBatchStatus = "idle" | "in-progress" | "success" | "failed";
 
-// Available batch operations
-type BatchOperationType = "backlight-on" | "backlight-off" | "restart" | "all-off" | "toggle-all";
+// Types of operations
+type DirectOperationType = "restart" | "scenes-all-off" | "smart-toggle" | "toggle-backlight";
+type VirtualOperationType = "virtual-backlight-on" | "virtual-backlight-off" | "virtual-all-lights-on" | "virtual-all-lights-off";
+type BatchOperationType = DirectOperationType | VirtualOperationType;
 
 interface BatchOperation {
   id: BatchOperationType;
   label: string;
-  icon: string;
-  command: PanelCommand;
+  command?: PanelCommand; // Direct operations have a single command
+  isVirtual?: boolean; // Virtual operations are computed
   confirmMessage?: string;
   variant?: "default" | "warning" | "danger";
+  tooltip?: string;
 }
 
-const BATCH_OPERATIONS: BatchOperation[] = [
-  {
-    id: "backlight-on",
-    label: "Backlight On",
-    icon: "💡",
-    command: { command: "backlight", state: true },
-    variant: "default",
-  },
-  {
-    id: "backlight-off",
-    label: "Backlight Off",
-    icon: "🌙",
-    command: { command: "backlight", state: false },
-    variant: "default",
-  },
+// Direct operations - map directly to panel commands (no group titles, just buttons with their names)
+const DIRECT_OPERATIONS: BatchOperation[] = [
   {
     id: "restart",
     label: "Restart",
-    icon: "🔄",
     command: { command: "restart" },
     confirmMessage: "Are you sure you want to restart all selected panels? They will be temporarily unavailable.",
     variant: "warning",
   },
   {
-    id: "all-off",
-    label: "All Off",
-    icon: "⚡",
+    id: "scenes-all-off",
+    label: "Scenes All Off",
     command: { command: "all_off" },
-    confirmMessage: "Are you sure you want to turn OFF all relays on all selected panels?",
+    confirmMessage: "Are you sure you want to trigger the 'Scenes All Off' action on all selected panels?",
     variant: "danger",
   },
   {
-    id: "toggle-all",
-    label: "Toggle All",
-    icon: "🔀",
+    id: "smart-toggle",
+    label: "Smart Toggle",
     command: { command: "toggle_all" },
     variant: "default",
+    tooltip: "If ANY relay is ON → turns all OFF. Only if ALL relays are OFF → turns all ON.",
+  },
+  {
+    id: "toggle-backlight",
+    label: "Toggle Backlight",
+    // No fixed command - determined per panel based on current state
+    variant: "default",
+    tooltip: "Toggles backlight on each panel based on its current state",
+  },
+];
+
+// Virtual operations - our implementation using multiple commands
+const VIRTUAL_OPERATIONS: BatchOperation[] = [
+  {
+    id: "virtual-backlight-on",
+    label: "Backlight On",
+    isVirtual: true,
+    variant: "default",
+    tooltip: "Turns ON backlight on all selected panels",
+  },
+  {
+    id: "virtual-backlight-off",
+    label: "Backlight Off",
+    isVirtual: true,
+    variant: "default",
+    tooltip: "Turns OFF backlight on all selected panels",
+  },
+  {
+    id: "virtual-all-lights-on",
+    label: "All Lights On",
+    isVirtual: true,
+    variant: "default",
+    tooltip: "Turns ON all configured light relays on each panel",
+  },
+  {
+    id: "virtual-all-lights-off",
+    label: "All Lights Off",
+    isVirtual: true,
+    variant: "default",
+    tooltip: "Turns OFF all configured light relays on each panel",
   },
 ];
 
@@ -82,6 +109,13 @@ function compareVersions(a: string, b: string): number {
     if (numA < numB) return -1;
   }
   return 0;
+}
+
+// Check if a relay is a configured light (not a generic "Relay N" name)
+function isConfiguredRelay(relay: { name?: string }): boolean {
+  if (!relay.name || relay.name.trim() === "") return false;
+  if (/^Relay\s+\d+$/i.test(relay.name.trim())) return false;
+  return true;
 }
 
 export default function BatchOperationsView({
@@ -140,14 +174,14 @@ export default function BatchOperationsView({
   }, [selectedPanels, panelStatuses]);
 
   const hasFailures = stats.failed > 0;
-  const hasAnyStatus = stats.success > 0 || stats.failed > 0;
+  const hasAnyStatus = stats.success > 0 || stats.failed > 0 || stats.inProgress > 0;
 
   const handleRemovePanel = useCallback((ip: string) => {
     onSelectionChange(ip, false);
   }, [onSelectionChange]);
 
-  // Execute batch operation on specified panels
-  const executeBatchOperation = useCallback(async (
+  // Execute a direct batch operation (single command per panel)
+  const executeDirectOperation = useCallback(async (
     operation: BatchOperation,
     targetIps: string[]
   ) => {
@@ -166,7 +200,20 @@ export default function BatchOperationsView({
     // Execute commands in parallel but update status as each completes
     const promises = targetIps.map(async (ip) => {
       try {
-        const success = await onSendCommand(ip, operation.command);
+        let command = operation.command;
+        
+        // Special case: Toggle Backlight needs to read current state
+        if (operation.id === "toggle-backlight") {
+          const panelState = livePanelStates?.get(ip);
+          const currentBacklight = panelState?.fullState?.statusLedOn ?? false;
+          command = { command: "backlight", state: !currentBacklight };
+        }
+
+        if (!command) {
+          throw new Error("No command defined");
+        }
+
+        const success = await onSendCommand(ip, command);
         setPanelStatuses(prev => {
           const next = new Map(prev);
           next.set(ip, success ? "success" : "failed");
@@ -185,9 +232,90 @@ export default function BatchOperationsView({
 
     await Promise.all(promises);
     setIsRunning(false);
-  }, [onSendCommand]);
+  }, [onSendCommand, livePanelStates]);
 
-  // Handle clicking a batch operation button
+  // Execute a virtual batch operation (multiple commands per panel or computed commands)
+  const executeVirtualOperation = useCallback(async (
+    operation: BatchOperation,
+    targetIps: string[]
+  ) => {
+    if (!onSendCommand || targetIps.length === 0) return;
+
+    setIsRunning(true);
+    setLastOperation(operation);
+
+    // Set all target panels to in-progress
+    setPanelStatuses(prev => {
+      const next = new Map(prev);
+      targetIps.forEach(ip => next.set(ip, "in-progress"));
+      return next;
+    });
+
+    // Execute on each panel
+    const promises = targetIps.map(async (ip) => {
+      try {
+        // Handle backlight operations
+        if (operation.id === "virtual-backlight-on" || operation.id === "virtual-backlight-off") {
+          const targetState = operation.id === "virtual-backlight-on";
+          const success = await onSendCommand(ip, { command: "backlight", state: targetState });
+          setPanelStatuses(prev => {
+            const next = new Map(prev);
+            next.set(ip, success ? "success" : "failed");
+            return next;
+          });
+          return { ip, success };
+        }
+
+        // Handle all lights operations
+        if (operation.id === "virtual-all-lights-on" || operation.id === "virtual-all-lights-off") {
+          const targetState = operation.id === "virtual-all-lights-on";
+          const panelState = livePanelStates?.get(ip);
+          const relays = panelState?.fullState?.relays ?? [];
+          const configuredRelays = relays.filter(isConfiguredRelay);
+
+          if (configuredRelays.length === 0) {
+            // No configured relays, mark as success (nothing to do)
+            setPanelStatuses(prev => {
+              const next = new Map(prev);
+              next.set(ip, "success");
+              return next;
+            });
+            return { ip, success: true };
+          }
+
+          // Send set_relay command for each configured relay
+          const relayPromises = configuredRelays.map(relay =>
+            onSendCommand(ip, { command: "set_relay", index: relay.index, state: targetState })
+          );
+
+          const results = await Promise.all(relayPromises);
+          const allSuccess = results.every(r => r);
+
+          setPanelStatuses(prev => {
+            const next = new Map(prev);
+            next.set(ip, allSuccess ? "success" : "failed");
+            return next;
+          });
+          return { ip, success: allSuccess };
+        }
+
+        // Unknown operation
+        throw new Error("Unknown virtual operation");
+      } catch {
+        setPanelStatuses(prev => {
+          const next = new Map(prev);
+          next.set(ip, "failed");
+          return next;
+        });
+        return { ip, success: false };
+      }
+    });
+
+    await Promise.all(promises);
+    setIsRunning(false);
+  }, [onSendCommand, livePanelStates]);
+
+  // Handle clicking any batch operation button
   const handleOperationClick = useCallback((operation: BatchOperation) => {
     // If there's a confirm message, show confirmation
     if (operation.confirmMessage) {
@@ -200,8 +328,13 @@ export default function BatchOperationsView({
 
     // Execute on all selected panels
     const targetIps = selectedPanels.map(p => p.ip);
-    executeBatchOperation(operation, targetIps);
-  }, [selectedPanels, executeBatchOperation]);
+
+    if (operation.isVirtual) {
+      executeVirtualOperation(operation, targetIps);
+    } else {
+      executeDirectOperation(operation, targetIps);
+    }
+  }, [selectedPanels, executeDirectOperation, executeVirtualOperation]);
 
   // Handle re-run on failed panels
   const handleRerunFailed = useCallback(() => {
@@ -220,8 +353,12 @@ export default function BatchOperationsView({
     });
 
     // Re-run on failed panels only
-    executeBatchOperation(lastOperation, failedIps);
-  }, [lastOperation, hasFailures, selectedPanels, panelStatuses, executeBatchOperation]);
+    if (lastOperation.isVirtual) {
+      executeVirtualOperation(lastOperation, failedIps);
+    } else {
+      executeDirectOperation(lastOperation, failedIps);
+    }
+  }, [lastOperation, hasFailures, selectedPanels, panelStatuses, executeDirectOperation, executeVirtualOperation]);
 
   const count = selectedPanels.length;
 
@@ -240,6 +377,10 @@ export default function BatchOperationsView({
     }
   };
 
+  // Find operations by ID
+  const getDirectOp = (id: DirectOperationType) => DIRECT_OPERATIONS.find(op => op.id === id)!;
+  const getVirtualOp = (id: VirtualOperationType) => VIRTUAL_OPERATIONS.find(op => op.id === id)!;
+
   return (
     <div className={styles.batchView}>
       <button type="button" className={styles.backButton} onClick={onBack}>
@@ -248,92 +389,124 @@ export default function BatchOperationsView({
       
       <div className={styles.batchHeader}>
         <h2>Batch Operations <span className={styles.batchCount}>(batching {count} {count === 1 ? "panel" : "panels"})</span></h2>
-        {hasAnyStatus && (
-          <p className={styles.batchProgress}>
-            {stats.inProgress > 0 && <span className={styles.progressInProgress}>⏳ {stats.inProgress} in progress</span>}
-            {stats.success > 0 && <span className={styles.progressSuccess}>✓ {stats.success} succeeded</span>}
-            {stats.failed > 0 && <span className={styles.progressFailed}>✗ {stats.failed} failed</span>}
-          </p>
-        )}
+        <p className={`${styles.batchProgress} ${hasAnyStatus ? "" : styles.batchProgressHidden}`}>
+          {stats.inProgress > 0 && <span className={styles.progressInProgress}>⏳ {stats.inProgress} in progress</span>}
+          {stats.success > 0 && <span className={styles.progressSuccess}>✓ {stats.success} succeeded</span>}
+          {stats.failed > 0 && <span className={styles.progressFailed}>✗ {stats.failed} failed</span>}
+          {!hasAnyStatus && <span className={styles.progressPlaceholder}>&nbsp;</span>}
+        </p>
       </div>
 
-      {/* Batch operation controls */}
-      <div className={styles.batchControlsArea}>
-        <div className={styles.batchControlsGrid}>
-          {/* Backlight Controls */}
-          <div className={styles.batchControlGroup}>
-            <h4 className={styles.batchControlGroupTitle}>💡 Backlight</h4>
-            <div className={styles.batchControlButtons}>
-              <button
-                type="button"
-                className={styles.batchControlButton}
-                onClick={() => handleOperationClick(BATCH_OPERATIONS[0])}
-                disabled={isRunning || count === 0}
-              >
-                On
-              </button>
-              <button
-                type="button"
-                className={styles.batchControlButton}
-                onClick={() => handleOperationClick(BATCH_OPERATIONS[1])}
-                disabled={isRunning || count === 0}
-              >
-                Off
-              </button>
-            </div>
+      {/* Batch operation controls - two sections */}
+      <div className={styles.batchControlsSections}>
+        {/* Direct Operations */}
+        <div className={styles.batchControlsSection}>
+          <div className={styles.batchSectionHeader}>
+            <h3>Direct Operations</h3>
+            <span className={styles.batchSectionHint}>Native panel commands</span>
           </div>
-
-          {/* Restart */}
-          <div className={styles.batchControlGroup}>
-            <h4 className={styles.batchControlGroupTitle}>🔄 Device</h4>
-            <div className={styles.batchControlButtons}>
+          <div className={styles.batchControlsArea}>
+            <div className={styles.batchControlsRow}>
               <button
                 type="button"
                 className={`${styles.batchControlButton} ${styles.batchControlWarning}`}
-                onClick={() => handleOperationClick(BATCH_OPERATIONS[2])}
+                onClick={() => handleOperationClick(getDirectOp("restart"))}
                 disabled={isRunning || count === 0}
               >
                 Restart
               </button>
-            </div>
-          </div>
-
-          {/* Power Controls */}
-          <div className={styles.batchControlGroup}>
-            <h4 className={styles.batchControlGroupTitle}>⚡ Power</h4>
-            <div className={styles.batchControlButtons}>
               <button
                 type="button"
                 className={`${styles.batchControlButton} ${styles.batchControlDanger}`}
-                onClick={() => handleOperationClick(BATCH_OPERATIONS[3])}
+                onClick={() => handleOperationClick(getDirectOp("scenes-all-off"))}
                 disabled={isRunning || count === 0}
               >
-                All Off
+                Scenes All Off
               </button>
               <button
                 type="button"
                 className={styles.batchControlButton}
-                onClick={() => handleOperationClick(BATCH_OPERATIONS[4])}
+                onClick={() => handleOperationClick(getDirectOp("smart-toggle"))}
                 disabled={isRunning || count === 0}
+                title={getDirectOp("smart-toggle").tooltip}
               >
-                Toggle All
+                Smart Toggle
+              </button>
+              <button
+                type="button"
+                className={styles.batchControlButton}
+                onClick={() => handleOperationClick(getDirectOp("toggle-backlight"))}
+                disabled={isRunning || count === 0}
+                title={getDirectOp("toggle-backlight").tooltip}
+              >
+                Toggle Backlight
               </button>
             </div>
           </div>
         </div>
 
-        {/* Re-run on failed button */}
-        {hasFailures && !isRunning && lastOperation && (
-          <div className={styles.rerunSection}>
-            <button
-              type="button"
-              className={styles.rerunButton}
-              onClick={handleRerunFailed}
-              title={`Re-run "${lastOperation.label}" on ${stats.failed} failed panel${stats.failed > 1 ? 's' : ''}`}
-            >
-              🔁 Re-run on failed panels ({stats.failed})
-            </button>
+        {/* Virtual Operations */}
+        <div className={styles.batchControlsSection}>
+          <div className={styles.batchSectionHeader}>
+            <h3>Virtual Operations</h3>
+            <span className={styles.batchSectionHint}>Aggregated commands</span>
           </div>
+          <div className={styles.batchControlsArea}>
+            <div className={styles.batchControlsRow}>
+              <button
+                type="button"
+                className={styles.batchControlButton}
+                onClick={() => handleOperationClick(getVirtualOp("virtual-backlight-on"))}
+                disabled={isRunning || count === 0}
+                title={getVirtualOp("virtual-backlight-on").tooltip}
+              >
+                Backlight On
+              </button>
+              <button
+                type="button"
+                className={styles.batchControlButton}
+                onClick={() => handleOperationClick(getVirtualOp("virtual-backlight-off"))}
+                disabled={isRunning || count === 0}
+                title={getVirtualOp("virtual-backlight-off").tooltip}
+              >
+                Backlight Off
+              </button>
+              <button
+                type="button"
+                className={styles.batchControlButton}
+                onClick={() => handleOperationClick(getVirtualOp("virtual-all-lights-on"))}
+                disabled={isRunning || count === 0}
+                title={getVirtualOp("virtual-all-lights-on").tooltip}
+              >
+                All Lights On
+              </button>
+              <button
+                type="button"
+                className={styles.batchControlButton}
+                onClick={() => handleOperationClick(getVirtualOp("virtual-all-lights-off"))}
+                disabled={isRunning || count === 0}
+                title={getVirtualOp("virtual-all-lights-off").tooltip}
+              >
+                All Lights Off
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Re-run on failed button - always reserve space */}
+      <div className={styles.rerunSection}>
+        {hasFailures && !isRunning && lastOperation ? (
+          <button
+            type="button"
+            className={styles.rerunButton}
+            onClick={handleRerunFailed}
+            title={`Re-run "${lastOperation.label}" on ${stats.failed} failed panel${stats.failed > 1 ? 's' : ''}`}
+          >
+            🔁 Re-run on failed panels ({stats.failed})
+          </button>
+        ) : (
+          <div className={styles.rerunPlaceholder}></div>
         )}
       </div>
 
@@ -450,14 +623,12 @@ export default function BatchOperationsView({
                     <td>
                       {liveState?.fullState ? (
                         (() => {
-                          const relayCount = liveState.fullState.relays?.filter(
-                            r => r.name && !/^Relay\s+\d+$/i.test(r.name.trim())
-                          ).length ?? 0;
+                          const relayCount = liveState.fullState.relays?.filter(isConfiguredRelay).length ?? 0;
                           const curtainCount = liveState.fullState.curtains?.filter(
                             c => c.name && !/^Curtain\s+\d+$/i.test(c.name.trim())
                           ).length ?? 0;
                           const onCount = liveState.fullState.relays?.filter(
-                            r => r.state && r.name && !/^Relay\s+\d+$/i.test(r.name.trim())
+                            r => r.state && isConfiguredRelay(r)
                           ).length ?? 0;
 
                           if (relayCount === 0 && curtainCount === 0) {

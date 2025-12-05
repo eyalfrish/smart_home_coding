@@ -61,39 +61,68 @@ Batch operations allow administrators to execute the same command across multipl
 
 ---
 
-### 4. **All Off** (Emergency/Scene)
+
+### 4. **Scenes All Off** (Built-in Scene)
 **Command:** `all_off` (WebSocket: `{ "command": "all_off" }`, HTTP: `GET /alloff`)
 
-**Use Case:** Turn off all relays on all selected panels:
-- Emergency shutdown
-- Leaving home routine
-- Energy saving before vacation
+**Use Case:** Trigger the built-in "All Off" scene on all selected panels.
 
-**Considerations:**
-- This affects ALL relays on each panel, not just lights
-- Curtains are NOT affected (different control)
-- Irreversible until individually turned back on
+**Note:** This is the panel's built-in scene command. The exact behavior depends on how the panel's scenes are configured.
 
 **Batch UI Suggestion:**
-- Red "All Off" button with confirmation dialog
-- "Are you sure you want to turn off all devices on N panels?"
+- Red "All Off" button under "Scenes" group with confirmation dialog
 
 ---
 
-### 5. **Toggle All** (Scene)
+### 5. **Smart Toggle** (Scene)
 **Command:** `toggle_all` (WebSocket: `{ "command": "toggle_all" }`, HTTP: `GET /toggleall`)
 
-**Use Case:** Toggle all relays on selected panels:
-- Quick state inversion
-- Testing purposes
+**Behavior:** 
+- If **ANY** relay is ON → turns ALL relays OFF
+- Only if **ALL** relays are OFF → turns ALL relays ON
 
-**Considerations:**
-- Less predictable outcome (depends on current state)
-- May not be suitable for most batch scenarios
-- Included for completeness
+**Use Case:** Quick way to turn everything off (or on if already off).
 
 **Batch UI Suggestion:**
-- Lower priority, can be omitted initially or placed in "Advanced" section
+- "Smart Toggle" button with tooltip explaining the behavior
+
+---
+
+## Virtual Operations (Aggregated)
+
+These operations are implemented by our dashboard, sending multiple individual commands to achieve the desired result. They appear in a separate "Virtual Operations" section in the UI.
+
+### V1. **All Lights On**
+**Implementation:** Sends `set_relay` with `state: true` to each configured relay on each panel.
+
+**Use Case:** Turn on all lights across all selected panels.
+
+**Considerations:**
+- Only affects "configured" relays (those with custom names, not generic "Relay N")
+- Sends one command per relay per panel (may take longer than direct operations)
+- Panels with no configured relays are marked as success immediately
+
+---
+
+### V2. **All Lights Off**
+**Implementation:** Sends `set_relay` with `state: false` to each configured relay on each panel.
+
+**Use Case:** Turn off all lights across all selected panels.
+
+**Considerations:**
+- Same as "All Lights On" but turns lights off
+- More predictable than "Scenes All Off" since it explicitly targets configured relays
+
+---
+
+## Direct vs Virtual Operations
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **Direct** | Single command sent to panel's native API | Restart, Backlight On/Off |
+| **Virtual** | Our implementation using multiple commands | All Lights On/Off |
+
+Direct operations are faster and more reliable. Virtual operations provide functionality not available natively.
 
 ---
 
