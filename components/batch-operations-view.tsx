@@ -39,13 +39,12 @@ const DIRECT_OPERATIONS: BatchOperation[] = [
     label: "Restart",
     command: { command: "restart" },
     confirmMessage: "Are you sure you want to restart all selected panels? They will be temporarily unavailable.",
-    variant: "warning",
+    variant: "danger",
   },
   {
     id: "scenes-all-off",
     label: "Scenes All Off",
     command: { command: "all_off" },
-    confirmMessage: "Are you sure you want to trigger the 'Scenes All Off' action on all selected panels?",
     variant: "danger",
   },
   {
@@ -98,7 +97,7 @@ const VIRTUAL_OPERATIONS: BatchOperation[] = [
     id: "virtual-all-switches-off",
     label: "All Switches Off",
     isVirtual: true,
-    variant: "danger",
+    variant: "default",
     tooltip: "Turns OFF ALL relays (lights + unconfigured switches) on each panel",
   },
 ];
@@ -447,20 +446,12 @@ export default function BatchOperationsView({
             <div className={styles.batchControlsRow}>
               <button
                 type="button"
-                className={`${styles.batchControlButton} ${styles.batchControlWarning}`}
-                onClick={() => handleOperationClick(getDirectOp("restart"))}
+                className={styles.batchControlButton}
+                onClick={() => handleOperationClick(getDirectOp("toggle-backlight"))}
                 disabled={isRunning || count === 0}
+                title={getDirectOp("toggle-backlight").tooltip}
               >
-                Restart
-              </button>
-              <span className={styles.buttonGroupSpacer}></span>
-              <button
-                type="button"
-                className={`${styles.batchControlButton} ${styles.batchControlDanger}`}
-                onClick={() => handleOperationClick(getDirectOp("scenes-all-off"))}
-                disabled={isRunning || count === 0}
-              >
-                Scenes All Off
+                Toggle Backlight
               </button>
               <span className={styles.buttonGroupSpacer}></span>
               <button
@@ -475,12 +466,20 @@ export default function BatchOperationsView({
               <span className={styles.buttonGroupSpacer}></span>
               <button
                 type="button"
-                className={styles.batchControlButton}
-                onClick={() => handleOperationClick(getDirectOp("toggle-backlight"))}
+                className={`${styles.batchControlButton} ${styles.batchControlDanger}`}
+                onClick={() => handleOperationClick(getDirectOp("scenes-all-off"))}
                 disabled={isRunning || count === 0}
-                title={getDirectOp("toggle-backlight").tooltip}
               >
-                Toggle Backlight
+                Scenes All Off
+              </button>
+              <span className={styles.buttonGroupSpacer}></span>
+              <button
+                type="button"
+                className={`${styles.batchControlButton} ${styles.batchControlDanger}`}
+                onClick={() => handleOperationClick(getDirectOp("restart"))}
+                disabled={isRunning || count === 0}
+              >
+                Restart
               </button>
             </div>
           </div>
@@ -490,7 +489,7 @@ export default function BatchOperationsView({
         <div className={styles.batchControlsSection}>
           <div className={styles.batchSectionHeader}>
             <h3>Virtual Operations</h3>
-            <span className={styles.batchSectionHint}>Aggregated commands</span>
+            <span className={styles.batchSectionHint}>Composed commands</span>
           </div>
           <div className={styles.batchControlsArea}>
             <div className={styles.batchControlsRow}>
@@ -541,7 +540,7 @@ export default function BatchOperationsView({
               {/* All Switches Off (standalone) */}
               <button
                 type="button"
-                className={`${styles.batchControlButton} ${styles.batchControlDanger}`}
+                className={styles.batchControlButton}
                 onClick={() => handleOperationClick(getVirtualOp("virtual-all-switches-off"))}
                 disabled={isRunning || count === 0}
                 title={getVirtualOp("virtual-all-switches-off").tooltip}
