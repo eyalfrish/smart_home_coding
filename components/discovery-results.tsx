@@ -2,7 +2,7 @@
 
 import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryResponse, PanelInfo, LivePanelState, PanelCommand } from "@/lib/discovery/types";
+import type { DiscoveryResponse, PanelInfo, LivePanelState, PanelCommand, PanelSettings } from "@/lib/discovery/types";
 
 interface DiscoveryResultsProps {
   data: DiscoveryResponse | null;
@@ -207,6 +207,42 @@ export default function DiscoveryResults({
       }
     });
     return highest;
+  })();
+
+  // Calculate most common logging value and long press time for color coding
+  const { mostCommonLogging, mostCommonLongPress } = (() => {
+    const loggingCounts: Record<string, number> = { 'true': 0, 'false': 0 };
+    const longPressCounts: Record<number, number> = {};
+    
+    results.forEach(result => {
+      if (result.status !== "panel" || !result.settings) return;
+      
+      if (result.settings.logging !== undefined) {
+        loggingCounts[String(result.settings.logging)]++;
+      }
+      
+      if (result.settings.longPressMs !== undefined) {
+        longPressCounts[result.settings.longPressMs] = (longPressCounts[result.settings.longPressMs] || 0) + 1;
+      }
+    });
+    
+    // Determine most common logging
+    let mostCommonLogging: boolean | null = null;
+    if (loggingCounts['true'] > 0 || loggingCounts['false'] > 0) {
+      mostCommonLogging = loggingCounts['true'] >= loggingCounts['false'];
+    }
+    
+    // Determine most common long press
+    let mostCommonLongPress: number | null = null;
+    let maxCount = 0;
+    for (const [time, count] of Object.entries(longPressCounts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostCommonLongPress = parseInt(time, 10);
+      }
+    }
+    
+    return { mostCommonLogging, mostCommonLongPress };
   })();
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -435,6 +471,8 @@ export default function DiscoveryResults({
                 </span>
               </th>
               <th>Backlight</th>
+              <th>Logging</th>
+              <th>LongPress</th>
               <th>Live State</th>
               <th 
                 className={styles.sortableHeader} 
@@ -451,7 +489,7 @@ export default function DiscoveryResults({
           <tbody>
             {sortedResults.length === 0 ? (
               <tr>
-                <td colSpan={11}>No entries match that search.</td>
+                <td colSpan={13}>No entries match that search.</td>
               </tr>
             ) : (
               sortedResults.map((result) => {
@@ -556,6 +594,36 @@ export default function DiscoveryResults({
                         <span className={styles.backlightUnknown}>...</span>
                       ) : (
                         <span className={styles.backlightUnknown}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {result.settings?.logging !== undefined ? (
+                        <span className={
+                          result.settings.logging === mostCommonLogging
+                            ? styles.settingCommon
+                            : styles.settingDifferent
+                        }>
+                          {result.settings.logging ? "On" : "Off"}
+                        </span>
+                      ) : result.status === "panel" ? (
+                        <span className={styles.settingUnknown}>—</span>
+                      ) : (
+                        <span className={styles.settingUnknown}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {result.settings?.longPressMs !== undefined ? (
+                        <span className={
+                          result.settings.longPressMs === mostCommonLongPress
+                            ? styles.settingCommon
+                            : styles.settingDifferent
+                        }>
+                          {result.settings.longPressMs}
+                        </span>
+                      ) : result.status === "panel" ? (
+                        <span className={styles.settingUnknown}>—</span>
+                      ) : (
+                        <span className={styles.settingUnknown}>—</span>
                       )}
                     </td>
                     <td>

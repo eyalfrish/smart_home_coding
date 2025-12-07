@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryResult, PanelInfo, LivePanelState, PanelCommand } from "@/lib/discovery/types";
+import type { DiscoveryResult, PanelInfo, LivePanelState, PanelCommand, PanelSettings } from "@/lib/discovery/types";
 
 interface BatchOperationsViewProps {
   selectedPanelIps: Set<string>;
@@ -20,7 +20,8 @@ type PanelBatchStatus = "idle" | "in-progress" | "success" | "failed";
 // Types of operations
 type DirectOperationType = "restart" | "scenes-all-off" | "toggle-all" | "toggle-backlight";
 type VirtualOperationType = "virtual-backlight-on" | "virtual-backlight-off" | "virtual-all-lights-on" | "virtual-all-lights-off" | "virtual-all-switches-off";
-type BatchOperationType = DirectOperationType | VirtualOperationType;
+type SettingsOperationType = "set-logging-on" | "set-logging-off" | "set-longpress";
+type BatchOperationType = DirectOperationType | VirtualOperationType | SettingsOperationType;
 
 interface BatchOperation {
   id: BatchOperationType;
@@ -102,6 +103,31 @@ const VIRTUAL_OPERATIONS: BatchOperation[] = [
   },
 ];
 
+// Settings operations - HTTP-based configuration changes
+const SETTINGS_OPERATIONS: BatchOperation[] = [
+  {
+    id: "set-logging-on",
+    label: "Logging On",
+    isVirtual: true,
+    variant: "default",
+    tooltip: "Enable logging on all selected panels",
+  },
+  {
+    id: "set-logging-off",
+    label: "Logging Off",
+    isVirtual: true,
+    variant: "default",
+    tooltip: "Disable logging on all selected panels",
+  },
+  {
+    id: "set-longpress",
+    label: "Set LPress",
+    isVirtual: true,
+    variant: "default",
+    tooltip: "Set long press time on all selected panels",
+  },
+];
+
 // Compare two semver-like version strings
 function compareVersions(a: string, b: string): number {
   const partsA = a.split('.').map(Number);
@@ -139,6 +165,8 @@ export default function BatchOperationsView({
   const [isRunning, setIsRunning] = useState(false);
   // Track the last operation that was run (for re-run functionality)
   const [lastOperation, setLastOperation] = useState<BatchOperation | null>(null);
+  // Long press time input value
+  const [longPressInput, setLongPressInput] = useState<string>("1000");
 
   // Filter to only show selected panels that are actual panels
   const selectedPanels = useMemo(() => {
@@ -178,6 +206,42 @@ export default function BatchOperationsView({
 
     return { success, failed, inProgress, total: selectedPanels.length };
   }, [selectedPanels, panelStatuses]);
+
+  // Calculate most common logging value and long press time for color coding
+  const { mostCommonLogging, mostCommonLongPress } = useMemo(() => {
+    const loggingCounts: Record<string, number> = { 'true': 0, 'false': 0 };
+    const longPressCounts: Record<number, number> = {};
+    
+    selectedPanels.forEach(result => {
+      if (!result.settings) return;
+      
+      if (result.settings.logging !== undefined) {
+        loggingCounts[String(result.settings.logging)]++;
+      }
+      
+      if (result.settings.longPressMs !== undefined) {
+        longPressCounts[result.settings.longPressMs] = (longPressCounts[result.settings.longPressMs] || 0) + 1;
+      }
+    });
+    
+    // Determine most common logging
+    let mostCommonLogging: boolean | null = null;
+    if (loggingCounts['true'] > 0 || loggingCounts['false'] > 0) {
+      mostCommonLogging = loggingCounts['true'] >= loggingCounts['false'];
+    }
+    
+    // Determine most common long press
+    let mostCommonLongPress: number | null = null;
+    let maxCount = 0;
+    for (const [time, count] of Object.entries(longPressCounts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostCommonLongPress = parseInt(time, 10);
+      }
+    }
+    
+    return { mostCommonLogging, mostCommonLongPress };
+  }, [selectedPanels]);
 
   const hasFailures = stats.failed > 0;
   const hasAnyStatus = stats.success > 0 || stats.failed > 0 || stats.inProgress > 0;
@@ -239,6 +303,58 @@ export default function BatchOperationsView({
     await Promise.all(promises);
     setIsRunning(false);
   }, [onSendCommand, livePanelStates]);
+
+  // Execute a settings operation via HTTP
+  const executeSettingsOperation = useCallback(async (
+    operation: BatchOperation,
+    targetIps: string[],
+    longPressValue?: number
+  ) => {
+    if (targetIps.length === 0) return;
+
+    setIsRunning(true);
+    setLastOperation(operation);
+
+    // Set all target panels to in-progress
+    setPanelStatuses(prev => {
+      const next = new Map(prev);
+      targetIps.forEach(ip => next.set(ip, "in-progress"));
+      return next;
+    });
+
+    // Execute on each panel
+    const promises = targetIps.map(async (ip) => {
+      try {
+        const response = await fetch(`/api/panels/settings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ip,
+            operation: operation.id,
+            longPressMs: longPressValue,
+          }),
+        });
+
+        const success = response.ok;
+        setPanelStatuses(prev => {
+          const next = new Map(prev);
+          next.set(ip, success ? "success" : "failed");
+          return next;
+        });
+        return { ip, success };
+      } catch {
+        setPanelStatuses(prev => {
+          const next = new Map(prev);
+          next.set(ip, "failed");
+          return next;
+        });
+        return { ip, success: false };
+      }
+    });
+
+    await Promise.all(promises);
+    setIsRunning(false);
+  }, []);
 
   // Execute a virtual batch operation (multiple commands per panel or computed commands)
   const executeVirtualOperation = useCallback(async (
@@ -352,8 +468,13 @@ export default function BatchOperationsView({
     setIsRunning(false);
   }, [onSendCommand, livePanelStates]);
 
+  // Check if operation is a settings operation
+  const isSettingsOperation = useCallback((id: BatchOperationType) => {
+    return id.startsWith("set-");
+  }, []);
+
   // Handle clicking any batch operation button
-  const handleOperationClick = useCallback((operation: BatchOperation) => {
+  const handleOperationClick = useCallback((operation: BatchOperation, longPressValue?: number) => {
     // If there's a confirm message, show confirmation
     if (operation.confirmMessage) {
       const confirmed = window.confirm(operation.confirmMessage);
@@ -366,12 +487,14 @@ export default function BatchOperationsView({
     // Execute on all selected panels
     const targetIps = selectedPanels.map(p => p.ip);
 
-    if (operation.isVirtual) {
+    if (isSettingsOperation(operation.id)) {
+      executeSettingsOperation(operation, targetIps, longPressValue);
+    } else if (operation.isVirtual) {
       executeVirtualOperation(operation, targetIps);
     } else {
       executeDirectOperation(operation, targetIps);
     }
-  }, [selectedPanels, executeDirectOperation, executeVirtualOperation]);
+  }, [selectedPanels, executeDirectOperation, executeVirtualOperation, executeSettingsOperation, isSettingsOperation]);
 
   // Handle re-run on failed panels
   const handleRerunFailed = useCallback(() => {
@@ -390,12 +513,15 @@ export default function BatchOperationsView({
     });
 
     // Re-run on failed panels only
-    if (lastOperation.isVirtual) {
+    if (isSettingsOperation(lastOperation.id)) {
+      const longPressValue = lastOperation.id === "set-longpress" ? parseInt(longPressInput, 10) : undefined;
+      executeSettingsOperation(lastOperation, failedIps, longPressValue);
+    } else if (lastOperation.isVirtual) {
       executeVirtualOperation(lastOperation, failedIps);
     } else {
       executeDirectOperation(lastOperation, failedIps);
     }
-  }, [lastOperation, hasFailures, selectedPanels, panelStatuses, executeDirectOperation, executeVirtualOperation]);
+  }, [lastOperation, hasFailures, selectedPanels, panelStatuses, executeDirectOperation, executeVirtualOperation, executeSettingsOperation, isSettingsOperation, longPressInput]);
 
   const count = selectedPanels.length;
 
@@ -417,6 +543,7 @@ export default function BatchOperationsView({
   // Find operations by ID
   const getDirectOp = (id: DirectOperationType) => DIRECT_OPERATIONS.find(op => op.id === id)!;
   const getVirtualOp = (id: VirtualOperationType) => VIRTUAL_OPERATIONS.find(op => op.id === id)!;
+  const getSettingsOp = (id: SettingsOperationType) => SETTINGS_OPERATIONS.find(op => op.id === id)!;
 
   return (
     <div className={styles.batchView}>
@@ -550,6 +677,63 @@ export default function BatchOperationsView({
             </div>
           </div>
         </div>
+
+        {/* Settings Operations */}
+        <div className={styles.batchControlsSection}>
+          <div className={styles.batchSectionHeader}>
+            <h3>Settings</h3>
+            <span className={styles.batchSectionHint}>HTTP-based configuration</span>
+          </div>
+          <div className={styles.batchControlsArea}>
+            <div className={styles.batchControlsRow}>
+              {/* Logging group */}
+              <div className={styles.buttonGroup}>
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => handleOperationClick(getSettingsOp("set-logging-on"))}
+                  disabled={isRunning || count === 0}
+                  title={getSettingsOp("set-logging-on").tooltip}
+                >
+                  Log On
+                </button>
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => handleOperationClick(getSettingsOp("set-logging-off"))}
+                  disabled={isRunning || count === 0}
+                  title={getSettingsOp("set-logging-off").tooltip}
+                >
+                  Log Off
+                </button>
+              </div>
+              <span className={styles.buttonGroupSpacer}></span>
+              {/* Long press group */}
+              <div className={styles.settingsInputGroup}>
+                <input
+                  type="number"
+                  className={styles.settingsInput}
+                  value={longPressInput}
+                  onChange={(e) => setLongPressInput(e.target.value)}
+                  min="100"
+                  max="5000"
+                  step="100"
+                  placeholder="ms"
+                  disabled={isRunning}
+                />
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => handleOperationClick(getSettingsOp("set-longpress"), parseInt(longPressInput, 10))}
+                  disabled={isRunning || count === 0 || !longPressInput || parseInt(longPressInput, 10) < 100}
+                  title={getSettingsOp("set-longpress").tooltip}
+                >
+                  Set LPress
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Re-run on failed button - always reserve space */}
@@ -586,6 +770,8 @@ export default function BatchOperationsView({
                 <th>FW Version</th>
                 <th>Signal</th>
                 <th>Backlight</th>
+                <th>Logging</th>
+                <th>LongPress</th>
                 <th>Live State</th>
               </tr>
             </thead>
@@ -676,6 +862,32 @@ export default function BatchOperationsView({
                         </span>
                       ) : (
                         <span className={styles.backlightUnknown}>...</span>
+                      )}
+                    </td>
+                    <td>
+                      {panel.settings?.logging !== undefined ? (
+                        <span className={
+                          panel.settings.logging === mostCommonLogging
+                            ? styles.settingCommon
+                            : styles.settingDifferent
+                        }>
+                          {panel.settings.logging ? "On" : "Off"}
+                        </span>
+                      ) : (
+                        <span className={styles.settingUnknown}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {panel.settings?.longPressMs !== undefined ? (
+                        <span className={
+                          panel.settings.longPressMs === mostCommonLongPress
+                            ? styles.settingCommon
+                            : styles.settingDifferent
+                        }>
+                          {panel.settings.longPressMs}
+                        </span>
+                      ) : (
+                        <span className={styles.settingUnknown}>—</span>
                       )}
                     </td>
                     <td>

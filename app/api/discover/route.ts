@@ -4,6 +4,7 @@ import type {
   DiscoveryResponse,
   DiscoveryResult,
   DiscoverySummary,
+  PanelSettings,
 } from "@/lib/discovery/types";
 
 export const runtime = "nodejs";
@@ -141,14 +142,27 @@ async function checkHost(ip: string): Promise<DiscoveryResult> {
     if (response.status === 200) {
       const html = await response.text();
       const panel = isPanelHtml(html);
-      const panelName = panel ? await fetchPanelName(ip) : null;
+      let name: string | undefined;
+      let settings: PanelSettings | undefined;
+      
+      if (panel) {
+        const panelSettings = await fetchPanelSettings(ip);
+        name = panelSettings.name ?? undefined;
+        settings = {};
+        if (panelSettings.logging !== null) settings.logging = panelSettings.logging;
+        if (panelSettings.longPressMs !== null) settings.longPressMs = panelSettings.longPressMs;
+        // Only include settings if there's at least one value
+        if (Object.keys(settings).length === 0) settings = undefined;
+      }
+      
       return {
         ip,
         status: panel ? "panel" : "not-panel",
         httpStatus: response.status,
         errorMessage: panel ? undefined : "HTML does not look like Cubixx",
-        name: panel ? panelName : undefined,
+        name,
         panelHtml: panel ? html : undefined,
+        settings,
       };
     }
 
@@ -181,9 +195,15 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Best-effort scrape of the hostn input on /settings. The main page does not expose
-// the name, so we read it from the settings form when possible.
-async function fetchPanelName(ip: string): Promise<string | null> {
+interface PanelSettingsResult {
+  name: string | null;
+  logging: boolean | null;
+  longPressMs: number | null;
+}
+
+// Best-effort scrape of settings from /settings page. The main page does not expose
+// the name or settings, so we read them from the settings form when possible.
+async function fetchPanelSettings(ip: string): Promise<PanelSettingsResult> {
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -198,19 +218,36 @@ async function fetchPanelName(ip: string): Promise<string | null> {
     });
 
     if (!response.ok) {
-      return null;
+      return { name: null, logging: null, longPressMs: null };
     }
 
     const html = await response.text();
-    const match = html.match(/id=["']hostn["'][^>]*value=["']([^"']*)["']/i);
-    if (!match) {
-      return null;
+    
+    // Hostname: <input type="text" id="hostn" name="hostn" value="Entrance1">
+    const nameMatch = html.match(/id=["']hostn["'][^>]*value=["']([^"']*)["']/i);
+    const name = nameMatch ? nameMatch[1].trim() || null : null;
+    
+    // Logging: <select id="file_logging" name="file_logging"> with <option value="0|1" selected>
+    let logging: boolean | null = null;
+    const loggingSelectMatch = html.match(/<select[^>]*id=["']file_logging["'][^>]*>[\s\S]*?<\/select>/i);
+    if (loggingSelectMatch) {
+      // Check if option value="1" is selected (enabled)
+      const enabledSelected = /<option[^>]*value=["']1["'][^>]*selected/i.test(loggingSelectMatch[0]);
+      const disabledSelected = /<option[^>]*value=["']0["'][^>]*selected/i.test(loggingSelectMatch[0]);
+      if (enabledSelected) {
+        logging = true;
+      } else if (disabledSelected) {
+        logging = false;
+      }
     }
-
-    const rawName = match[1].trim();
-    return rawName || null;
+    
+    // Long press: <input type="number" id="long_press_duration" name="long_press_duration" value="1000">
+    const longPressMatch = html.match(/id=["']long_press_duration["'][^>]*value=["'](\d+)["']/i);
+    const longPressMs = longPressMatch ? parseInt(longPressMatch[1], 10) : null;
+    
+    return { name, logging, longPressMs };
   } catch {
-    return null;
+    return { name: null, logging: null, longPressMs: null };
   } finally {
     clearTimeout(timeout);
   }

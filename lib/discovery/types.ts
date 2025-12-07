@@ -12,6 +12,12 @@ export interface DiscoveryRequest {
   end: number;
 }
 
+/** Panel settings scraped from /settings page */
+export interface PanelSettings {
+  logging?: boolean;
+  longPressMs?: number;
+}
+
 export interface DiscoveryResult {
   ip: string;
   status: DiscoveryStatus;
@@ -19,6 +25,7 @@ export interface DiscoveryResult {
   errorMessage?: string;
   name?: string | null;
   panelHtml?: string;
+  settings?: PanelSettings;
 }
 
 export interface DiscoverySummary {
