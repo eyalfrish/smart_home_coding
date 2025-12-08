@@ -77,6 +77,16 @@ export function getProgressStats() {
     }
   });
   
+  // Sort results by IP for consistent display
+  partialResults.sort((a, b) => {
+    const partsA = a.ip.split('.').map(Number);
+    const partsB = b.ip.split('.').map(Number);
+    for (let i = 0; i < 4; i++) {
+      if (partsA[i] !== partsB[i]) return partsA[i] - partsB[i];
+    }
+    return 0;
+  });
+  
   return {
     isRunning: progress.isRunning,
     phase: progress.phase,
@@ -115,17 +125,23 @@ export function addResult(result: {
 }): void {
   const progress = getProgress();
   
-  // Only add/update if it's a definitive result (panel or not-panel)
-  // or if we don't have this IP yet
   const existing = progress.resultsByIp.get(result.ip);
   
-  // Prioritize: panel > not-panel > error > no-response
-  const shouldUpdate = !existing || 
-    result.status === 'panel' ||
-    (result.status === 'not-panel' && existing.status !== 'panel') ||
-    (result.status === 'error' && existing.status === 'no-response');
+  // Always add new IPs, or upgrade status based on priority
+  // Priority: panel > not-panel > error > no-response > pending
+  const statusPriority: Record<ResultStatus, number> = {
+    'panel': 5,
+    'not-panel': 4,
+    'error': 3,
+    'no-response': 2,
+    'pending': 1,
+  };
   
-  if (shouldUpdate) {
+  const existingPriority = existing ? statusPriority[existing.status] : 0;
+  const newPriority = statusPriority[result.status];
+  
+  // Update if new IP or better status
+  if (!existing || newPriority > existingPriority) {
     progress.resultsByIp.set(result.ip, {
       ip: result.ip,
       status: result.status,

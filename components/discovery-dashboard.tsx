@@ -155,42 +155,45 @@ export default function DiscoveryDashboard() {
           });
           
           // Update response with partial results so table shows progress
-          if (data.partialResults && data.partialResults.length > 0) {
-            setResponse(prev => {
-              if (!prev) return prev;
-              
-              // Create a map from partial results for quick lookup
-              const partialMap = new Map<string, { status: string; name?: string }>();
-              for (const pr of data.partialResults) {
-                partialMap.set(pr.ip, { status: pr.status, name: pr.name });
-              }
-              
-              // Update results with partial data
-              const updatedResults = prev.results.map(r => {
-                const partial = partialMap.get(r.ip);
-                if (partial && r.status === 'initial') {
+          setResponse(prev => {
+            if (!prev) return prev;
+            
+            // Create a map from partial results for quick lookup
+            const partialMap = new Map<string, { status: string; name?: string }>();
+            for (const pr of data.partialResults || []) {
+              partialMap.set(pr.ip, { status: pr.status, name: pr.name });
+            }
+            
+            // Update results with partial data - update any row that has new info
+            const updatedResults = prev.results.map(r => {
+              const partial = partialMap.get(r.ip);
+              if (partial) {
+                // Update if we have new data (status changed or name added)
+                const statusChanged = partial.status !== r.status;
+                const nameAdded = partial.name && !r.name;
+                if (statusChanged || nameAdded) {
                   return {
                     ...r,
                     status: partial.status as DiscoveryResult['status'],
                     name: partial.name || r.name,
                   };
                 }
-                return r;
-              });
-              
-              return {
-                ...prev,
-                summary: {
-                  ...prev.summary,
-                  panelsFound: data.panelsFound,
-                  notPanels: data.notPanels,
-                  noResponse: data.noResponse,
-                  errors: data.errors,
-                },
-                results: updatedResults,
-              };
+              }
+              return r;
             });
-          }
+            
+            return {
+              ...prev,
+              summary: {
+                ...prev.summary,
+                panelsFound: data.panelsFound,
+                notPanels: data.notPanels,
+                noResponse: data.noResponse,
+                errors: data.errors,
+              },
+              results: updatedResults,
+            };
+          });
         }
       } catch (err) {
         // Ignore polling errors
@@ -271,11 +274,29 @@ export default function DiscoveryDashboard() {
       setError(null);
       setView("discovery");
       setSearchQuery("");
-      setResponse(null); // Clear response first
       setPanelInfoMap({}); // Clear panel info
       setSelectedPanelIps(new Set()); // Clear selection on new discovery
+      
+      // Initialize response with placeholder data so polling can update it
+      const initialResults: DiscoveryResult[] = [];
+      for (let octet = payload.start; octet <= payload.end; octet++) {
+        initialResults.push({ ip: `${payload.baseIp}.${octet}`, status: "initial" });
+      }
+      setResponse({
+        summary: {
+          baseIp: payload.baseIp,
+          start: payload.start,
+          end: payload.end,
+          totalChecked: payload.end - payload.start + 1,
+          panelsFound: 0,
+          notPanels: 0,
+          noResponse: 0,
+          errors: 0,
+        },
+        results: initialResults,
+      });
 
-      // Give React a chance to process the clears before we start receiving data
+      // Give React a chance to process the init before we start receiving data
       await new Promise(resolve => setTimeout(resolve, 0));
 
       // Track results as they stream in
@@ -613,23 +634,9 @@ export default function DiscoveryDashboard() {
               <div className={styles.loadingSpinner} />
               <div className={styles.loadingText}>
                 <strong>Scanning network...</strong>
-                {liveProgress ? (
-                  <div className={styles.progressStats}>
-                    <span className={styles.progressPhase}>Phase: {liveProgress.phase}</span>
-                    <span className={styles.progressCount}>
-                      Checked: <strong>{liveProgress.scannedCount}</strong> / {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0} IPs
-                    </span>
-                    <span className={styles.progressPanels}>
-                      Found: <strong className={styles.progressPanelsCount}>{liveProgress.panelsFound}</strong> panels
-                      {liveProgress.notPanels > 0 && <>, {liveProgress.notPanels} other</>}
-                      {liveProgress.noResponse > 0 && <>, {liveProgress.noResponse} no response</>}
-                    </span>
-                  </div>
-                ) : (
-                  <span style={{ fontSize: "0.9em", opacity: 0.8 }}>
-                    Initializing scan of {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0} IP addresses...
-                  </span>
-                )}
+                <span style={{ fontSize: "0.9em", opacity: 0.8, marginLeft: "0.5rem" }}>
+                  {liveProgress ? `Phase: ${liveProgress.phase}` : "Initializing..."}
+                </span>
               </div>
             </div>
           )}

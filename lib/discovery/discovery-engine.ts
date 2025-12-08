@@ -34,11 +34,11 @@ interface PhaseConfig {
   baseRetryDelay: number;
 }
 
-// Higher concurrency for faster discovery
+// Phase configuration - balanced for speed and reliability
 const PHASES: PhaseConfig[] = [
   { name: "quick-sweep", timeout: 500, concurrency: 20, retries: 0, baseRetryDelay: 0 },
   { name: "standard", timeout: 1200, concurrency: 15, retries: 1, baseRetryDelay: 100 },
-  { name: "deep", timeout: 1500, concurrency: 10, retries: 1, baseRetryDelay: 100 },
+  { name: "deep", timeout: 2500, concurrency: 8, retries: 2, baseRetryDelay: 150 },
 ];
 
 const SETTINGS_TIMEOUT = 3000;  // Some panels are slow to serve /settings

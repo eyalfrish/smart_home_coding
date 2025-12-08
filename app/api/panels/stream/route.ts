@@ -38,14 +38,13 @@ export async function GET(request: NextRequest) {
   const sessionParam = searchParams.get("session");
   
   // Validate session to prevent stale connections after server restart
+  // Silently reject - this is expected when browser reconnects after server restart
   const currentSession = getServerSessionId();
   if (sessionParam !== currentSession) {
-    console.log(`[SSE] Rejected connection: session mismatch (got ${sessionParam}, expected ${currentSession})`);
     return new Response(
       JSON.stringify({ 
         error: "Session expired",
         message: "Server restarted - please refresh the page",
-        currentSession,
       }),
       {
         status: 401,
