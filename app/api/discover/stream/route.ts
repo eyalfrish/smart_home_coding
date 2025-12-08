@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { runMultiPhaseDiscovery, type DiscoveryEvent } from "@/lib/discovery/discovery-engine";
+import { getPanelRegistry } from "@/lib/discovery/panel-registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,11 @@ const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
  * Results are sent as they complete but may arrive in batches.
  */
 export async function GET(request: NextRequest) {
+  // Reset panel registry before starting new discovery
+  // This clears any stale WebSocket connections from previous discoveries
+  const registry = getPanelRegistry();
+  registry.reset();
+  console.log("[Discovery] Starting new discovery - registry reset");
   const searchParams = request.nextUrl.searchParams;
   const baseIp = searchParams.get("baseIp");
   const startStr = searchParams.get("start");

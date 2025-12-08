@@ -295,6 +295,15 @@ class PanelRegistryImpl {
     this.disconnectAllPanels();
     this.listeners.clear();
   }
+
+  /** Reset the registry - disconnect all panels and clear all state */
+  reset(): void {
+    console.log("[Registry] Resetting - disconnecting all panels and clearing state");
+    this.disconnectAllPanels();
+    this.states.clear();
+    this.clients.clear();
+    // Don't clear listeners - they're still valid SSE connections
+  }
 }
 
 // Use globalThis to ensure the singleton persists across Next.js API routes

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getPanelRegistry } from "@/lib/discovery/panel-registry";
+import { getServerSessionId } from "@/lib/discovery/server-session";
 import type { SSEMessage } from "@/lib/discovery/types";
 
 export const runtime = "nodejs";
@@ -10,8 +11,9 @@ export const dynamic = "force-dynamic";
  * 
  * Query parameters:
  * - ips: Comma-separated list of panel IPs to connect to (e.g., "10.88.99.201,10.88.99.203")
+ * - session: Server session ID (required to prevent stale connections after restart)
  * 
- * Example: GET /api/panels/stream?ips=10.88.99.201,10.88.99.203
+ * Example: GET /api/panels/stream?ips=10.88.99.201,10.88.99.203&session=xxx
  */
 export async function GET(request: NextRequest) {
   const registry = getPanelRegistry();
@@ -33,6 +35,24 @@ export async function GET(request: NextRequest) {
 
   const searchParams = request.nextUrl.searchParams;
   const ipsParam = searchParams.get("ips");
+  const sessionParam = searchParams.get("session");
+  
+  // Validate session to prevent stale connections after server restart
+  const currentSession = getServerSessionId();
+  if (sessionParam !== currentSession) {
+    console.log(`[SSE] Rejected connection: session mismatch (got ${sessionParam}, expected ${currentSession})`);
+    return new Response(
+      JSON.stringify({ 
+        error: "Session expired",
+        message: "Server restarted - please refresh the page",
+        currentSession,
+      }),
+      {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
 
   if (!ipsParam) {
     return new Response(

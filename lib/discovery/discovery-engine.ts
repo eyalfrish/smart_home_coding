@@ -23,6 +23,7 @@
  */
 
 import type { DiscoveryResult, PanelSettings } from "./types";
+import { startProgress, updatePhase, addResult, finishProgress, resetProgress } from "./discovery-progress";
 
 // Phase configuration
 interface PhaseConfig {
@@ -99,6 +100,10 @@ export async function runMultiPhaseDiscovery(
     allTargets.push(`${baseIp}.${octet}`);
   }
 
+  // Initialize progress tracking for polling
+  resetProgress();
+  startProgress(allTargets.length);
+
   // Results map - the source of truth
   const results = new Map<string, DiscoveryResult>();
   const phaseStats: DiscoveryStats["phases"] = [];
@@ -131,6 +136,9 @@ export async function runMultiPhaseDiscovery(
       }
     });
 
+    // Update progress tracker
+    updatePhase(phase.name);
+
     console.log(`[Discovery] Phase ${phase.name}: scanning ${ipsToScan.length} IPs (timeout: ${phase.timeout}ms, concurrency: ${phase.concurrency})`);
 
     let panelsFoundInPhase = 0;
@@ -147,6 +155,15 @@ export async function runMultiPhaseDiscovery(
           if (result.status === "panel") {
             panelsFoundInPhase++;
           }
+        }
+        
+        // Update progress tracker for polling
+        if (result.status !== "pending") {
+          addResult({
+            ip: result.ip,
+            status: result.status as 'panel' | 'not-panel' | 'no-response' | 'error' | 'pending',
+            name: result.name ?? undefined,
+          });
         }
         
         onEvent({
@@ -234,6 +251,9 @@ export async function runMultiPhaseDiscovery(
   };
 
   console.log(`[Discovery] Complete! ${panelsFound} panels in ${stats.totalDurationMs}ms`);
+
+  // Mark progress as complete
+  finishProgress();
 
   onEvent({ 
     type: "complete", 

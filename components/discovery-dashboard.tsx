@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import DiscoveryForm, { type DiscoveryFormValues } from "./discovery-form";
 import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
@@ -67,8 +67,107 @@ export default function DiscoveryDashboard() {
   const [showOnlyTouched, setShowOnlyTouched] = useState(false);
   // Selection state for batch operations - persists across filters/views
   const [selectedPanelIps, setSelectedPanelIps] = useState<Set<string>>(new Set());
-  // Only connect to panels AFTER explicit discovery, not on page load
-  const [hasDiscoveredThisSession, setHasDiscoveredThisSession] = useState(false);
+  // Only connect to panels AFTER explicit discovery in THIS page session
+  // Use sessionStorage to detect if this is a fresh page load
+  const [hasDiscoveredThisSession, setHasDiscoveredThisSession] = useState(() => {
+    // Check if we're in the browser and if there's a discovery flag
+    if (typeof window !== 'undefined') {
+      const flag = sessionStorage.getItem('discoveredThisSession');
+      // Clear the flag on fresh load - it will be set again when discovery runs
+      sessionStorage.removeItem('discoveredThisSession');
+      return false; // Always start fresh on page load
+    }
+    return false;
+  });
+  
+  // Track if registry has been reset
+  const [registryReady, setRegistryReady] = useState(false);
+  
+  // Server session ID for validating panel stream connections
+  const [serverSessionId, setServerSessionId] = useState<string | null>(null);
+  
+  // Live progress during discovery
+  const [liveProgress, setLiveProgress] = useState<{
+    scannedCount: number;
+    panelsFound: number;
+    notPanels: number;
+    noResponse: number;
+    phase: string;
+    partialResults: Array<{ ip: string; status: string; name?: string }>;
+  } | null>(null);
+
+  // Reset panel registry on mount and check server session
+  // This ensures clean slate when page loads or server restarts
+  useEffect(() => {
+    const checkServerAndReset = async () => {
+      try {
+        // Get current server session
+        const sessionRes = await fetch('/api/session');
+        const { sessionId } = await sessionRes.json();
+        
+        // Check if server has changed
+        const lastSessionId = sessionStorage.getItem('serverSessionId');
+        if (lastSessionId && lastSessionId !== sessionId) {
+          console.log('[Dashboard] Server restarted (new session), clearing all state');
+          // Clear all local state
+          setResponse(null);
+          setPanelInfoMap({});
+          setSelectedPanelIps(new Set());
+          setHasDiscoveredThisSession(false);
+          sessionStorage.removeItem('discoveredThisSession');
+        }
+        
+        // Save current session ID
+        sessionStorage.setItem('serverSessionId', sessionId);
+        setServerSessionId(sessionId);
+        console.log('[Dashboard] Server session:', sessionId);
+        
+        // Reset registry
+        const resetRes = await fetch('/api/panels/reset', { method: 'POST' });
+        const resetData = await resetRes.json();
+        console.log('[Dashboard] Registry reset:', resetData.message);
+        setRegistryReady(true);
+      } catch (err) {
+        console.error('[Dashboard] Failed to check session/reset registry:', err);
+        setRegistryReady(true); // Continue anyway
+      }
+    };
+    
+    checkServerAndReset();
+  }, []);
+
+  // Poll for progress during discovery
+  useEffect(() => {
+    if (!isLoading) {
+      setLiveProgress(null);
+      return;
+    }
+    
+    const pollProgress = async () => {
+      try {
+        const res = await fetch('/api/discover/progress');
+        const data = await res.json();
+        if (data.isRunning) {
+          setLiveProgress({
+            scannedCount: data.scannedCount,
+            panelsFound: data.panelsFound,
+            notPanels: data.notPanels,
+            noResponse: data.noResponse,
+            phase: data.phase,
+            partialResults: data.partialResults || [],
+          });
+        }
+      } catch (err) {
+        // Ignore polling errors
+      }
+    };
+    
+    // Poll immediately and then every 500ms
+    pollProgress();
+    const interval = setInterval(pollProgress, 500);
+    
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   // Get list of discovered Cubixx panel IPs for real-time streaming
   const discoveredPanelIps = useMemo(() => {
@@ -115,10 +214,18 @@ export default function DiscoveryDashboard() {
   }, []);
 
   // Real-time panel stream
-  // Only connect AFTER explicit discovery in this session - not on page load/refresh
+  // Only connect AFTER:
+  // 1. Registry has been reset (registryReady)
+  // 2. Explicit discovery in this session (hasDiscoveredThisSession)
+  // 3. Not currently loading
+  // 4. We have discovered panels
+  // 5. We have a valid server session ID
+  const shouldConnectToPanels = registryReady && hasDiscoveredThisSession && !isLoading && discoveredPanelIps.length > 0 && !!serverSessionId;
+  
   const { isConnected: isStreamConnected, panelStates, error: streamError } = usePanelStream({
-    ips: discoveredPanelIps,
-    enabled: hasDiscoveredThisSession && !isLoading && discoveredPanelIps.length > 0,
+    ips: shouldConnectToPanels ? discoveredPanelIps : [], // Pass empty array if not ready
+    sessionId: serverSessionId, // Required for server-side validation
+    enabled: shouldConnectToPanels,
     onPanelState: handlePanelState,
   });
 
@@ -320,6 +427,10 @@ export default function DiscoveryDashboard() {
               eventSource.close();
               setIsLoading(false);
               setHasDiscoveredThisSession(true); // Enable panel connections
+              // Mark that we've discovered in this session (for debugging)
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('discoveredThisSession', 'true');
+              }
             }
           } catch (e) {
             console.error("[Discovery] Failed to parse message:", e);
@@ -462,16 +573,57 @@ export default function DiscoveryDashboard() {
             selectedCount={selectedPanelIps.size}
             onBatchOperationsClick={handleBatchOperationsClick}
           />
-          {discoveredPanelIps.length > 0 && (
+          {isLoading && (
+            <div className={styles.loadingBox}>
+              <div className={styles.loadingSpinner} />
+              <div className={styles.loadingText}>
+                <strong>Scanning network...</strong>
+                {liveProgress ? (
+                  <div className={styles.progressStats}>
+                    <span className={styles.progressPhase}>Phase: {liveProgress.phase}</span>
+                    <span className={styles.progressCount}>
+                      Scanned: <strong>{liveProgress.scannedCount}</strong> / {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0}
+                    </span>
+                    <span className={styles.progressPanels}>
+                      Found: <strong className={styles.progressPanelsCount}>{liveProgress.panelsFound}</strong> panels
+                      {liveProgress.notPanels > 0 && <span>, {liveProgress.notPanels} other</span>}
+                      {liveProgress.noResponse > 0 && <span>, {liveProgress.noResponse} no response</span>}
+                    </span>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: "0.9em", opacity: 0.8 }}>
+                    Checking {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0} IP addresses...
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Show partial results during scanning */}
+          {isLoading && liveProgress && liveProgress.partialResults.length > 0 && (
+            <div className={styles.partialResultsBox}>
+              <div className={styles.partialResultsHeader}>
+                Live Results ({liveProgress.partialResults.filter(r => r.status === 'panel').length} panels found so far)
+              </div>
+              <div className={styles.partialResultsList}>
+                {liveProgress.partialResults
+                  .filter(r => r.status === 'panel')
+                  .map(r => (
+                    <div key={r.ip} className={styles.partialResultItem}>
+                      <span className={styles.partialResultIp}>{r.ip}</span>
+                      {r.name && <span className={styles.partialResultName}>{r.name}</span>}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+          {!isLoading && discoveredPanelIps.length > 0 && (
             <div className={styles.streamStatus}>
               <span className={isStreamConnected ? styles.statusConnected : styles.statusDisconnected}>
-                {isLoading
-                  ? "○ Scanning network..."
-                  : isStreamConnected
-                    ? `● Live: ${discoveredPanelIps.filter(ip => panelStates.get(ip)?.connectionStatus === "connected").length}/${discoveredPanelIps.length} panels connected`
-                    : "○ Connecting to panels..."}
+                {isStreamConnected
+                  ? `● Live: ${discoveredPanelIps.filter(ip => panelStates.get(ip)?.connectionStatus === "connected").length}/${discoveredPanelIps.length} panels connected`
+                  : "○ Connecting to panels..."}
               </span>
-              {streamError && !isLoading && (
+              {streamError && (
                 <span className={styles.streamError}>
                   {streamError.includes("npm install") 
                     ? "⚠️ " + streamError

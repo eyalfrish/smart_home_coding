@@ -12,6 +12,8 @@ import type {
 interface UsePanelStreamOptions {
   /** Panel IPs to connect to */
   ips: string[];
+  /** Server session ID for validation */
+  sessionId?: string | null;
   /** Callback when a panel's full state is received */
   onPanelState?: (ip: string, state: LivePanelState) => void;
   /** Callback when a relay update is received */
@@ -50,6 +52,7 @@ export function usePanelStream(
 ): UsePanelStreamReturn {
   const {
     ips,
+    sessionId,
     onPanelState,
     onRelayUpdate,
     onCurtainUpdate,
@@ -231,11 +234,11 @@ export function usePanelStream(
   }, []);
 
   const connect = useCallback(() => {
-    if (ips.length === 0 || eventSourceRef.current) {
+    if (ips.length === 0 || eventSourceRef.current || !sessionId) {
       return;
     }
 
-    const url = `/api/panels/stream?ips=${encodeURIComponent(ips.join(","))}`;
+    const url = `/api/panels/stream?ips=${encodeURIComponent(ips.join(","))}&session=${encodeURIComponent(sessionId)}`;
     console.log("[usePanelStream] Connecting to:", url);
 
     const eventSource = new EventSource(url);
@@ -281,7 +284,7 @@ export function usePanelStream(
         }, RECONNECT_DELAY_MS);
       }
     };
-  }, [ips, handleMessage]);
+  }, [ips, sessionId, handleMessage]);
 
   const disconnect = useCallback(() => {
     shouldReconnectRef.current = false;
@@ -324,7 +327,7 @@ export function usePanelStream(
       prevIpsKeyRef.current = ipsKey;
     }
     
-    if (enabled && ips.length > 0) {
+    if (enabled && ips.length > 0 && sessionId) {
       shouldReconnectRef.current = true;
       // Only connect if not already connected (or just disconnected above)
       if (!eventSourceRef.current) {
@@ -337,7 +340,7 @@ export function usePanelStream(
     return () => {
       disconnect();
     };
-  }, [enabled, ipsKey, connect, disconnect]);
+  }, [enabled, ipsKey, sessionId, connect, disconnect]);
 
   return {
     isConnected,
