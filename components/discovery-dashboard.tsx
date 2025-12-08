@@ -67,6 +67,8 @@ export default function DiscoveryDashboard() {
   const [showOnlyTouched, setShowOnlyTouched] = useState(false);
   // Selection state for batch operations - persists across filters/views
   const [selectedPanelIps, setSelectedPanelIps] = useState<Set<string>>(new Set());
+  // Only connect to panels AFTER explicit discovery, not on page load
+  const [hasDiscoveredThisSession, setHasDiscoveredThisSession] = useState(false);
 
   // Get list of discovered Cubixx panel IPs for real-time streaming
   const discoveredPanelIps = useMemo(() => {
@@ -113,10 +115,10 @@ export default function DiscoveryDashboard() {
   }, []);
 
   // Real-time panel stream
-  // We wait until discovery completes to avoid constant reconnections as IPs are found
+  // Only connect AFTER explicit discovery in this session - not on page load/refresh
   const { isConnected: isStreamConnected, panelStates, error: streamError } = usePanelStream({
     ips: discoveredPanelIps,
-    enabled: !isLoading && discoveredPanelIps.length > 0,
+    enabled: hasDiscoveredThisSession && !isLoading && discoveredPanelIps.length > 0,
     onPanelState: handlePanelState,
   });
 
@@ -147,8 +149,12 @@ export default function DiscoveryDashboard() {
         errors: 0,
       };
 
-      // Helper to rebuild and update response
-      const updateResponseFromMap = () => {
+      // Throttled update mechanism - update UI at most every 80ms for smooth progressive display
+      let updatePending = false;
+      let lastUpdateTime = 0;
+      const UPDATE_INTERVAL = 80;
+      
+      const doUpdateResponse = () => {
         const orderedResults: DiscoveryResult[] = [];
         let panels = 0, notPanels = 0, noResp = 0, errs = 0;
         
@@ -178,6 +184,30 @@ export default function DiscoveryDashboard() {
           },
           results: orderedResults,
         });
+        lastUpdateTime = Date.now();
+        updatePending = false;
+      };
+      
+      // Throttled update - schedules update if not already pending
+      const updateResponseFromMap = (force = false) => {
+        if (force) {
+          doUpdateResponse();
+          return;
+        }
+        
+        const now = Date.now();
+        if (now - lastUpdateTime >= UPDATE_INTERVAL) {
+          // Enough time passed, update immediately
+          doUpdateResponse();
+        } else if (!updatePending) {
+          // Schedule update for later
+          updatePending = true;
+          setTimeout(() => {
+            if (updatePending) {
+              doUpdateResponse();
+            }
+          }, UPDATE_INTERVAL - (now - lastUpdateTime));
+        }
       };
 
       // Set initial placeholder after clears are processed
@@ -217,19 +247,17 @@ export default function DiscoveryDashboard() {
               const batchResults = message.data as DiscoveryResult[];
               console.log(`[Discovery] Received settings batch for ${batchResults.length} panels`);
               
+              // Build panel info map update in one batch
+              const newPanelInfoEntries: Record<string, PanelInfo> = {};
               for (const result of batchResults) {
                 resultsMap.set(result.ip, result);
-                
-                // Update panel info map
                 if (result.status === "panel") {
-                  setPanelInfoMap((prev) => ({
-                    ...prev,
-                    [result.ip]: buildPanelInfoFromResult(result, prev[result.ip], { resetBaseline: false }),
-                  }));
+                  newPanelInfoEntries[result.ip] = buildPanelInfoFromResult(result, undefined, { resetBaseline: false });
                 }
               }
               
-              updateResponseFromMap();
+              setPanelInfoMap((prev) => ({ ...prev, ...newPanelInfoEntries }));
+              updateResponseFromMap(true); // Force immediate update for settings
               return;
             }
 
@@ -288,9 +316,10 @@ export default function DiscoveryDashboard() {
                 }
               }
               
-              updateResponseFromMap();
+              updateResponseFromMap(true); // Force final update
               eventSource.close();
               setIsLoading(false);
+              setHasDiscoveredThisSession(true); // Enable panel connections
             }
           } catch (e) {
             console.error("[Discovery] Failed to parse message:", e);
