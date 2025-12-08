@@ -147,6 +147,39 @@ export default function DiscoveryDashboard() {
         errors: 0,
       };
 
+      // Helper to rebuild and update response
+      const updateResponseFromMap = () => {
+        const orderedResults: DiscoveryResult[] = [];
+        let panels = 0, notPanels = 0, noResp = 0, errs = 0;
+        
+        for (let octet = payload.start; octet <= payload.end; octet++) {
+          const ip = `${payload.baseIp}.${octet}`;
+          const existing = resultsMap.get(ip);
+          if (existing) {
+            const { panelHtml, ...rest } = existing;
+            orderedResults.push(rest as DiscoveryResult);
+            // Count statuses
+            if (existing.status === "panel") panels++;
+            else if (existing.status === "not-panel") notPanels++;
+            else if (existing.status === "no-response" || existing.status === "pending") noResp++;
+            else if (existing.status === "error") errs++;
+          } else {
+            orderedResults.push({ ip, status: "initial" });
+          }
+        }
+        
+        setResponse({
+          summary: { 
+            ...summary, 
+            panelsFound: panels, 
+            notPanels: notPanels, 
+            noResponse: noResp, 
+            errors: errs 
+          },
+          results: orderedResults,
+        });
+      };
+
       // Set initial placeholder after clears are processed
       setResponse(buildPlaceholderResponse(payload));
 
@@ -158,29 +191,59 @@ export default function DiscoveryDashboard() {
           try {
             const message = JSON.parse(event.data);
 
-            // Ignore heartbeat messages (used to ensure connection is ready)
+            // Ignore heartbeat and phase events (used internally)
             if (message.type === "heartbeat") {
-              console.log("[Discovery] Heartbeat received, connection ready");
+              console.log("[Discovery] Connection established");
+              return;
+            }
+            
+            if (message.type === "phase_start") {
+              console.log(`[Discovery] Starting phase: ${message.phase}`);
+              return;
+            }
+            
+            if (message.type === "phase_complete") {
+              console.log(`[Discovery] Phase ${message.phase} complete. Panels: ${message.progress?.panelsFound}`);
+              return;
+            }
+            
+            if (message.type === "settings_start" || message.type === "settings_complete") {
+              console.log(`[Discovery] ${message.type}`);
+              return;
+            }
+            
+            // Handle batch settings update - all settings in one event
+            if (message.type === "settings_batch") {
+              const batchResults = message.data as DiscoveryResult[];
+              console.log(`[Discovery] Received settings batch for ${batchResults.length} panels`);
+              
+              for (const result of batchResults) {
+                resultsMap.set(result.ip, result);
+                
+                // Update panel info map
+                if (result.status === "panel") {
+                  setPanelInfoMap((prev) => ({
+                    ...prev,
+                    [result.ip]: buildPanelInfoFromResult(result, prev[result.ip], { resetBaseline: false }),
+                  }));
+                }
+              }
+              
+              updateResponseFromMap();
               return;
             }
 
             if (message.type === "result") {
               const result = message.data as DiscoveryResult;
               
-              // Debug: log first few results
-              if (resultsMap.size < 3) {
-                console.log(`[Discovery] Result ${resultsMap.size + 1}: ${result.ip} = ${result.status}`);
+              // Debug: log first few panel results
+              if (result.status === "panel" && Array.from(resultsMap.values()).filter(r => r.status === "panel").length < 3) {
+                console.log(`[Discovery] Panel found: ${result.ip} (${result.name || "unnamed"})`);
               }
               
               resultsMap.set(result.ip, result);
 
-              // Update summary counts
-              if (result.status === "panel") summary.panelsFound++;
-              else if (result.status === "not-panel") summary.notPanels++;
-              else if (result.status === "no-response") summary.noResponse++;
-              else if (result.status === "error") summary.errors++;
-
-              // Update panel info map for this result (only for panels)
+              // Update panel info map for panels
               if (result.status === "panel") {
                 setPanelInfoMap((prev) => ({
                   ...prev,
@@ -188,88 +251,44 @@ export default function DiscoveryDashboard() {
                 }));
               }
 
-              // Build ordered results array
-              const orderedResults: DiscoveryResult[] = [];
-              for (let octet = payload.start; octet <= payload.end; octet++) {
-                const ip = `${payload.baseIp}.${octet}`;
-                const existing = resultsMap.get(ip);
-                if (existing) {
-                  // Remove panelHtml for state storage
-                  const { panelHtml, ...rest } = existing;
-                  orderedResults.push(rest as DiscoveryResult);
-                } else {
-                  // Not yet scanned - show as initial/blank
-                  orderedResults.push({
-                    ip,
-                    status: "initial",
-                  });
-                }
-              }
-
-              setResponse({
-                summary: { ...summary },
-                results: orderedResults,
-              });
+              updateResponseFromMap();
             } else if (message.type === "update") {
-              // Rescue pass found a panel that was previously missed
+              // Update from verification or settings enrichment
               const result = message.data as DiscoveryResult;
               const previousResult = resultsMap.get(result.ip);
               
-              // Update summary counts (subtract old, add new)
-              if (previousResult?.status === "no-response") summary.noResponse--;
-              if (result.status === "panel") summary.panelsFound++;
-              else if (result.status === "not-panel") summary.notPanels++;
-              else if (result.status === "error") summary.errors++;
-              
               resultsMap.set(result.ip, result);
-              console.log(`[Discovery] Rescue found: ${result.ip} = ${result.status}`);
               
-              // Update panel info map if it's a panel
+              // Update panel info map
               if (result.status === "panel") {
                 setPanelInfoMap((prev) => ({
                   ...prev,
-                  [result.ip]: buildPanelInfoFromResult(result, undefined, { resetBaseline: true }),
+                  [result.ip]: buildPanelInfoFromResult(result, prev[result.ip], { resetBaseline: false }),
                 }));
+              } else if (previousResult?.status === "panel") {
+                // Panel became invalid during verification
+                console.log(`[Discovery] Panel ${result.ip} failed verification`);
               }
               
-              // Rebuild results
-              const orderedResults: DiscoveryResult[] = [];
-              for (let octet = payload.start; octet <= payload.end; octet++) {
-                const ip = `${payload.baseIp}.${octet}`;
-                const existing = resultsMap.get(ip);
-                if (existing) {
-                  const { panelHtml, ...rest } = existing;
-                  orderedResults.push(rest as DiscoveryResult);
-                } else {
-                  orderedResults.push({ ip, status: "initial" });
-                }
-              }
-              
-              setResponse({
-                summary: { ...summary },
-                results: orderedResults,
-              });
+              updateResponseFromMap();
             } else if (message.type === "complete") {
-              console.log(`[Discovery] Complete. Total results: ${resultsMap.size}, Panels found: ${summary.panelsFound}`);
-              
-              // Final verification - rebuild one more time to ensure all results are captured
-              const finalResults: DiscoveryResult[] = [];
-              for (let octet = payload.start; octet <= payload.end; octet++) {
-                const ip = `${payload.baseIp}.${octet}`;
-                const existing = resultsMap.get(ip);
-                if (existing) {
-                  const { panelHtml, ...rest } = existing;
-                  finalResults.push(rest as DiscoveryResult);
-                } else {
-                  finalResults.push({ ip, status: "no-response", errorMessage: "No result received" });
+              const stats = message.stats;
+              console.log(`[Discovery] Complete! Found ${stats?.panelsFound ?? "?"} panels in ${stats?.totalDurationMs ?? "?"}ms`);
+              if (stats?.phases) {
+                for (const phase of stats.phases) {
+                  console.log(`  - ${phase.name}: scanned ${phase.scanned}, found ${phase.found} (${phase.durationMs}ms)`);
                 }
               }
               
-              setResponse({
-                summary: { ...summary },
-                results: finalResults,
-              });
+              // Final update - mark any remaining "initial" as no-response
+              for (let octet = payload.start; octet <= payload.end; octet++) {
+                const ip = `${payload.baseIp}.${octet}`;
+                if (!resultsMap.has(ip)) {
+                  resultsMap.set(ip, { ip, status: "no-response", errorMessage: "Not scanned" });
+                }
+              }
               
+              updateResponseFromMap();
               eventSource.close();
               setIsLoading(false);
             }

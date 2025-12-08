@@ -1,20 +1,13 @@
 import { NextRequest } from "next/server";
-import type { DiscoveryResult, PanelSettings } from "@/lib/discovery/types";
+import { runMultiPhaseDiscovery, type DiscoveryEvent } from "@/lib/discovery/discovery-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REQUEST_TIMEOUT_MS = 1000;          // Timeout for initial check
-const RESCUE_TIMEOUT_MS = 800;            // Rescue timeout
-const SETTINGS_REQUEST_TIMEOUT_MS = 600;  // Settings request timeout
-const MAX_CONCURRENCY = 10;               // Lower concurrency for reliability
-const RETRY_LIMIT = 2;                    // 3 total attempts
-const RETRY_DELAYS_MS = [150, 250, 350];  // Backoff delays
 const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 /**
- * Streaming discovery endpoint using SSE.
- * Results are sent as they complete, enabling progressive UI updates.
+ * Streaming discovery endpoint using SSE with multi-phase scanning.
  * 
  * Query params:
  * - baseIp: First 3 octets (e.g., "10.88.99")
@@ -27,10 +20,18 @@ export async function GET(request: NextRequest) {
   const startStr = searchParams.get("start");
   const endStr = searchParams.get("end");
 
-  // Validate
+  // Validate baseIp
   if (!baseIp || !BASE_IP_REGEX.test(baseIp)) {
     return new Response(
       JSON.stringify({ error: "Invalid baseIp - must be 3 octets (e.g., 10.88.99)" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const octets = baseIp.split(".").map(Number);
+  if (octets.some(o => o < 0 || o > 255)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid baseIp - octets must be 0-255" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -40,104 +41,50 @@ export async function GET(request: NextRequest) {
 
   if (isNaN(start) || isNaN(end) || start < 0 || end > 254 || start > end) {
     return new Response(
-      JSON.stringify({ error: "Invalid start/end range" }),
+      JSON.stringify({ error: "Invalid start/end range (must be 0-254, start <= end)" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
-  }
-
-  // Build target list
-  const targets: string[] = [];
-  for (let lastOctet = start; lastOctet <= end; lastOctet++) {
-    targets.push(`${baseIp}.${lastOctet}`);
   }
 
   // Create SSE stream
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      let completedCount = 0;
-      
-      // Use a queue with mutex-like behavior to avoid race conditions
-      const pendingTargets = [...targets];
-      
-      const getNextTarget = (): string | null => {
-        return pendingTargets.shift() ?? null;
-      };
+      let closed = false;
 
-      const sendResult = (result: DiscoveryResult) => {
-        completedCount++;
-        // Log first result to verify it's being sent
-        if (completedCount === 1) {
-          console.log(`[Discovery Stream] First result: ${result.ip} = ${result.status}`);
-        }
-        const message = {
-          type: "result",
-          data: result,
-          progress: { completed: completedCount, total: targets.length },
-        };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
-      };
-
-      const sendComplete = () => {
-        const message = { type: "complete", total: targets.length };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
-        controller.close();
-      };
-
-      // Small delay to ensure SSE connection is established on client
-      await delay(50);
-      
-      // Send initial heartbeat to confirm connection
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "heartbeat" })}\n\n`));
-
-      // Track results for final rescue pass
-      const resultsMap = new Map<string, DiscoveryResult>();
-      
-      // Worker function - processes IPs from the shared queue
-      const worker = async () => {
-        while (true) {
-          const ip = getNextTarget();
-          if (!ip) break;
-
-          const result = await checkHostWithRetry(ip);
-          resultsMap.set(ip, result);
-          sendResult(result);
+      const send = (data: unknown) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          closed = true;
         }
       };
 
-      // Run workers concurrently
-      const workerCount = Math.min(MAX_CONCURRENCY, targets.length);
-      const workers = Array.from({ length: workerCount }, () => worker());
-
-      await Promise.all(workers);
-      
-      // Final rescue pass: retry no-response IPs in PARALLEL
-      // This catches panels that were temporarily busy during initial scan
-      const noResponseIps = Array.from(resultsMap.entries())
-        .filter(([, result]) => result.status === "no-response")
-        .map(([ip]) => ip);
-      
-      // Always do rescue pass if we have failures (up to 20 IPs for reliability)
-      if (noResponseIps.length > 0 && noResponseIps.length <= 30) {
-        const rescueIps = noResponseIps.slice(0, 20);
-        console.log(`[Discovery] Rescue pass for ${rescueIps.length}/${noResponseIps.length} IPs (parallel)`);
-        
-        // Run rescue checks in parallel
-        const rescueResults = await Promise.all(
-          rescueIps.map(ip => checkHostFast(ip))
-        );
-        
-        for (const result of rescueResults) {
-          if (result.status !== "no-response") {
-            resultsMap.set(result.ip, result);
-            const message = { type: "update", data: result };
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
-            console.log(`[Discovery] Rescue found: ${result.ip} = ${result.status}`);
-          }
-        }
+      try {
+        await runMultiPhaseDiscovery(baseIp, start, end, (event: DiscoveryEvent) => {
+          // Forward all events to client
+          send(event);
+        });
+      } catch (error) {
+        console.error("[Discovery] Error:", error);
+        send({ 
+          type: "complete", 
+          stats: { 
+            totalIps: 0, 
+            panelsFound: 0, 
+            nonPanels: 0, 
+            noResponse: 0, 
+            errors: 1, 
+            phases: [], 
+            totalDurationMs: 0 
+          } 
+        });
       }
-      
-      sendComplete();
+
+      if (!closed) {
+        controller.close();
+      }
     },
   });
 
@@ -150,196 +97,3 @@ export async function GET(request: NextRequest) {
     },
   });
 }
-
-async function checkHostWithRetry(ip: string): Promise<DiscoveryResult> {
-  let attempt = 0;
-  let lastResult: DiscoveryResult = { ip, status: "no-response", errorMessage: "No response" };
-  
-  while (attempt <= RETRY_LIMIT) {
-    const result = await checkHost(ip);
-    lastResult = result;
-    
-    // Success or definitive result - return immediately
-    if (result.status === "panel" || result.status === "not-panel") {
-      return result;
-    }
-    
-    // If error (not timeout), might be worth retrying
-    // If no-response (timeout), definitely retry
-    if (attempt < RETRY_LIMIT) {
-      const delayMs = RETRY_DELAYS_MS[attempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
-      await delay(delayMs);
-    }
-    attempt++;
-  }
-  
-  return lastResult;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Fast check for rescue pass - shorter timeout, no panel name fetch */
-async function checkHostFast(ip: string): Promise<DiscoveryResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RESCUE_TIMEOUT_MS);
-  const url = `http://${ip}/`;
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    if (response.status === 200) {
-      const html = await response.text();
-      const panel = isPanelHtml(html);
-      return {
-        ip,
-        status: panel ? "panel" : "not-panel",
-        httpStatus: response.status,
-        errorMessage: panel ? undefined : "HTML does not look like Cubixx",
-        // Skip name fetch for speed
-      };
-    }
-
-    return {
-      ip,
-      status: "error",
-      httpStatus: response.status,
-      errorMessage: `Unexpected HTTP ${response.status}`,
-    };
-  } catch (error) {
-    return {
-      ip,
-      status: "no-response",
-      errorMessage: (error as Error).name === "AbortError" ? "Request timed out" : (error as Error).message,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function checkHost(ip: string): Promise<DiscoveryResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const url = `http://${ip}/`;
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    if (response.status === 200) {
-      const html = await response.text();
-      const panel = isPanelHtml(html);
-      let name: string | undefined;
-      let settings: PanelSettings | undefined;
-      
-      if (panel) {
-        const panelSettings = await fetchPanelSettings(ip);
-        name = panelSettings.name ?? undefined;
-        settings = {};
-        if (panelSettings.logging !== null) settings.logging = panelSettings.logging;
-        if (panelSettings.longPressMs !== null) settings.longPressMs = panelSettings.longPressMs;
-        // Only include settings if there's at least one value
-        if (Object.keys(settings).length === 0) settings = undefined;
-      }
-      
-      return {
-        ip,
-        status: panel ? "panel" : "not-panel",
-        httpStatus: response.status,
-        errorMessage: panel ? undefined : "HTML does not look like Cubixx",
-        name,
-        panelHtml: panel ? html : undefined,
-        settings,
-      };
-    }
-
-    return {
-      ip,
-      status: "error",
-      httpStatus: response.status,
-      errorMessage: `Unexpected HTTP ${response.status}`,
-    };
-  } catch (error) {
-    if ((error as Error).name === "AbortError") {
-      return {
-        ip,
-        status: "no-response",
-        errorMessage: "Request timed out",
-      };
-    }
-
-    return {
-      ip,
-      status: "error",
-      errorMessage: (error as Error).message,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-interface PanelSettingsResult {
-  name: string | null;
-  logging: boolean | null;
-  longPressMs: number | null;
-}
-
-async function fetchPanelSettings(ip: string): Promise<PanelSettingsResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SETTINGS_REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`http://${ip}/settings`, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    if (!response.ok) return { name: null, logging: null, longPressMs: null };
-
-    const html = await response.text();
-    
-    // Hostname: <input type="text" id="hostn" name="hostn" value="Entrance1">
-    const nameMatch = html.match(/id=["']hostn["'][^>]*value=["']([^"']*)["']/i);
-    const name = nameMatch ? nameMatch[1].trim() || null : null;
-    
-    // Logging: <select id="file_logging" name="file_logging"> with <option value="0|1" selected>
-    // Look for the file_logging select and check which option is selected
-    let logging: boolean | null = null;
-    const loggingSelectMatch = html.match(/<select[^>]*id=["']file_logging["'][^>]*>[\s\S]*?<\/select>/i);
-    if (loggingSelectMatch) {
-      // Check if option value="1" is selected (enabled)
-      const enabledSelected = /<option[^>]*value=["']1["'][^>]*selected/i.test(loggingSelectMatch[0]);
-      const disabledSelected = /<option[^>]*value=["']0["'][^>]*selected/i.test(loggingSelectMatch[0]);
-      if (enabledSelected) {
-        logging = true;
-      } else if (disabledSelected) {
-        logging = false;
-      }
-    }
-    
-    // Long press: <input type="number" id="long_press_duration" name="long_press_duration" value="1000">
-    const longPressMatch = html.match(/id=["']long_press_duration["'][^>]*value=["'](\d+)["']/i);
-    const longPressMs = longPressMatch ? parseInt(longPressMatch[1], 10) : null;
-    
-    return { name, logging, longPressMs };
-  } catch {
-    return { name: null, logging: null, longPressMs: null };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function isPanelHtml(html: string): boolean {
-  const lower = html.toLowerCase();
-  return lower.includes("cubixx") || lower.includes("cubixx controller");
-}
-

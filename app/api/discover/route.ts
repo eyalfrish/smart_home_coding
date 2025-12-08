@@ -2,20 +2,22 @@ import { NextResponse } from "next/server";
 import type {
   DiscoveryRequest,
   DiscoveryResponse,
-  DiscoveryResult,
   DiscoverySummary,
-  PanelSettings,
 } from "@/lib/discovery/types";
+import { runMultiPhaseDiscovery } from "@/lib/discovery/discovery-engine";
 
 export const runtime = "nodejs";
 
-const REQUEST_TIMEOUT_MS = 1600;
-const SETTINGS_REQUEST_TIMEOUT_MS = 1500;
-const MAX_CONCURRENCY = 10;
-const RETRY_LIMIT = 1;
-const RETRY_DELAY_MS = 200;
 const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
+/**
+ * Non-streaming discovery endpoint.
+ * 
+ * Uses the same multi-phase discovery engine as the streaming endpoint,
+ * but returns all results at once when complete.
+ * 
+ * For better UX, prefer the streaming endpoint at /api/discover/stream
+ */
 export async function POST(request: Request) {
   let body: DiscoveryRequest;
 
@@ -33,20 +35,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: validationError }, { status: 400 });
   }
 
-  const targets: string[] = [];
-  for (let lastOctet = body.start; lastOctet <= body.end; lastOctet += 1) {
-    targets.push(`${body.baseIp}.${lastOctet}`);
+  try {
+    const resultsMap = await runMultiPhaseDiscovery(
+      body.baseIp,
+      body.start,
+      body.end,
+      () => {} // No-op callback for non-streaming mode
+    );
+
+    // Build ordered results array
+    const results = [];
+    for (let octet = body.start; octet <= body.end; octet++) {
+      const ip = `${body.baseIp}.${octet}`;
+      const result = resultsMap.get(ip);
+      if (result) {
+        // Remove panelHtml to reduce payload size
+        const { panelHtml, ...rest } = result;
+        results.push(rest);
+      }
+    }
+
+    const summary: DiscoverySummary = {
+      baseIp: body.baseIp,
+      start: body.start,
+      end: body.end,
+      totalChecked: results.length,
+      panelsFound: results.filter(r => r.status === "panel").length,
+      notPanels: results.filter(r => r.status === "not-panel").length,
+      noResponse: results.filter(r => r.status === "no-response" || r.status === "pending").length,
+      errors: results.filter(r => r.status === "error").length,
+    };
+
+    const response: DiscoveryResponse = {
+      summary,
+      results,
+    };
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error("[Discovery] Error:", error);
+    return NextResponse.json(
+      { message: "Discovery failed due to an internal error." },
+      { status: 500 }
+    );
   }
-
-  const results = await runDiscovery(targets);
-  const summary = buildSummary(body, results);
-
-  const response: DiscoveryResponse = {
-    summary,
-    results,
-  };
-
-  return NextResponse.json(response);
 }
 
 function validatePayload(payload: DiscoveryRequest): string | null {
@@ -86,208 +118,3 @@ function validatePayload(payload: DiscoveryRequest): string | null {
 
   return null;
 }
-
-async function runDiscovery(targets: string[]): Promise<DiscoveryResult[]> {
-  const results: DiscoveryResult[] = Array(targets.length);
-  let nextIndex = 0;
-
-  const workers = Array.from({
-    length: Math.min(MAX_CONCURRENCY, targets.length),
-  }).map(async () => {
-    while (true) {
-      const currentIndex = nextIndex;
-      if (currentIndex >= targets.length) {
-        break;
-      }
-      nextIndex += 1;
-
-      const ip = targets[currentIndex];
-      results[currentIndex] = await checkHostWithRetry(ip);
-      // slight pause to avoid hammering all panels simultaneously
-      await delay(20);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
-}
-
-async function checkHostWithRetry(ip: string): Promise<DiscoveryResult> {
-  let attempt = 0;
-  while (attempt <= RETRY_LIMIT) {
-    const result = await checkHost(ip);
-    if (result.status !== "no-response" || attempt === RETRY_LIMIT) {
-      return result;
-    }
-    attempt += 1;
-    await delay(RETRY_DELAY_MS);
-  }
-
-  // Should not reach here, but return a fallback if it does.
-  return { ip, status: "no-response", errorMessage: "No response" };
-}
-
-async function checkHost(ip: string): Promise<DiscoveryResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const url = `http://${ip}/`;
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    if (response.status === 200) {
-      const html = await response.text();
-      const panel = isPanelHtml(html);
-      let name: string | undefined;
-      let settings: PanelSettings | undefined;
-      
-      if (panel) {
-        const panelSettings = await fetchPanelSettings(ip);
-        name = panelSettings.name ?? undefined;
-        settings = {};
-        if (panelSettings.logging !== null) settings.logging = panelSettings.logging;
-        if (panelSettings.longPressMs !== null) settings.longPressMs = panelSettings.longPressMs;
-        // Only include settings if there's at least one value
-        if (Object.keys(settings).length === 0) settings = undefined;
-      }
-      
-      return {
-        ip,
-        status: panel ? "panel" : "not-panel",
-        httpStatus: response.status,
-        errorMessage: panel ? undefined : "HTML does not look like Cubixx",
-        name,
-        panelHtml: panel ? html : undefined,
-        settings,
-      };
-    }
-
-    return {
-      ip,
-      status: "error",
-      httpStatus: response.status,
-      errorMessage: `Unexpected HTTP ${response.status}`,
-    };
-  } catch (error) {
-    if ((error as Error).name === "AbortError") {
-      return {
-        ip,
-        status: "no-response",
-        errorMessage: "Request timed out",
-      };
-    }
-
-    return {
-      ip,
-      status: "error",
-      errorMessage: (error as Error).message,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-interface PanelSettingsResult {
-  name: string | null;
-  logging: boolean | null;
-  longPressMs: number | null;
-}
-
-// Best-effort scrape of settings from /settings page. The main page does not expose
-// the name or settings, so we read them from the settings form when possible.
-async function fetchPanelSettings(ip: string): Promise<PanelSettingsResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    SETTINGS_REQUEST_TIMEOUT_MS
-  );
-
-  try {
-    const response = await fetch(`http://${ip}/settings`, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      return { name: null, logging: null, longPressMs: null };
-    }
-
-    const html = await response.text();
-    
-    // Hostname: <input type="text" id="hostn" name="hostn" value="Entrance1">
-    const nameMatch = html.match(/id=["']hostn["'][^>]*value=["']([^"']*)["']/i);
-    const name = nameMatch ? nameMatch[1].trim() || null : null;
-    
-    // Logging: <select id="file_logging" name="file_logging"> with <option value="0|1" selected>
-    let logging: boolean | null = null;
-    const loggingSelectMatch = html.match(/<select[^>]*id=["']file_logging["'][^>]*>[\s\S]*?<\/select>/i);
-    if (loggingSelectMatch) {
-      // Check if option value="1" is selected (enabled)
-      const enabledSelected = /<option[^>]*value=["']1["'][^>]*selected/i.test(loggingSelectMatch[0]);
-      const disabledSelected = /<option[^>]*value=["']0["'][^>]*selected/i.test(loggingSelectMatch[0]);
-      if (enabledSelected) {
-        logging = true;
-      } else if (disabledSelected) {
-        logging = false;
-      }
-    }
-    
-    // Long press: <input type="number" id="long_press_duration" name="long_press_duration" value="1000">
-    const longPressMatch = html.match(/id=["']long_press_duration["'][^>]*value=["'](\d+)["']/i);
-    const longPressMs = longPressMatch ? parseInt(longPressMatch[1], 10) : null;
-    
-    return { name, logging, longPressMs };
-  } catch {
-    return { name: null, logging: null, longPressMs: null };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function buildSummary(
-  payload: DiscoveryRequest,
-  results: DiscoveryResult[]
-): DiscoverySummary {
-  const summary: DiscoverySummary = {
-    baseIp: payload.baseIp,
-    start: payload.start,
-    end: payload.end,
-    totalChecked: results.length,
-    panelsFound: 0,
-    notPanels: 0,
-    noResponse: 0,
-    errors: 0,
-  };
-
-  for (const result of results) {
-    if (result.status === "panel") {
-      summary.panelsFound += 1;
-    } else if (result.status === "not-panel") {
-      summary.notPanels += 1;
-    } else if (result.status === "no-response") {
-      summary.noResponse += 1;
-    } else if (result.status === "error") {
-      summary.errors += 1;
-    }
-  }
-
-  return summary;
-}
-
-// Treat an IP as a "panel" only if its HTML clearly looks like a Cubixx controller.
-// This is intentionally strict: any non-Cubixx page (including Control4 or other devices)
-// will be classified as "not-panel" even if it returns HTTP 200.
-function isPanelHtml(html: string): boolean {
-  const lower = html.toLowerCase();
-  return lower.includes("cubixx") || lower.includes("cubixx controller");
-}
-

@@ -3,8 +3,8 @@ export type DiscoveryStatus =
   | "not-panel"
   | "no-response"
   | "error"
-  | "pending"
-  | "initial";
+  | "pending"    // Discovery in progress for this IP
+  | "initial";   // Not yet started (UI placeholder)
 
 export interface DiscoveryRequest {
   baseIp: string;
