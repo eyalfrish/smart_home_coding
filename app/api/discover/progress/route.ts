@@ -1,4 +1,4 @@
-import { getProgress } from "@/lib/discovery/discovery-progress";
+import { getProgressStats } from "@/lib/discovery/discovery-progress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,20 +8,12 @@ export const dynamic = "force-dynamic";
  * Returns current scan progress and partial results.
  */
 export async function GET() {
-  const progress = getProgress();
+  const stats = getProgressStats();
   
   return new Response(
     JSON.stringify({
-      isRunning: progress.isRunning,
-      phase: progress.phase,
-      totalIps: progress.totalIps,
-      scannedCount: progress.scannedCount,
-      panelsFound: progress.panelsFound,
-      notPanels: progress.notPanels,
-      noResponse: progress.noResponse,
-      errors: progress.errors,
-      partialResults: progress.partialResults,
-      elapsed: progress.startTime ? Date.now() - progress.startTime : 0,
+      ...stats,
+      elapsed: stats.startTime ? Date.now() - stats.startTime : 0,
     }),
     {
       status: 200,

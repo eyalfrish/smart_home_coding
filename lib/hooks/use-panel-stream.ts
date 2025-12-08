@@ -268,13 +268,20 @@ export function usePanelStream(
           shouldReconnectRef.current = false;
           return;
         }
+        if (response.status === 401) {
+          // Session expired - server restarted, don't reconnect
+          console.log("[usePanelStream] Session expired, not reconnecting");
+          shouldReconnectRef.current = false;
+          setError("Session expired - server restarted");
+          return;
+        }
       } catch {
         // Ignore fetch errors
       }
 
       setError("Connection lost");
 
-      // Schedule reconnect
+      // Schedule reconnect only if allowed
       if (shouldReconnectRef.current) {
         reconnectTimerRef.current = setTimeout(() => {
           reconnectTimerRef.current = null;

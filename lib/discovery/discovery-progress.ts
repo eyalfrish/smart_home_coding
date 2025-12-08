@@ -3,22 +3,20 @@
  * This allows polling for progress while discovery is running.
  */
 
+type ResultStatus = 'panel' | 'not-panel' | 'no-response' | 'error' | 'pending';
+
+interface PartialResult {
+  ip: string;
+  status: ResultStatus;
+  name?: string;
+}
+
 interface DiscoveryProgress {
   isRunning: boolean;
   phase: string;
   totalIps: number;
-  scannedCount: number;
-  panelsFound: number;
-  notPanels: number;
-  noResponse: number;
-  errors: number;
-  // Partial results for early display
-  partialResults: Array<{
-    ip: string;
-    status: 'panel' | 'not-panel' | 'no-response' | 'error' | 'pending';
-    name?: string;
-    responseTime?: number;
-  }>;
+  // Track results by IP to avoid duplicates across phases
+  resultsByIp: Map<string, PartialResult>;
   startTime: number;
   lastUpdate: number;
 }
@@ -30,26 +28,68 @@ interface GlobalWithProgress {
   [PROGRESS_KEY]?: DiscoveryProgress;
 }
 
-const defaultProgress: DiscoveryProgress = {
-  isRunning: false,
-  phase: '',
-  totalIps: 0,
-  scannedCount: 0,
-  panelsFound: 0,
-  notPanels: 0,
-  noResponse: 0,
-  errors: 0,
-  partialResults: [],
-  startTime: 0,
-  lastUpdate: 0,
-};
+function createDefaultProgress(): DiscoveryProgress {
+  return {
+    isRunning: false,
+    phase: '',
+    totalIps: 0,
+    resultsByIp: new Map(),
+    startTime: 0,
+    lastUpdate: 0,
+  };
+}
 
 export function getProgress(): DiscoveryProgress {
   const globalObj = globalThis as GlobalWithProgress;
   if (!globalObj[PROGRESS_KEY]) {
-    globalObj[PROGRESS_KEY] = { ...defaultProgress };
+    globalObj[PROGRESS_KEY] = createDefaultProgress();
   }
   return globalObj[PROGRESS_KEY];
+}
+
+// Get computed stats for API response
+export function getProgressStats() {
+  const progress = getProgress();
+  
+  let panelsFound = 0;
+  let notPanels = 0;
+  let noResponse = 0;
+  let errors = 0;
+  
+  const partialResults: PartialResult[] = [];
+  
+  progress.resultsByIp.forEach((result) => {
+    partialResults.push(result);
+    switch (result.status) {
+      case 'panel':
+        panelsFound++;
+        break;
+      case 'not-panel':
+        notPanels++;
+        break;
+      case 'no-response':
+      case 'pending':
+        noResponse++;
+        break;
+      case 'error':
+        errors++;
+        break;
+    }
+  });
+  
+  return {
+    isRunning: progress.isRunning,
+    phase: progress.phase,
+    totalIps: progress.totalIps,
+    scannedCount: progress.resultsByIp.size,
+    panelsFound,
+    notPanels,
+    noResponse,
+    errors,
+    partialResults,
+    startTime: progress.startTime,
+    lastUpdate: progress.lastUpdate,
+  };
 }
 
 export function startProgress(totalIps: number): void {
@@ -57,12 +97,7 @@ export function startProgress(totalIps: number): void {
   progress.isRunning = true;
   progress.phase = 'starting';
   progress.totalIps = totalIps;
-  progress.scannedCount = 0;
-  progress.panelsFound = 0;
-  progress.notPanels = 0;
-  progress.noResponse = 0;
-  progress.errors = 0;
-  progress.partialResults = [];
+  progress.resultsByIp = new Map();
   progress.startTime = Date.now();
   progress.lastUpdate = Date.now();
 }
@@ -75,34 +110,27 @@ export function updatePhase(phase: string): void {
 
 export function addResult(result: {
   ip: string;
-  status: 'panel' | 'not-panel' | 'no-response' | 'error' | 'pending';
+  status: ResultStatus;
   name?: string;
-  responseTime?: number;
 }): void {
   const progress = getProgress();
   
-  // Update counts
-  progress.scannedCount++;
-  switch (result.status) {
-    case 'panel':
-      progress.panelsFound++;
-      break;
-    case 'not-panel':
-      progress.notPanels++;
-      break;
-    case 'no-response':
-    case 'pending':
-      progress.noResponse++;
-      break;
-    case 'error':
-      progress.errors++;
-      break;
-  }
+  // Only add/update if it's a definitive result (panel or not-panel)
+  // or if we don't have this IP yet
+  const existing = progress.resultsByIp.get(result.ip);
   
-  // Add to partial results (keep only panels and non-responses for display)
-  // Limit to prevent memory issues
-  if (progress.partialResults.length < 300) {
-    progress.partialResults.push(result);
+  // Prioritize: panel > not-panel > error > no-response
+  const shouldUpdate = !existing || 
+    result.status === 'panel' ||
+    (result.status === 'not-panel' && existing.status !== 'panel') ||
+    (result.status === 'error' && existing.status === 'no-response');
+  
+  if (shouldUpdate) {
+    progress.resultsByIp.set(result.ip, {
+      ip: result.ip,
+      status: result.status,
+      name: result.name || existing?.name,
+    });
   }
   
   progress.lastUpdate = Date.now();
@@ -117,6 +145,6 @@ export function finishProgress(): void {
 
 export function resetProgress(): void {
   const globalObj = globalThis as GlobalWithProgress;
-  globalObj[PROGRESS_KEY] = { ...defaultProgress };
+  globalObj[PROGRESS_KEY] = createDefaultProgress();
 }
 

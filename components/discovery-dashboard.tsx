@@ -99,23 +99,20 @@ export default function DiscoveryDashboard() {
   // Reset panel registry on mount and check server session
   // This ensures clean slate when page loads or server restarts
   useEffect(() => {
+    // ALWAYS clear discovery state on mount - this handles Fast Refresh preserving state
+    console.log('[Dashboard] Mount: clearing discovery state');
+    setResponse(null);
+    setPanelInfoMap({});
+    setSelectedPanelIps(new Set());
+    setHasDiscoveredThisSession(false);
+    setServerSessionId(null); // Clear session until we get a new one
+    sessionStorage.removeItem('discoveredThisSession');
+    
     const checkServerAndReset = async () => {
       try {
         // Get current server session
         const sessionRes = await fetch('/api/session');
         const { sessionId } = await sessionRes.json();
-        
-        // Check if server has changed
-        const lastSessionId = sessionStorage.getItem('serverSessionId');
-        if (lastSessionId && lastSessionId !== sessionId) {
-          console.log('[Dashboard] Server restarted (new session), clearing all state');
-          // Clear all local state
-          setResponse(null);
-          setPanelInfoMap({});
-          setSelectedPanelIps(new Set());
-          setHasDiscoveredThisSession(false);
-          sessionStorage.removeItem('discoveredThisSession');
-        }
         
         // Save current session ID
         sessionStorage.setItem('serverSessionId', sessionId);
@@ -136,7 +133,7 @@ export default function DiscoveryDashboard() {
     checkServerAndReset();
   }, []);
 
-  // Poll for progress during discovery
+  // Poll for progress during discovery and update table with partial results
   useEffect(() => {
     if (!isLoading) {
       setLiveProgress(null);
@@ -156,15 +153,53 @@ export default function DiscoveryDashboard() {
             phase: data.phase,
             partialResults: data.partialResults || [],
           });
+          
+          // Update response with partial results so table shows progress
+          if (data.partialResults && data.partialResults.length > 0) {
+            setResponse(prev => {
+              if (!prev) return prev;
+              
+              // Create a map from partial results for quick lookup
+              const partialMap = new Map<string, { status: string; name?: string }>();
+              for (const pr of data.partialResults) {
+                partialMap.set(pr.ip, { status: pr.status, name: pr.name });
+              }
+              
+              // Update results with partial data
+              const updatedResults = prev.results.map(r => {
+                const partial = partialMap.get(r.ip);
+                if (partial && r.status === 'initial') {
+                  return {
+                    ...r,
+                    status: partial.status as DiscoveryResult['status'],
+                    name: partial.name || r.name,
+                  };
+                }
+                return r;
+              });
+              
+              return {
+                ...prev,
+                summary: {
+                  ...prev.summary,
+                  panelsFound: data.panelsFound,
+                  notPanels: data.notPanels,
+                  noResponse: data.noResponse,
+                  errors: data.errors,
+                },
+                results: updatedResults,
+              };
+            });
+          }
         }
       } catch (err) {
         // Ignore polling errors
       }
     };
     
-    // Poll immediately and then every 500ms
+    // Poll immediately and then every 300ms for responsive updates
     pollProgress();
-    const interval = setInterval(pollProgress, 500);
+    const interval = setInterval(pollProgress, 300);
     
     return () => clearInterval(interval);
   }, [isLoading]);
@@ -582,37 +617,19 @@ export default function DiscoveryDashboard() {
                   <div className={styles.progressStats}>
                     <span className={styles.progressPhase}>Phase: {liveProgress.phase}</span>
                     <span className={styles.progressCount}>
-                      Scanned: <strong>{liveProgress.scannedCount}</strong> / {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0}
+                      Checked: <strong>{liveProgress.scannedCount}</strong> / {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0} IPs
                     </span>
                     <span className={styles.progressPanels}>
                       Found: <strong className={styles.progressPanelsCount}>{liveProgress.panelsFound}</strong> panels
-                      {liveProgress.notPanels > 0 && <span>, {liveProgress.notPanels} other</span>}
-                      {liveProgress.noResponse > 0 && <span>, {liveProgress.noResponse} no response</span>}
+                      {liveProgress.notPanels > 0 && <>, {liveProgress.notPanels} other</>}
+                      {liveProgress.noResponse > 0 && <>, {liveProgress.noResponse} no response</>}
                     </span>
                   </div>
                 ) : (
                   <span style={{ fontSize: "0.9em", opacity: 0.8 }}>
-                    Checking {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0} IP addresses...
+                    Initializing scan of {formValues.end ? Number(formValues.end) - Number(formValues.start) + 1 : 0} IP addresses...
                   </span>
                 )}
-              </div>
-            </div>
-          )}
-          {/* Show partial results during scanning */}
-          {isLoading && liveProgress && liveProgress.partialResults.length > 0 && (
-            <div className={styles.partialResultsBox}>
-              <div className={styles.partialResultsHeader}>
-                Live Results ({liveProgress.partialResults.filter(r => r.status === 'panel').length} panels found so far)
-              </div>
-              <div className={styles.partialResultsList}>
-                {liveProgress.partialResults
-                  .filter(r => r.status === 'panel')
-                  .map(r => (
-                    <div key={r.ip} className={styles.partialResultItem}>
-                      <span className={styles.partialResultIp}>{r.ip}</span>
-                      {r.name && <span className={styles.partialResultName}>{r.name}</span>}
-                    </div>
-                  ))}
               </div>
             </div>
           )}
