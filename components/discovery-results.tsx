@@ -50,7 +50,7 @@ function compareVersions(a: string, b: string): number {
 }
 
 // Sortable column types
-type SortColumn = "ip" | "name" | "status" | "version" | "signal" | "touched" | null;
+type SortColumn = "ip" | "name" | "status" | "version" | "signal" | "backlight" | "logging" | "longpress" | "touched" | null;
 type SortDirection = "asc" | "desc";
 
 export default function DiscoveryResults({
@@ -317,6 +317,36 @@ export default function DiscoveryResults({
         comparison = signalA - signalB;
         break;
       }
+      case "backlight": {
+        // Sort by statusLedOn: true > false > unknown
+        const backlightA = liveStateA?.fullState?.statusLedOn;
+        const backlightB = liveStateB?.fullState?.statusLedOn;
+        if (backlightA === backlightB) comparison = 0;
+        else if (backlightA === undefined) comparison = 1;
+        else if (backlightB === undefined) comparison = -1;
+        else comparison = (backlightA ? 1 : 0) - (backlightB ? 1 : 0);
+        break;
+      }
+      case "logging": {
+        // Sort by logging: true > false > unknown
+        const loggingA = a.settings?.logging;
+        const loggingB = b.settings?.logging;
+        if (loggingA === loggingB) comparison = 0;
+        else if (loggingA === undefined) comparison = 1;
+        else if (loggingB === undefined) comparison = -1;
+        else comparison = (loggingA ? 1 : 0) - (loggingB ? 1 : 0);
+        break;
+      }
+      case "longpress": {
+        // Sort by longPressMs: numeric, unknown at end
+        const longPressA = a.settings?.longPressMs;
+        const longPressB = b.settings?.longPressMs;
+        if (longPressA === longPressB) comparison = 0;
+        else if (longPressA === undefined) comparison = 1;
+        else if (longPressB === undefined) comparison = -1;
+        else comparison = longPressA - longPressB;
+        break;
+      }
       case "touched": {
         const touchedA = metadataA?.touched === true ? 1 : 0;
         const touchedB = metadataB?.touched === true ? 1 : 0;
@@ -470,9 +500,33 @@ export default function DiscoveryResults({
                   {sortColumn === "signal" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
                 </span>
               </th>
-              <th>Backlight</th>
-              <th>Logging</th>
-              <th>LongPress</th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("backlight")}
+              >
+                Backlight
+                <span className={`${styles.sortIndicator} ${sortColumn === "backlight" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "backlight" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("logging")}
+              >
+                Logging
+                <span className={`${styles.sortIndicator} ${sortColumn === "logging" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "logging" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
+              <th 
+                className={styles.sortableHeader} 
+                onClick={() => handleSort("longpress")}
+              >
+                LongPress
+                <span className={`${styles.sortIndicator} ${sortColumn === "longpress" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "longpress" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
               <th>Live State</th>
               <th 
                 className={styles.sortableHeader} 
