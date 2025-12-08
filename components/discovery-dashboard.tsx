@@ -312,10 +312,10 @@ export default function DiscoveryDashboard() {
         errors: 0,
       };
 
-      // Throttled update mechanism - update UI at most every 80ms for smooth progressive display
+      // Throttled update mechanism - update UI at most every 50ms for responsive progressive display
       let updatePending = false;
       let lastUpdateTime = 0;
-      const UPDATE_INTERVAL = 80;
+      const UPDATE_INTERVAL = 50;
       
       const doUpdateResponse = () => {
         const orderedResults: DiscoveryResult[] = [];

@@ -3,23 +3,23 @@
  * 
  * This engine uses a multi-phase approach to maximize panel detection reliability:
  * 
- * Phase 1: Quick Sweep (400ms timeout)
+ * Phase 1: Quick Sweep (500ms timeout)
  *   - Fast initial scan to identify definitely-responsive hosts
- *   - High concurrency (15 parallel)
+ *   - High concurrency (20 parallel)
+ *   - Settings fetched IMMEDIATELY for discovered panels
  *   
- * Phase 2: Standard Scan (1500ms timeout)  
+ * Phase 2: Standard Scan (1200ms timeout)  
  *   - Re-scan non-responsive IPs from Phase 1
- *   - Medium concurrency (10 parallel)
+ *   - Medium concurrency (15 parallel)
  *   - 1 retry
  *   
- * Phase 3: Deep Scan (3000ms timeout)
+ * Phase 3: Deep Scan (2500ms timeout)
  *   - Final attempt for stubborn/slow IPs
- *   - Lower concurrency (5 parallel)
+ *   - Lower concurrency (8 parallel)
  *   - 2 retries
  *   
- * Phase 4: Settings Enrichment (parallel)
- *   - Fetch panel names/settings in parallel batches
- *   - Uses longer timeout since panels are confirmed
+ * Settings are fetched incrementally as panels are discovered,
+ * not in a batch at the end - this provides instant panel names!
  */
 
 import type { DiscoveryResult, PanelSettings } from "./types";
@@ -41,8 +41,7 @@ const PHASES: PhaseConfig[] = [
   { name: "deep", timeout: 2500, concurrency: 8, retries: 2, baseRetryDelay: 150 },
 ];
 
-const SETTINGS_TIMEOUT = 3000;  // Some panels are slow to serve /settings
-const SETTINGS_CONCURRENCY = 25; // High concurrency since we have longer timeout
+const SETTINGS_TIMEOUT = 2500;  // Fetch settings quickly, don't block
 
 export type DiscoveryEventType = 
   | "phase_start" 
@@ -119,6 +118,49 @@ export async function runMultiPhaseDiscovery(
   // Track which IPs still need scanning
   let pendingIps = new Set(allTargets);
   
+  // Track background settings fetches - don't await them inline
+  const pendingSettingsFetches: Promise<void>[] = [];
+  
+  // Helper to fetch settings for a discovered panel in background
+  const fetchSettingsForPanel = (ip: string) => {
+    const fetchPromise = (async () => {
+      try {
+        const settings = await fetchPanelSettings(ip);
+        const existing = results.get(ip);
+        if (existing && existing.status === "panel") {
+          const enriched: DiscoveryResult = {
+            ...existing,
+            name: settings.name ?? existing.name,
+            settings: buildSettingsObject(settings),
+          };
+          results.set(ip, enriched);
+          
+          // Update progress tracker with name
+          addResult({
+            ip: enriched.ip,
+            status: "panel",
+            name: enriched.name ?? undefined,
+          });
+          
+          // Send update event with enriched data
+          onEvent({
+            type: "update",
+            data: enriched,
+            progress: {
+              completed: allTargets.length - pendingIps.size,
+              total: allTargets.length,
+              panelsFound: countByStatus(results, "panel"),
+            }
+          });
+        }
+      } catch (e) {
+        // Silently ignore settings fetch errors - panel is still discovered
+        console.log(`[Settings] ${ip}: FAILED - ${(e as Error).message}`);
+      }
+    })();
+    pendingSettingsFetches.push(fetchPromise);
+  };
+
   // Run discovery phases
   for (const phase of PHASES) {
     if (pendingIps.size === 0) break;
@@ -154,6 +196,8 @@ export async function runMultiPhaseDiscovery(
           pendingIps.delete(ip);
           if (result.status === "panel") {
             panelsFoundInPhase++;
+            // Start fetching settings immediately in background!
+            fetchSettingsForPanel(ip);
           }
         }
         
@@ -208,34 +252,15 @@ export async function runMultiPhaseDiscovery(
     }
   });
 
-  // Get confirmed panels for settings enrichment
-  const confirmedPanels = Array.from(results.entries())
-    .filter(([, r]) => r.status === "panel")
-    .map(([ip]) => ip);
-
-  console.log(`[Discovery] Found ${confirmedPanels.length} panels total, fetching settings...`);
-
-  // Settings enrichment phase - fetch all in parallel, then send batch update
-  if (confirmedPanels.length > 0) {
-    onEvent({ type: "settings_start" });
-    
-    const settingsStartTime = Date.now();
-    const enrichedResults = await fetchAllPanelSettings(confirmedPanels, results);
-    
-    // Apply all enriched results to the map
-    enrichedResults.forEach((result, ip) => {
-      results.set(ip, result);
-    });
-    
-    console.log(`[Discovery] Settings fetched in ${Date.now() - settingsStartTime}ms`);
-    
-    // Send ONE batch update with all enriched panels
-    onEvent({ 
-      type: "settings_batch",
-      data: Array.from(enrichedResults.values()),
-    } as DiscoveryEvent);
-
-    onEvent({ type: "settings_complete" });
+  // Wait for any remaining settings fetches (with a timeout so we don't hang)
+  if (pendingSettingsFetches.length > 0) {
+    console.log(`[Discovery] Waiting for ${pendingSettingsFetches.length} settings fetches...`);
+    const settingsTimeout = new Promise<void>(resolve => setTimeout(resolve, 3000));
+    await Promise.race([
+      Promise.allSettled(pendingSettingsFetches),
+      settingsTimeout,
+    ]);
+    console.log(`[Discovery] Settings fetches complete`);
   }
 
   // Calculate final stats
@@ -292,8 +317,8 @@ async function runPhase(
       const result = await checkHostWithRetry(ip, config);
       onResult(ip, result);
       
-      // Small stagger between requests
-      await delay(15);
+      // Minimal stagger to avoid overwhelming network stack
+      await delay(5);
     }
   };
 
@@ -375,60 +400,6 @@ async function checkHost(ip: string, timeout: number): Promise<DiscoveryResult> 
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-/**
- * Fetch settings for all panels in parallel and return enriched results
- */
-async function fetchAllPanelSettings(
-  panelIps: string[],
-  results: Map<string, DiscoveryResult>
-): Promise<Map<string, DiscoveryResult>> {
-  const enrichedResults = new Map<string, DiscoveryResult>();
-  const startTime = Date.now();
-  
-  console.log(`[Settings] Starting batch fetch for ${panelIps.length} panels (concurrency: ${SETTINGS_CONCURRENCY})`);
-  
-  // Create fetch tasks
-  const fetchTasks = panelIps.map((ip) => async () => {
-    const taskStart = Date.now();
-    const existing = results.get(ip);
-    if (!existing || existing.status !== "panel") return;
-
-    try {
-      const settings = await fetchPanelSettings(ip);
-      const enriched: DiscoveryResult = {
-        ...existing,
-        name: settings.name ?? existing.name,
-        settings: buildSettingsObject(settings),
-      };
-      enrichedResults.set(ip, enriched);
-      console.log(`[Settings] ${ip}: ${settings.name || "no-name"} (${Date.now() - taskStart}ms)`);
-    } catch (e) {
-      console.log(`[Settings] ${ip}: FAILED (${Date.now() - taskStart}ms) - ${(e as Error).message}`);
-      enrichedResults.set(ip, existing);
-    }
-  });
-
-  // Run all tasks with concurrency limit
-  let taskIndex = 0;
-  const runNext = async (): Promise<void> => {
-    while (taskIndex < fetchTasks.length) {
-      const currentIndex = taskIndex++;
-      await fetchTasks[currentIndex]();
-    }
-  };
-
-  const workers = Array.from(
-    { length: Math.min(SETTINGS_CONCURRENCY, fetchTasks.length) },
-    () => runNext()
-  );
-  
-  await Promise.all(workers);
-  
-  console.log(`[Settings] Batch complete: ${enrichedResults.size} panels in ${Date.now() - startTime}ms`);
-
-  return enrichedResults;
 }
 
 interface PanelSettingsResult {

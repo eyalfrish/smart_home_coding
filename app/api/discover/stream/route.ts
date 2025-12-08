@@ -9,8 +9,7 @@ const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 /**
  * Streaming discovery endpoint using SSE.
- * NOTE: True real-time streaming is limited by Next.js buffering.
- * Results are sent as they complete but may arrive in batches.
+ * Results are streamed in real-time as they complete.
  */
 export async function GET(request: NextRequest) {
   // Reset panel registry before starting new discovery
@@ -18,6 +17,7 @@ export async function GET(request: NextRequest) {
   const registry = getPanelRegistry();
   registry.reset();
   console.log("[Discovery] Starting new discovery - registry reset");
+  
   const searchParams = request.nextUrl.searchParams;
   const baseIp = searchParams.get("baseIp");
   const startStr = searchParams.get("start");
@@ -49,28 +49,70 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Collect all events, then stream them
-  const events: DiscoveryEvent[] = [];
+  // Create a ReadableStream for true SSE streaming
+  const encoder = new TextEncoder();
   
-  await runMultiPhaseDiscovery(baseIp, start, end, (event: DiscoveryEvent) => {
-    events.push(event);
+  const stream = new ReadableStream({
+    async start(controller) {
+      let aborted = false;
+      
+      // Handle client disconnect
+      request.signal.addEventListener("abort", () => {
+        aborted = true;
+        console.log("[Discovery] Client disconnected, aborting");
+        try {
+          controller.close();
+        } catch {
+          // Controller might already be closed
+        }
+      });
+
+      // Send events as they arrive
+      const sendEvent = (event: DiscoveryEvent) => {
+        if (aborted) return;
+        try {
+          const data = `data: ${JSON.stringify(event)}\n\n`;
+          controller.enqueue(encoder.encode(data));
+        } catch (err) {
+          console.error("[Discovery] Failed to send event:", err);
+        }
+      };
+
+      try {
+        // Run discovery with real-time event streaming
+        await runMultiPhaseDiscovery(baseIp, start, end, sendEvent);
+      } catch (err) {
+        console.error("[Discovery] Error during discovery:", err);
+        sendEvent({
+          type: "complete",
+          stats: {
+            totalIps: end - start + 1,
+            panelsFound: 0,
+            nonPanels: 0,
+            noResponse: end - start + 1,
+            errors: 1,
+            phases: [],
+            totalDurationMs: 0,
+          },
+        });
+      } finally {
+        if (!aborted) {
+          try {
+            controller.close();
+          } catch {
+            // Controller might already be closed
+          }
+        }
+      }
+    },
   });
 
-  // Build SSE response with all events
-  const encoder = new TextEncoder();
-  const lines: string[] = [];
-  
-  for (const event of events) {
-    lines.push(`data: ${JSON.stringify(event)}\n\n`);
-  }
-  
-  const body = lines.join("");
-
-  return new Response(encoder.encode(body), {
+  return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-store",
+      "Cache-Control": "no-cache, no-store, no-transform",
       "Connection": "keep-alive",
+      "X-Accel-Buffering": "no", // Disable nginx buffering
     },
   });
 }
