@@ -80,20 +80,6 @@ export default function DiscoveryResults({
     onPanelSelectionChange?.(ip, checked);
   }, [onPanelSelectionChange]);
 
-  const handleSelectAllChange = useCallback((checked: boolean) => {
-    if (checked) {
-      onSelectAll?.(cubixxPanelIps);
-    } else {
-      onDeselectAll?.();
-    }
-  }, [onSelectAll, onDeselectAll, cubixxPanelIps]);
-
-  // Calculate if all Cubixx panels are selected (for the header checkbox)
-  const allCubixxSelected = cubixxPanelIps.length > 0 && 
-    cubixxPanelIps.every(ip => selectedPanelIps?.has(ip));
-  const someCubixxSelected = cubixxPanelIps.some(ip => selectedPanelIps?.has(ip));
-  const isIndeterminate = someCubixxSelected && !allCubixxSelected;
-
   const handleSort = useCallback((column: SortColumn) => {
     if (sortColumn === column) {
       // Toggle direction if same column
@@ -269,6 +255,35 @@ export default function DiscoveryResults({
       name.includes(normalizedQuery)
     );
   });
+
+  // Get only the Cubixx panel IPs from the filtered results (for select-all functionality)
+  const filteredCubixxIps = filteredResults
+    .filter(result => result.status === "panel")
+    .map(result => result.ip);
+
+  // Calculate if all filtered Cubixx panels are selected (for the header checkbox)
+  const allFilteredSelected = filteredCubixxIps.length > 0 && 
+    filteredCubixxIps.every(ip => selectedPanelIps?.has(ip));
+  const someFilteredSelected = filteredCubixxIps.some(ip => selectedPanelIps?.has(ip));
+  const isIndeterminate = someFilteredSelected && !allFilteredSelected;
+
+  const handleSelectAllChange = (checked: boolean) => {
+    if (checked) {
+      // Add all filtered panels to current selection (merge with existing)
+      const newSelection = new Set(selectedPanelIps);
+      filteredCubixxIps.forEach(ip => newSelection.add(ip));
+      onSelectAll?.([...newSelection]);
+    } else {
+      // Remove only the filtered panels from selection (keep others)
+      const newSelection = new Set(selectedPanelIps);
+      filteredCubixxIps.forEach(ip => newSelection.delete(ip));
+      if (newSelection.size === 0) {
+        onDeselectAll?.();
+      } else {
+        onSelectAll?.([...newSelection]);
+      }
+    }
+  };
 
   // Sort filtered results
   const sortedResults = [...filteredResults].sort((a, b) => {
@@ -446,12 +461,12 @@ export default function DiscoveryResults({
               <th className={styles.checkboxHeader}>
                 <input
                   type="checkbox"
-                  checked={allCubixxSelected}
+                  checked={allFilteredSelected}
                   ref={(el) => {
                     if (el) el.indeterminate = isIndeterminate;
                   }}
                   onChange={(e) => handleSelectAllChange(e.target.checked)}
-                  title={allCubixxSelected ? "Deselect all panels" : "Select all panels"}
+                  title={allFilteredSelected ? "Deselect all filtered panels" : "Select all filtered panels"}
                   className={styles.selectAllCheckbox}
                 />
               </th>
