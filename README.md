@@ -47,9 +47,27 @@ The Next.js dev server runs on `http://localhost:3000` by default.
 - A 1.6 s timeout guards every request so the whole scan stays responsive even if certain IPs never answer.
 - An address is marked as a panel only when the HTML clearly mentions “Cubixx” (case-insensitive); any other HTTP 200 page is reported as “Not Cubixx”.
 
+## Deployment
+
+For home deployment on a Windows PC with auto-start on boot, see the detailed guide:
+
+📖 **[Windows Deployment Guide](docs/windows-deployment-guide.md)**
+
+The guide covers:
+- Prerequisites and installation
+- Running as a Windows service (auto-start on reboot)
+- Network configuration for access from other devices
+- Updating to newer versions
+- Remote management
+
+Helper scripts are available in the `scripts/` folder:
+- `install-service.bat` - Automated service installation
+- `update-dashboard.bat` - Update and rebuild script
+- `uninstall-service.bat` - Remove the service
+
 ## Future Plans
 
-- Show each discovered panel as a card that can launch the live panel UI inside an iframe while offering a “return to dashboard” action.
+- Show each discovered panel as a card that can launch the live panel UI inside an iframe while offering a "return to dashboard" action.
 - Gradually expand the dashboard to include metadata, health indicators, and navigation among multiple rooms/floors.
-- Add batch operations (e.g., “reset all panels”, “push config”) built on top of the discovery and monitoring primitives established here.
+- Add batch operations (e.g., "reset all panels", "push config") built on top of the discovery and monitoring primitives established here.
 
