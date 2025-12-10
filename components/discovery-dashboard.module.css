@@ -1135,6 +1135,280 @@
   cursor: not-allowed;
 }
 
+/* Disabled button variant */
+.batchControlButtonDisabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  background: rgba(100, 116, 139, 0.3) !important;
+}
+
+/* Firmware Update View Styles */
+.firmwareDropZone {
+  border: 2px dashed rgba(15, 23, 42, 0.2);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.5);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.firmwareDropZone:hover {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.firmwareDropZoneDragging {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+  border-style: solid;
+  transform: scale(1.01);
+}
+
+.firmwareDropZoneHasFile {
+  border-color: var(--panel);
+  background: rgba(22, 163, 74, 0.05);
+  border-style: solid;
+}
+
+.firmwareDropZoneHasFile:hover {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: var(--panel);
+}
+
+.firmwareDropZoneDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.firmwareDropPrompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.firmwareDropIcon {
+  font-size: 2.5rem;
+  opacity: 0.6;
+}
+
+.firmwareDropText {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.firmwareDropHint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.firmwareFileInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.firmwareFileName {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--panel);
+}
+
+.firmwareFileSize {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.firmwareClearButton {
+  background: rgba(220, 38, 38, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.firmwareClearButton:hover {
+  background: rgba(220, 38, 38, 0.2);
+}
+
+.firmwareClearButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.firmwareUploadRow {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.firmwareUploadButton {
+  min-width: 280px;
+  padding: 0.85rem 2rem !important;
+  font-size: 1rem !important;
+}
+
+/* Credentials info display */
+.credentialsInfo {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.credentialsInfo strong {
+  color: var(--panel);
+}
+
+.credentialsClearButton {
+  background: transparent;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+
+.credentialsClearButton:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.3);
+}
+
+.credentialsClearButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modalContent {
+  background: white;
+  border-radius: 16px;
+  padding: 1.75rem;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.25);
+}
+
+.modalContent h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  color: #1e293b;
+}
+
+.modalContent p {
+  margin: 0 0 1.25rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.modalField label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.modalField input {
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  font-size: 1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.modalField input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.modalButtonSecondary {
+  padding: 0.65rem 1.25rem;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+
+.modalButtonSecondary:hover {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.3);
+}
+
+.modalButtonPrimary {
+  padding: 0.65rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modalButtonPrimary:hover {
+  opacity: 0.85;
+}
+
 /* Loading box during discovery */
 .loadingBox {
   margin-top: 1rem;

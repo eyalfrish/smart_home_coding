@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useRef, type DragEvent, type ChangeEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryResult, PanelInfo, LivePanelState, PanelCommand, PanelSettings } from "@/lib/discovery/types";
+import type { DiscoveryResult, PanelInfo, LivePanelState, PanelCommand } from "@/lib/discovery/types";
 
 interface BatchOperationsViewProps {
   selectedPanelIps: Set<string>;
@@ -13,6 +13,9 @@ interface BatchOperationsViewProps {
   onSelectionChange: (ip: string, selected: boolean) => void;
   onSendCommand?: (ip: string, command: PanelCommand) => Promise<boolean>;
 }
+
+// Sub-view types
+type BatchSubView = "main" | "firmware-update";
 
 // Status for each panel during batch operation
 type PanelBatchStatus = "idle" | "in-progress" | "success" | "failed";
@@ -167,6 +170,19 @@ export default function BatchOperationsView({
   const [lastOperation, setLastOperation] = useState<BatchOperation | null>(null);
   // Long press time input value
   const [longPressInput, setLongPressInput] = useState<string>("1000");
+  // Current sub-view (main or firmware-update)
+  const [subView, setSubView] = useState<BatchSubView>("main");
+  // Firmware file for upload
+  const [firmwareFile, setFirmwareFile] = useState<File | null>(null);
+  // Drag state for drop zone
+  const [isDragging, setIsDragging] = useState(false);
+  // File input refs
+  const firmwareInputRef = useRef<HTMLInputElement>(null);
+  const configInputRef = useRef<HTMLInputElement>(null);
+  // Credentials for backup (HTTP Basic Auth)
+  const [backupCredentials, setBackupCredentials] = useState<{ username: string; password: string } | null>(null);
+  const [showCredentialsPrompt, setShowCredentialsPrompt] = useState(false);
+  const [credentialsInput, setCredentialsInput] = useState({ username: "", password: "" });
 
   // Filter to only show selected panels that are actual panels
   const selectedPanels = useMemo(() => {
@@ -523,6 +539,269 @@ export default function BatchOperationsView({
     }
   }, [lastOperation, hasFailures, selectedPanels, panelStatuses, executeDirectOperation, executeVirtualOperation, executeSettingsOperation, isSettingsOperation, longPressInput]);
 
+  // Firmware file drag handlers
+  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleFirmwareDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.name.toLowerCase().endsWith(".bin")) {
+        setFirmwareFile(file);
+      } else {
+        alert("Please select a .bin firmware file");
+      }
+    }
+  }, []);
+
+  const handleFirmwareFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setFirmwareFile(files[0]);
+    }
+  }, []);
+
+  // Execute config operation (backup, restore)
+  const executeConfigOperation = useCallback(async (
+    operation: "backup" | "restore",
+    targetIps: string[],
+    options?: { configData?: string; credentials?: { username: string; password: string } }
+  ) => {
+    if (targetIps.length === 0) return;
+
+    setIsRunning(true);
+    
+    // Create a pseudo-operation for tracking
+    const pseudoOp: BatchOperation = {
+      id: `config-${operation}` as BatchOperationType,
+      label: operation === "backup" ? "Backup Config" : "Restore Config",
+      isVirtual: true,
+    };
+    setLastOperation(pseudoOp);
+
+    // Set all target panels to in-progress
+    setPanelStatuses(prev => {
+      const next = new Map(prev);
+      targetIps.forEach(ip => next.set(ip, "in-progress"));
+      return next;
+    });
+
+    // For backup, collect all configs
+    const backups: Array<{ ip: string; data: string; success: boolean }> = [];
+
+    // Execute on each panel
+    const promises = targetIps.map(async (ip) => {
+      try {
+        const response = await fetch("/api/panels/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ip,
+            operation,
+            configData: options?.configData,
+            credentials: options?.credentials,
+          }),
+        });
+
+        const result = await response.json();
+        const success = response.ok && result.success;
+
+        if (operation === "backup" && success && result.configData) {
+          backups.push({ ip, data: result.configData, success: true });
+        }
+
+        setPanelStatuses(prev => {
+          const next = new Map(prev);
+          next.set(ip, success ? "success" : "failed");
+          return next;
+        });
+        return { ip, success };
+      } catch {
+        setPanelStatuses(prev => {
+          const next = new Map(prev);
+          next.set(ip, "failed");
+          return next;
+        });
+        return { ip, success: false };
+      }
+    });
+
+    await Promise.all(promises);
+
+    // For backup operation, trigger downloads
+    if (operation === "backup" && backups.length > 0) {
+      for (const backup of backups) {
+        try {
+          // Convert base64 to Uint8Array (browser-compatible)
+          const binaryString = atob(backup.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: "application/octet-stream" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `config_${backup.ip.replace(/\./g, "_")}.bin`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error("Failed to download backup for", backup.ip, e);
+        }
+      }
+    }
+
+    setIsRunning(false);
+  }, []);
+
+  // Execute firmware upload
+  const executeFirmwareUpload = useCallback(async (
+    file: File,
+    targetIps: string[]
+  ) => {
+    if (!file || targetIps.length === 0) return;
+
+    setIsRunning(true);
+    
+    const pseudoOp: BatchOperation = {
+      id: "firmware-upload" as BatchOperationType,
+      label: "Firmware Upload",
+      isVirtual: true,
+      confirmMessage: `Are you sure you want to upload firmware "${file.name}" to ${targetIps.length} panel(s)? This cannot be undone.`,
+      variant: "danger",
+    };
+    setLastOperation(pseudoOp);
+
+    // Set all target panels to in-progress
+    setPanelStatuses(prev => {
+      const next = new Map(prev);
+      targetIps.forEach(ip => next.set(ip, "in-progress"));
+      return next;
+    });
+
+    // Execute on each panel (sequentially to avoid overwhelming the network)
+    for (const ip of targetIps) {
+      try {
+        const formData = new FormData();
+        formData.append("ip", ip);
+        formData.append("firmware", file);
+
+        const response = await fetch("/api/panels/firmware", {
+          method: "POST",
+          body: formData,
+        });
+
+        const success = response.ok;
+        setPanelStatuses(prev => {
+          const next = new Map(prev);
+          next.set(ip, success ? "success" : "failed");
+          return next;
+        });
+      } catch {
+        setPanelStatuses(prev => {
+          const next = new Map(prev);
+          next.set(ip, "failed");
+          return next;
+        });
+      }
+    }
+
+    setIsRunning(false);
+  }, []);
+
+  // Handle backup button click - show credentials prompt
+  const handleBackupClick = useCallback(() => {
+    if (backupCredentials) {
+      // Already have credentials, run backup
+      const targetIps = selectedPanels.map(p => p.ip);
+      setPanelStatuses(new Map());
+      executeConfigOperation("backup", targetIps, { credentials: backupCredentials });
+    } else {
+      // Show credentials prompt
+      setShowCredentialsPrompt(true);
+    }
+  }, [selectedPanels, backupCredentials, executeConfigOperation]);
+
+  // Handle credentials submit
+  const handleCredentialsSubmit = useCallback(() => {
+    if (!credentialsInput.username || !credentialsInput.password) {
+      alert("Please enter both username and password.");
+      return;
+    }
+    const creds = { username: credentialsInput.username, password: credentialsInput.password };
+    setBackupCredentials(creds);
+    setShowCredentialsPrompt(false);
+    
+    // Run the backup with credentials
+    const targetIps = selectedPanels.map(p => p.ip);
+    setPanelStatuses(new Map());
+    executeConfigOperation("backup", targetIps, { credentials: creds });
+  }, [credentialsInput, selectedPanels, executeConfigOperation]);
+
+  // Handle restore - triggered after file selection
+  const handleRestoreFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const targetIps = selectedPanels.map(p => p.ip);
+
+    const confirmed = window.confirm(
+      `Are you sure you want to restore configuration from "${file.name}" to ${targetIps.length} panel(s)?\n\nPanels will restart after restore.`
+    );
+    if (!confirmed) {
+      // Clear the file input
+      e.target.value = "";
+      return;
+    }
+
+    setPanelStatuses(new Map());
+
+    // Read file and convert to base64
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      executeConfigOperation("restore", targetIps, { configData: base64 });
+    };
+    reader.readAsDataURL(file);
+
+    // Clear the file input for future selections
+    e.target.value = "";
+  }, [selectedPanels, executeConfigOperation]);
+
+  // Handle firmware upload button click
+  const handleFirmwareUpload = useCallback(() => {
+    if (!firmwareFile) {
+      alert("Please select a firmware file first.");
+      return;
+    }
+
+    const targetIps = selectedPanels.map(p => p.ip);
+    const confirmed = window.confirm(
+      `Are you sure you want to upload firmware "${firmwareFile.name}" to ${targetIps.length} panel(s)?\n\nThis operation cannot be undone. Panels will restart after upload.`
+    );
+    if (!confirmed) return;
+
+    setPanelStatuses(new Map());
+    executeFirmwareUpload(firmwareFile, targetIps);
+  }, [firmwareFile, selectedPanels, executeFirmwareUpload]);
+
   const count = selectedPanels.length;
 
   // Get status icon for a panel
@@ -544,6 +823,299 @@ export default function BatchOperationsView({
   const getDirectOp = (id: DirectOperationType) => DIRECT_OPERATIONS.find(op => op.id === id)!;
   const getVirtualOp = (id: VirtualOperationType) => VIRTUAL_OPERATIONS.find(op => op.id === id)!;
   const getSettingsOp = (id: SettingsOperationType) => SETTINGS_OPERATIONS.find(op => op.id === id)!;
+
+  // Render firmware update sub-view
+  if (subView === "firmware-update") {
+    return (
+      <div className={styles.batchView}>
+        <button 
+          type="button" 
+          className={styles.backButton} 
+          onClick={() => {
+            setSubView("main");
+            setFirmwareFile(null);
+            setPanelStatuses(new Map());
+            setBackupCredentials(null);
+            setCredentialsInput({ username: "", password: "" });
+          }}
+        >
+          ← Back to Batch Operations
+        </button>
+        
+        <div className={styles.batchHeader}>
+          <h2>Firmware Update <span className={styles.batchCount}>(batching {count} {count === 1 ? "panel" : "panels"})</span></h2>
+          <p className={`${styles.batchProgress} ${hasAnyStatus ? "" : styles.batchProgressHidden}`}>
+            {stats.inProgress > 0 && <span className={styles.progressInProgress}>⏳ {stats.inProgress} in progress</span>}
+            {stats.success > 0 && <span className={styles.progressSuccess}>✓ {stats.success} succeeded</span>}
+            {stats.failed > 0 && <span className={styles.progressFailed}>✗ {stats.failed} failed</span>}
+            {!hasAnyStatus && <span className={styles.progressPlaceholder}>&nbsp;</span>}
+          </p>
+        </div>
+
+        <div className={styles.batchControlsSections}>
+          {/* Configuration Operations */}
+          <div className={styles.batchControlsSection}>
+            <div className={styles.batchSectionHeader}>
+              <h3>Configuration</h3>
+              <span className={styles.batchSectionHint}>Backup or restore panel configuration</span>
+            </div>
+            <div className={styles.batchControlsArea}>
+              <div className={styles.batchControlsRow}>
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={handleBackupClick}
+                  disabled={isRunning || count === 0}
+                  title="Download configuration from all selected panels (requires authentication)"
+                >
+                  📥 Backup Config {backupCredentials ? "✓" : ""}
+                </button>
+                <span className={styles.buttonGroupSpacer}></span>
+                <input
+                  type="file"
+                  ref={configInputRef}
+                  onChange={handleRestoreFileSelect}
+                  style={{ display: "none" }}
+                  accept=".bin,.json"
+                />
+                <button
+                  type="button"
+                  className={styles.batchControlButton}
+                  onClick={() => configInputRef.current?.click()}
+                  disabled={isRunning || count === 0}
+                  title="Select and restore configuration to all selected panels"
+                >
+                  📤 Restore Config
+                </button>
+              </div>
+              {backupCredentials && (
+                <div className={styles.credentialsInfo}>
+                  Using credentials for user: <strong>{backupCredentials.username}</strong>
+                  <button
+                    type="button"
+                    className={styles.credentialsClearButton}
+                    onClick={() => setBackupCredentials(null)}
+                    disabled={isRunning}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Credentials Prompt Modal */}
+          {showCredentialsPrompt && (
+            <div className={styles.modalOverlay}>
+              <div className={styles.modalContent}>
+                <h3>Panel Authentication</h3>
+                <p>The backup endpoint requires authentication. Enter the panel credentials:</p>
+                <div className={styles.modalForm}>
+                  <div className={styles.modalField}>
+                    <label htmlFor="backup-username">Username</label>
+                    <input
+                      id="backup-username"
+                      type="text"
+                      value={credentialsInput.username}
+                      onChange={(e) => setCredentialsInput(prev => ({ ...prev, username: e.target.value }))}
+                      placeholder="admin"
+                      autoFocus
+                    />
+                  </div>
+                  <div className={styles.modalField}>
+                    <label htmlFor="backup-password">Password</label>
+                    <input
+                      id="backup-password"
+                      type="password"
+                      value={credentialsInput.password}
+                      onChange={(e) => setCredentialsInput(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder="password"
+                      onKeyDown={(e) => e.key === "Enter" && handleCredentialsSubmit()}
+                    />
+                  </div>
+                </div>
+                <div className={styles.modalActions}>
+                  <button
+                    type="button"
+                    className={styles.modalButtonSecondary}
+                    onClick={() => {
+                      setShowCredentialsPrompt(false);
+                      setCredentialsInput({ username: "", password: "" });
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.modalButtonPrimary}
+                    onClick={handleCredentialsSubmit}
+                  >
+                    Continue with Backup
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Firmware Upload */}
+          <div className={styles.batchControlsSection}>
+            <div className={styles.batchSectionHeader}>
+              <h3>Firmware Upload</h3>
+              <span className={styles.batchSectionHint}>Upload firmware .bin file to all selected panels</span>
+            </div>
+            <div className={styles.batchControlsArea}>
+              <div 
+                className={`${styles.firmwareDropZone} ${isDragging ? styles.firmwareDropZoneDragging : ""} ${firmwareFile ? styles.firmwareDropZoneHasFile : ""} ${isRunning ? styles.firmwareDropZoneDisabled : ""}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleFirmwareDrop}
+                onClick={() => !isRunning && firmwareInputRef.current?.click()}
+              >
+                <input
+                  type="file"
+                  ref={firmwareInputRef}
+                  onChange={handleFirmwareFileSelect}
+                  style={{ display: "none" }}
+                  accept=".bin"
+                />
+                {firmwareFile ? (
+                  <div className={styles.firmwareFileInfo}>
+                    <span className={styles.firmwareFileName}>📦 {firmwareFile.name}</span>
+                    <span className={styles.firmwareFileSize}>
+                      ({(firmwareFile.size / 1024).toFixed(1)} KB)
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.firmwareClearButton}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFirmwareFile(null);
+                      }}
+                      disabled={isRunning}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className={styles.firmwareDropPrompt}>
+                    <span className={styles.firmwareDropIcon}>📁</span>
+                    <span className={styles.firmwareDropText}>
+                      Drag & drop firmware .bin file here
+                    </span>
+                    <span className={styles.firmwareDropHint}>
+                      or click to browse
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className={styles.firmwareUploadRow}>
+                <button
+                  type="button"
+                  className={`${styles.batchControlButton} ${styles.batchControlDanger} ${styles.firmwareUploadButton} ${!firmwareFile ? styles.batchControlButtonDisabled : ""}`}
+                  onClick={handleFirmwareUpload}
+                  disabled={isRunning || count === 0 || !firmwareFile}
+                >
+                  🚀 Upload Firmware to {count} Panel{count !== 1 ? "s" : ""}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Re-run on failed button */}
+        <div className={styles.rerunSection}>
+          {hasFailures && !isRunning && lastOperation ? (
+            <button
+              type="button"
+              className={styles.rerunButton}
+              onClick={handleRerunFailed}
+              title={`Re-run "${lastOperation.label}" on ${stats.failed} failed panel${stats.failed > 1 ? 's' : ''}`}
+            >
+              🔁 Re-run on failed panels ({stats.failed})
+            </button>
+          ) : (
+            <div className={styles.rerunPlaceholder}></div>
+          )}
+        </div>
+
+        {/* Selected panels table */}
+        {count === 0 ? (
+          <div className={styles.emptyBatchState}>
+            No panels selected. Go back and select panels to perform firmware operations.
+          </div>
+        ) : (
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.statusHeader}>Status</th>
+                  <th>IP</th>
+                  <th>Name</th>
+                  <th>Connection</th>
+                  <th>FW Version</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedPanels.map((panel) => {
+                  const metadata = panelInfoMap[panel.ip];
+                  const liveState = livePanelStates?.get(panel.ip);
+                  const batchStatus = panelStatuses.get(panel.ip) ?? "idle";
+                  const rowStatusClass = batchStatus === "success" 
+                    ? styles.batchRowSuccess 
+                    : batchStatus === "failed" 
+                      ? styles.batchRowFailed 
+                      : batchStatus === "in-progress"
+                        ? styles.batchRowInProgress
+                        : "";
+
+                  return (
+                    <tr key={panel.ip} className={`${styles.selectedRow} ${rowStatusClass}`}>
+                      <td className={styles.batchStatusCell}>
+                        {getStatusIcon(panel.ip)}
+                      </td>
+                      <td>
+                        <a
+                          href={`http://${panel.ip}/`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={styles.panelLink}
+                        >
+                          {panel.ip}
+                        </a>
+                      </td>
+                      <td>
+                        {liveState?.fullState?.hostname ?? metadata?.name ?? panel.name ?? "—"}
+                      </td>
+                      <td>
+                        {liveState?.connectionStatus === "connected" ? (
+                          <span className={styles.statusLive}>● LIVE</span>
+                        ) : (
+                          <span className={styles.statusPanel}>● Panel</span>
+                        )}
+                      </td>
+                      <td>
+                        {liveState?.fullState?.version ? (
+                          <span className={
+                            highestVersion && compareVersions(liveState.fullState.version, highestVersion) === 0
+                              ? styles.versionLatest
+                              : styles.versionOutdated
+                          }>
+                            {liveState.fullState.version}
+                          </span>
+                        ) : (
+                          <span className={styles.versionUnknown}>...</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.batchView}>
@@ -607,6 +1179,18 @@ export default function BatchOperationsView({
                 disabled={isRunning || count === 0}
               >
                 Restart
+              </button>
+              <span className={styles.buttonGroupSpacer}></span>
+              <button
+                type="button"
+                className={`${styles.batchControlButton} ${styles.batchControlWarning}`}
+                onClick={() => {
+                  setPanelStatuses(new Map());
+                  setSubView("firmware-update");
+                }}
+                disabled={isRunning || count === 0}
+              >
+                Firmware Update →
               </button>
             </div>
           </div>
