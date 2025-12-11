@@ -601,6 +601,21 @@ export default function DiscoveryDashboard() {
     }
   }, []);
 
+  // Update panel settings in the response state (persists settings changes from batch operations)
+  const handlePanelSettingsUpdate = useCallback((ip: string, settings: { logging?: boolean; longPressMs?: number }) => {
+    setResponse(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        results: prev.results.map(result => 
+          result.ip === ip 
+            ? { ...result, settings: { ...result.settings, ...settings } }
+            : result
+        ),
+      };
+    });
+  }, []);
+
   const panelResults = response?.results ?? [];
 
   // Get list of Cubixx panel IPs for selection purposes
@@ -629,6 +644,7 @@ export default function DiscoveryDashboard() {
           onBack={handleBackToDiscovery}
           onSelectionChange={handlePanelSelectionChange}
           onSendCommand={sendCommand}
+          onPanelSettingsUpdate={handlePanelSettingsUpdate}
         />
       ) : (
         <>

@@ -113,7 +113,6 @@ export default function DiscoveryForm({
         >
           📊 Export
         </button>
-        {isLoading && <span className={styles.status}>Scanning range…</span>}
       </div>
     </form>
   );

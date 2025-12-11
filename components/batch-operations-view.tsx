@@ -12,6 +12,7 @@ interface BatchOperationsViewProps {
   onBack: () => void;
   onSelectionChange: (ip: string, selected: boolean) => void;
   onSendCommand?: (ip: string, command: PanelCommand) => Promise<boolean>;
+  onPanelSettingsUpdate?: (ip: string, settings: { logging?: boolean; longPressMs?: number }) => void;
 }
 
 // Sub-view types
@@ -168,6 +169,7 @@ export default function BatchOperationsView({
   onBack,
   onSelectionChange,
   onSendCommand,
+  onPanelSettingsUpdate,
 }: BatchOperationsViewProps) {
   // Track batch operation status per panel
   const [panelStatuses, setPanelStatuses] = useState<Map<string, PanelBatchStatus>>(new Map());
@@ -359,6 +361,19 @@ export default function BatchOperationsView({
         });
 
         const success = response.ok;
+        
+        // On success, update panel settings in the parent state
+        if (success && onPanelSettingsUpdate) {
+          try {
+            const data = await response.json();
+            if (data.settings) {
+              onPanelSettingsUpdate(ip, data.settings);
+            }
+          } catch {
+            // Ignore JSON parse errors - the operation still succeeded
+          }
+        }
+        
         setPanelStatuses(prev => {
           const next = new Map(prev);
           next.set(ip, success ? "success" : "failed");
@@ -377,7 +392,7 @@ export default function BatchOperationsView({
 
     await Promise.all(promises);
     setIsRunning(false);
-  }, []);
+  }, [onPanelSettingsUpdate]);
 
   // Execute a virtual batch operation (multiple commands per panel or computed commands)
   const executeVirtualOperation = useCallback(async (
