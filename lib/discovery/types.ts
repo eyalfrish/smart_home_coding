@@ -26,6 +26,8 @@ export interface DiscoveryResult {
   name?: string | null;
   panelHtml?: string;
   settings?: PanelSettings;
+  /** Time taken to discover this IP in milliseconds */
+  discoveryTimeMs?: number;
 }
 
 export interface DiscoverySummary {

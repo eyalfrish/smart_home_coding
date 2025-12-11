@@ -335,6 +335,7 @@ async function checkHostWithRetry(
   ip: string,
   config: PhaseConfig
 ): Promise<DiscoveryResult> {
+  const startTime = Date.now();
   let lastResult: DiscoveryResult = { ip, status: "no-response", errorMessage: "No response" };
   
   for (let attempt = 0; attempt <= config.retries; attempt++) {
@@ -343,7 +344,7 @@ async function checkHostWithRetry(
     
     // Success or definitive "not a panel" - return immediately
     if (result.status === "panel" || result.status === "not-panel") {
-      return result;
+      return { ...result, discoveryTimeMs: Date.now() - startTime };
     }
     
     // On timeout/error, retry after delay
@@ -353,7 +354,7 @@ async function checkHostWithRetry(
     }
   }
   
-  return lastResult;
+  return { ...lastResult, discoveryTimeMs: Date.now() - startTime };
 }
 
 /**

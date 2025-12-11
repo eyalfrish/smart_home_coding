@@ -34,7 +34,7 @@ export default function AllPanelsView({
   return (
     <div className={styles.panelsView}>
       <button type="button" className={styles.backButton} onClick={onBack}>
-        ← Back to discovery
+        ⬅️ Back to Discovery
       </button>
       <div className={styles.panelsHeader}>
         <h2>All Cubixx Panels</h2>
@@ -78,7 +78,7 @@ export default function AllPanelsView({
                 className={styles.openPanelButton}
                 onClick={() => window.open(`http://${panel.ip}/`, "_blank")}
               >
-                Open panel in new tab
+                🔗 Open in New Tab
               </button>
             </div>
           ))}

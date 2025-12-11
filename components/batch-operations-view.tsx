@@ -846,7 +846,7 @@ export default function BatchOperationsView({
             setCredentialsInput({ username: "", password: "" });
           }}
         >
-          ← Back to Batch Operations
+          ⬅️ Back to Batch Operations
         </button>
         
         <div className={styles.batchHeader}>
@@ -1127,7 +1127,7 @@ export default function BatchOperationsView({
   return (
     <div className={styles.batchView}>
       <button type="button" className={styles.backButton} onClick={onBack}>
-        ← Back to discovery
+        ⬅️ Back to Discovery
       </button>
       
       <div className={styles.batchHeader}>
@@ -1157,7 +1157,7 @@ export default function BatchOperationsView({
                 disabled={isRunning || count === 0}
                 title={getDirectOp("toggle-backlight").tooltip}
               >
-                Toggle Backlight
+                💡 Toggle Backlight
               </button>
               <span className={styles.buttonGroupSpacer}></span>
               <button
@@ -1167,7 +1167,7 @@ export default function BatchOperationsView({
                 disabled={isRunning || count === 0}
                 title={getDirectOp("toggle-all").tooltip}
               >
-                Toggle All
+                🔄 Toggle All
               </button>
               <span className={styles.buttonGroupSpacer}></span>
               <button
@@ -1176,7 +1176,7 @@ export default function BatchOperationsView({
                 onClick={() => handleOperationClick(getDirectOp("scenes-all-off"))}
                 disabled={isRunning || count === 0}
               >
-                Scenes All Off
+                🚫 Scenes All Off
               </button>
               <span className={styles.buttonGroupSpacer}></span>
               <button
@@ -1185,7 +1185,7 @@ export default function BatchOperationsView({
                 onClick={() => handleOperationClick(getDirectOp("restart"))}
                 disabled={isRunning || count === 0}
               >
-                Restart
+                🔃 Restart
               </button>
               <span className={styles.buttonGroupSpacer}></span>
               <button
@@ -1197,7 +1197,7 @@ export default function BatchOperationsView({
                 }}
                 disabled={isRunning || count === 0}
               >
-                Firmware Update →
+                ⬆️ Firmware Update
               </button>
             </div>
           </div>
@@ -1220,7 +1220,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0}
                   title={getVirtualOp("virtual-backlight-on").tooltip}
                 >
-                  Backlight On
+                  💡 Backlight On
                 </button>
                 <button
                   type="button"
@@ -1229,7 +1229,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0}
                   title={getVirtualOp("virtual-backlight-off").tooltip}
                 >
-                  Backlight Off
+                  🔅 Backlight Off
                 </button>
               </div>
               <span className={styles.buttonGroupSpacer}></span>
@@ -1242,7 +1242,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0}
                   title={getVirtualOp("virtual-all-lights-on").tooltip}
                 >
-                  All Lights On
+                  🌟 Lights On
                 </button>
                 <button
                   type="button"
@@ -1251,7 +1251,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0}
                   title={getVirtualOp("virtual-all-lights-off").tooltip}
                 >
-                  All Lights Off
+                  🌑 Lights Off
                 </button>
               </div>
               <span className={styles.buttonGroupSpacer}></span>
@@ -1263,7 +1263,7 @@ export default function BatchOperationsView({
                 disabled={isRunning || count === 0}
                 title={getVirtualOp("virtual-all-switches-off").tooltip}
               >
-                All Switches Off
+                ⭕ All Switches Off
               </button>
             </div>
           </div>
@@ -1286,7 +1286,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0}
                   title={getSettingsOp("set-logging-on").tooltip}
                 >
-                  Log On
+                  📝 Log On
                 </button>
                 <button
                   type="button"
@@ -1295,7 +1295,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0}
                   title={getSettingsOp("set-logging-off").tooltip}
                 >
-                  Log Off
+                  📄 Log Off
                 </button>
               </div>
               <span className={styles.buttonGroupSpacer}></span>
@@ -1319,7 +1319,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0 || !longPressInput || parseInt(longPressInput, 10) < 100}
                   title={getSettingsOp("set-longpress").tooltip}
                 >
-                  Set LPress
+                  ⏱️ Set LPress
                 </button>
               </div>
             </div>

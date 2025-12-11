@@ -17,6 +17,8 @@ interface DiscoveryFormProps {
   onSubmit: () => void;
   selectedCount?: number;
   onBatchOperationsClick?: () => void;
+  hasResults?: boolean;
+  onExportClick?: () => void;
 }
 
 export default function DiscoveryForm({
@@ -27,6 +29,8 @@ export default function DiscoveryForm({
   onSubmit,
   selectedCount = 0,
   onBatchOperationsClick,
+  hasResults = false,
+  onExportClick,
 }: DiscoveryFormProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -90,7 +94,7 @@ export default function DiscoveryForm({
           disabled={disabled}
           aria-busy={isLoading}
         >
-          {isLoading ? "Scanning…" : "Discover"}
+          {isLoading ? "⏳ Scanning…" : "🔍 Discover"}
         </button>
         <button
           type="button"
@@ -98,7 +102,16 @@ export default function DiscoveryForm({
           disabled={!hasBatchSelection || isLoading}
           onClick={onBatchOperationsClick}
         >
-          Batch Operations{hasBatchSelection ? ` (${selectedCount})` : ""}
+          ⚡ Batch Operations{hasBatchSelection ? ` (${selectedCount})` : ""}
+        </button>
+        <button
+          type="button"
+          className={styles.exportButton}
+          disabled={!hasResults || isLoading}
+          onClick={onExportClick}
+          title="Export all discovery results to Excel"
+        >
+          📊 Export
         </button>
         {isLoading && <span className={styles.status}>Scanning range…</span>}
       </div>

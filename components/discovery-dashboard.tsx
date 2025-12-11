@@ -15,6 +15,7 @@ import type {
   PanelCommand,
 } from "@/lib/discovery/types";
 import { usePanelStream } from "@/lib/hooks/use-panel-stream";
+import { exportDiscoveryToExcel } from "@/lib/discovery/export-excel";
 
 const DEFAULTS: DiscoveryRequest = {
   baseIp: "10.88.99",
@@ -565,6 +566,16 @@ export default function DiscoveryDashboard() {
     setSelectedPanelIps(new Set());
   }, []);
 
+  // Export all discovery results to Excel
+  const handleExportToExcel = useCallback(() => {
+    if (!response) return;
+    exportDiscoveryToExcel({
+      results: response.results,
+      panelInfoMap,
+      livePanelStates: panelStates,
+    });
+  }, [response, panelInfoMap, panelStates]);
+
   // Send a command to a specific panel
   const sendCommand = useCallback(async (ip: string, command: PanelCommand): Promise<boolean> => {
     try {
@@ -629,6 +640,8 @@ export default function DiscoveryDashboard() {
             onSubmit={handleFormSubmit}
             selectedCount={selectedPanelIps.size}
             onBatchOperationsClick={handleBatchOperationsClick}
+            hasResults={!!response && response.results.length > 0}
+            onExportClick={handleExportToExcel}
           />
           {isLoading && (
             <div className={styles.loadingBox}>

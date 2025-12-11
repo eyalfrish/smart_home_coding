@@ -870,7 +870,11 @@ export default function DiscoveryResults({
                         {touched ? "Yes" : "No"}
                       </span>
                     </td>
-                    <td>{result.errorMessage ?? "—"}</td>
+                    <td>
+                      {result.status === "panel" && result.discoveryTimeMs != null
+                        ? `Discovered in ${result.discoveryTimeMs}ms`
+                        : result.errorMessage ?? "—"}
+                    </td>
                   </tr>
                 );
               })
