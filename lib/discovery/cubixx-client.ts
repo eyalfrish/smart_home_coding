@@ -31,7 +31,6 @@ let WebSocket: WSConstructor | null = null;
 let wsAvailable = false;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   WebSocket = require("ws");
   wsAvailable = true;
   console.log("[CubixxClient] ws package loaded successfully");

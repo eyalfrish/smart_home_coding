@@ -1,0 +1,58 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+.next
+out
+build
+dist
+
+# Testing
+coverage
+.nyc_output
+
+# Development
+.env*.local
+.env.development
+.env.test
+
+# Editor/IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Scripts (Windows deployment - not needed in container)
+scripts/
+
+# Docker files (avoid recursive include)
+Dockerfile*
+docker-compose*
+.dockerignore
+

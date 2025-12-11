@@ -49,7 +49,28 @@ The Next.js dev server runs on `http://localhost:3000` by default.
 
 ## Deployment
 
-For home deployment on a Windows PC with auto-start on boot, see the detailed guide:
+For home deployment on a Windows PC with auto-start on boot, you have two options:
+
+### Option 1: Docker (Recommended)
+
+If you have Docker Desktop installed, this is the easiest approach:
+
+```bash
+docker compose up -d --build
+```
+
+📖 **[Docker Deployment Guide](docs/docker-deployment-guide.md)** - Covers setup, auto-restart, updates, and more.
+
+Docker scripts in `scripts/`:
+- `docker-start.bat` - Build and start the container
+- `docker-stop.bat` - Stop the container  
+- `docker-update.bat` - Rebuild after code changes
+- `docker-logs.bat` - View live logs
+- `docker-status.bat` - Check container health
+
+### Option 2: Windows Service (Traditional)
+
+If you prefer running Node.js directly:
 
 📖 **[Windows Deployment Guide](docs/windows-deployment-guide.md)**
 
@@ -60,7 +81,7 @@ The guide covers:
 - Updating to newer versions
 - Remote management
 
-Helper scripts are available in the `scripts/` folder:
+Windows service scripts in `scripts/`:
 - `install-service.bat` - Automated service installation
 - `update-dashboard.bat` - Update and rebuild script
 - `uninstall-service.bat` - Remove the service

@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable standalone output for Docker deployment
+  output: 'standalone',
   // Mark 'ws' and related packages as external for server-side use only
   experimental: {
     serverComponentsExternalPackages: ['ws', 'bufferutil', 'utf-8-validate'],
