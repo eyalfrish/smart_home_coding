@@ -715,6 +715,13 @@ export default function DiscoveryResults({
                             return true;
                           };
                           
+                          // A relay is a "door" if its name contains door/lock/unlock keywords
+                          const isDoorRelay = (relay: { name?: string }) => {
+                            if (!relay.name) return false;
+                            const name = relay.name.toLowerCase();
+                            return name.includes("door") || name.includes("lock") || name.includes("unlock");
+                          };
+                          
                           // A curtain is configured if its name is NOT a generic "Curtain N" pattern
                           const isConfiguredCurtain = (curtain: { name?: string }) => {
                             if (!curtain.name || curtain.name.trim() === "") return false;
@@ -723,11 +730,15 @@ export default function DiscoveryResults({
                             return true;
                           };
                           
-                          const lightRelays = liveState.fullState.relays.filter(isConfiguredRelay);
+                          // Separate doors from lights
+                          const configuredRelays = liveState.fullState.relays.filter(isConfiguredRelay);
+                          const doorRelays = configuredRelays.filter(isDoorRelay);
+                          const lightRelays = configuredRelays.filter(r => !isDoorRelay(r));
                           const configuredCurtains = liveState.fullState.curtains.filter(isConfiguredCurtain);
                           
                           // Calculate max possible shades based on remaining relay slots
-                          const usedSlots = lightRelays.length;
+                          // Both lights and doors use relay slots
+                          const usedSlots = configuredRelays.length;
                           const availableSlots = TOTAL_RELAY_SLOTS - usedSlots;
                           const maxPossibleShades = Math.floor(availableSlots / SLOTS_PER_SHADE);
                           
@@ -748,6 +759,21 @@ export default function DiscoveryResults({
                                     disabled={isPending || !onSendCommand}
                                   >
                                     L{relay.index + 1}
+                                  </button>
+                                );
+                              })}
+                              {/* Doors (Relays with door/lock in name) */}
+                              {doorRelays.map((relay) => {
+                                const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
+                                return (
+                                  <button
+                                    key={`D${relay.index}`}
+                                    className={`${styles.doorButton} ${relay.state ? styles.doorOn : styles.doorOff} ${isPending ? styles.pending : ""}`}
+                                    title={`${relay.name} - Click to toggle`}
+                                    onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
+                                    disabled={isPending || !onSendCommand}
+                                  >
+                                    D{relay.index + 1}
                                   </button>
                                 );
                               })}
@@ -780,7 +806,7 @@ export default function DiscoveryResults({
                                 );
                               })}
                               {/* Show dash if no configured entities */}
-                              {lightRelays.length === 0 && validCurtains.length === 0 && (
+                              {lightRelays.length === 0 && doorRelays.length === 0 && validCurtains.length === 0 && (
                                 <span style={{ color: "var(--muted)" }}>—</span>
                               )}
                             </div>

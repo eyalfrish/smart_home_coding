@@ -524,6 +524,52 @@
   background: rgba(100, 116, 139, 0.35);
 }
 
+/* Door buttons (D1, D2, etc.) */
+.doorButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.doorButton:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.doorButton:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.doorButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.doorOn {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: white;
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.4);
+}
+
+.doorOff {
+  background: rgba(100, 116, 139, 0.2);
+  color: var(--muted);
+}
+
+.doorOff:hover:not(:disabled) {
+  background: rgba(249, 115, 22, 0.25);
+  color: #ea580c;
+}
+
 /* Shade button group */
 .shadeGroup {
   display: inline-flex;
@@ -1104,6 +1150,11 @@
 }
 
 .lightsSummary {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.doorsSummary {
   font-size: 0.85rem;
   font-weight: 500;
 }

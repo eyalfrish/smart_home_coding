@@ -153,6 +153,13 @@ function isConfiguredRelay(relay: { name?: string }): boolean {
   return true;
 }
 
+// Check if a relay is a door (has door/lock/unlock in name)
+function isDoorRelay(relay: { name?: string }): boolean {
+  if (!relay.name) return false;
+  const name = relay.name.toLowerCase();
+  return name.includes("door") || name.includes("lock") || name.includes("unlock");
+}
+
 export default function BatchOperationsView({
   selectedPanelIps,
   panelResults,
@@ -1477,23 +1484,29 @@ export default function BatchOperationsView({
                     <td>
                       {liveState?.fullState ? (
                         (() => {
-                          const relayCount = liveState.fullState.relays?.filter(isConfiguredRelay).length ?? 0;
+                          const configuredRelays = liveState.fullState.relays?.filter(isConfiguredRelay) ?? [];
+                          const doorRelays = configuredRelays.filter(isDoorRelay);
+                          const lightRelays = configuredRelays.filter(r => !isDoorRelay(r));
                           const curtainCount = liveState.fullState.curtains?.filter(
                             c => c.name && !/^Curtain\s+\d+$/i.test(c.name.trim())
                           ).length ?? 0;
-                          const onCount = liveState.fullState.relays?.filter(
-                            r => r.state && isConfiguredRelay(r)
-                          ).length ?? 0;
+                          const lightsOnCount = lightRelays.filter(r => r.state).length;
+                          const doorsOnCount = doorRelays.filter(r => r.state).length;
 
-                          if (relayCount === 0 && curtainCount === 0) {
+                          if (lightRelays.length === 0 && doorRelays.length === 0 && curtainCount === 0) {
                             return <span style={{ color: "var(--muted)" }}>—</span>;
                           }
 
                           return (
                             <span className={styles.liveStateSummary}>
-                              {relayCount > 0 && (
+                              {lightRelays.length > 0 && (
                                 <span className={styles.lightsSummary}>
-                                  💡 {onCount}/{relayCount}
+                                  💡 {lightsOnCount}/{lightRelays.length}
+                                </span>
+                              )}
+                              {doorRelays.length > 0 && (
+                                <span className={styles.doorsSummary}>
+                                  🚪 {doorsOnCount}/{doorRelays.length}
                                 </span>
                               )}
                               {curtainCount > 0 && (
