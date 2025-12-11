@@ -13,8 +13,10 @@ interface DiscoveryResultsProps {
   livePanelStates?: Map<string, LivePanelState>;
   showOnlyCubixx: boolean;
   showOnlyTouched: boolean;
+  showOnlyLightActive: boolean;
   onShowOnlyCubixxChange: (value: boolean) => void;
   onShowOnlyTouchedChange: (value: boolean) => void;
+  onShowOnlyLightActiveChange: (value: boolean) => void;
   onSendCommand?: (ip: string, command: PanelCommand) => Promise<boolean>;
   // Selection props for batch operations
   selectedPanelIps?: Set<string>;
@@ -62,8 +64,10 @@ export default function DiscoveryResults({
   livePanelStates,
   showOnlyCubixx,
   showOnlyTouched,
+  showOnlyLightActive,
   onShowOnlyCubixxChange,
   onShowOnlyTouchedChange,
+  onShowOnlyLightActiveChange,
   onSendCommand,
   selectedPanelIps,
   onPanelSelectionChange,
@@ -231,6 +235,33 @@ export default function DiscoveryResults({
     return { mostCommonLogging, mostCommonLongPress };
   })();
 
+  // Helper to check if a panel has at least one configured light relay that is ON
+  const hasLightOn = (ip: string): boolean => {
+    const liveState = livePanelStates?.get(ip);
+    if (!liveState?.fullState?.relays) return false;
+    
+    // A relay is a "light" if its name is NOT a generic "Relay N" pattern
+    const isConfiguredRelay = (relay: { name?: string }) => {
+      if (!relay.name || relay.name.trim() === "") return false;
+      if (/^Relay\s+\d+$/i.test(relay.name.trim())) return false;
+      return true;
+    };
+    
+    // A relay is a "door" if its name contains door/lock/unlock keywords
+    const isDoorRelay = (relay: { name?: string }) => {
+      if (!relay.name) return false;
+      const name = relay.name.toLowerCase();
+      return name.includes("door") || name.includes("lock") || name.includes("unlock");
+    };
+    
+    // Light relays are configured relays that are not doors
+    const lightRelays = liveState.fullState.relays
+      .filter(r => isConfiguredRelay(r) && !isDoorRelay(r));
+    
+    // Return true if any light relay is ON
+    return lightRelays.some(r => r.state === true);
+  };
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredResults = results.filter((result) => {
     const metadata = panelInfoMap[result.ip];
@@ -241,6 +272,10 @@ export default function DiscoveryResults({
     }
 
     if (showOnlyTouched && !metadata?.touched) {
+      return false;
+    }
+
+    if (showOnlyLightActive && !hasLightOn(result.ip)) {
       return false;
     }
 
@@ -453,6 +488,16 @@ export default function DiscoveryResults({
               }
             />
             Show only touched panels
+          </label>
+          <label className={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={showOnlyLightActive}
+              onChange={(event) =>
+                onShowOnlyLightActiveChange(event.target.checked)
+              }
+            />
+            Show only light-active panels
           </label>
         </div>
         <table className={styles.table}>

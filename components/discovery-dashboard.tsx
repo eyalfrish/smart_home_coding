@@ -65,6 +65,7 @@ export default function DiscoveryDashboard() {
   );
   const [showOnlyCubixx, setShowOnlyCubixx] = useState(true);
   const [showOnlyTouched, setShowOnlyTouched] = useState(false);
+  const [showOnlyLightActive, setShowOnlyLightActive] = useState(false);
   // Selection state for batch operations - persists across filters/views
   const [selectedPanelIps, setSelectedPanelIps] = useState<Set<string>>(new Set());
   // Only connect to panels AFTER explicit discovery in THIS page session
@@ -666,8 +667,10 @@ export default function DiscoveryDashboard() {
             livePanelStates={panelStates}
             showOnlyCubixx={showOnlyCubixx}
             showOnlyTouched={showOnlyTouched}
+            showOnlyLightActive={showOnlyLightActive}
             onShowOnlyCubixxChange={setShowOnlyCubixx}
             onShowOnlyTouchedChange={setShowOnlyTouched}
+            onShowOnlyLightActiveChange={setShowOnlyLightActive}
             onSendCommand={sendCommand}
             selectedPanelIps={selectedPanelIps}
             onPanelSelectionChange={handlePanelSelectionChange}
