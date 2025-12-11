@@ -124,7 +124,7 @@ const SETTINGS_OPERATIONS: BatchOperation[] = [
   },
   {
     id: "set-longpress",
-    label: "Set LPress",
+    label: "Set Long Press",
     isVirtual: true,
     variant: "default",
     tooltip: "Set long press time on all selected panels",
@@ -1319,7 +1319,7 @@ export default function BatchOperationsView({
                   disabled={isRunning || count === 0 || !longPressInput || parseInt(longPressInput, 10) < 100}
                   title={getSettingsOp("set-longpress").tooltip}
                 >
-                  ⏱️ Set LPress
+                  ⏱️ Set Long Press
                 </button>
               </div>
             </div>

@@ -13,7 +13,7 @@ interface SettingsRequest {
 /**
  * POST /api/panels/settings
  * 
- * Apply settings to a panel via HTTP POST to its /settings endpoint.
+ * Apply settings to a panel via HTTP POST to its /savesettings endpoint.
  * This is used for batch settings operations like logging and long press time.
  */
 export async function POST(request: Request) {
@@ -109,8 +109,8 @@ export async function POST(request: Request) {
     // Add long press time
     formData.append("long_press_duration", String(newLongPress));
 
-    // POST settings to panel
-    const postResponse = await fetch(`http://${ip}/settings`, {
+    // POST settings to panel (form action is /savesettings, not /settings)
+    const postResponse = await fetch(`http://${ip}/savesettings`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
