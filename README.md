@@ -49,42 +49,61 @@ The Next.js dev server runs on `http://localhost:3000` by default.
 
 ## Deployment
 
-For home deployment on a Windows PC with auto-start on boot, you have two options:
+The dashboard can be deployed on **Windows**, **macOS**, or **Linux** with auto-start on boot. Choose your platform and deployment method below.
 
-### Option 1: Docker (Recommended)
+### Quick Start (All Platforms)
 
-If you have Docker Desktop installed, this is the easiest approach:
-
+**Docker (Recommended):**
 ```bash
 docker compose up -d --build
 ```
 
-📖 **[Docker Deployment Guide](docs/docker-deployment-guide.md)** - Covers setup, auto-restart, updates, and more.
+**Native (without Docker):**
+```bash
+npm install
+npm run build
+npm run start
+```
 
-Docker scripts in `scripts/`:
-- `docker-start.bat` - Build and start the container
-- `docker-stop.bat` - Stop the container  
-- `docker-update.bat` - Rebuild after code changes
-- `docker-logs.bat` - View live logs
-- `docker-status.bat` - Check container health
+---
 
-### Option 2: Windows Service (Traditional)
+### Deployment Guides
 
-If you prefer running Node.js directly:
+| Platform | Guide | Service Manager |
+|----------|-------|-----------------|
+| 🐳 Docker (any OS) | **[Docker Deployment Guide](docs/docker-deployment-guide.md)** | Docker Compose |
+| 🪟 Windows | **[Windows Deployment Guide](docs/windows-deployment-guide.md)** | NSSM |
+| 🍎 macOS | **[macOS Deployment Guide](docs/macos-deployment-guide.md)** | launchd |
+| 🐧 Linux | **[Linux Deployment Guide](docs/linux-deployment-guide.md)** | systemd |
 
-📖 **[Windows Deployment Guide](docs/windows-deployment-guide.md)**
-
-The guide covers:
+Each guide covers:
 - Prerequisites and installation
-- Running as a Windows service (auto-start on reboot)
+- Running as a system service (auto-start on reboot)
 - Network configuration for access from other devices
 - Updating to newer versions
-- Remote management
+- Remote management & troubleshooting
 
-Windows service scripts in `scripts/`:
-- `install-service.bat` - Automated service installation
-- `update-dashboard.bat` - Update and rebuild script
-- `uninstall-service.bat` - Remove the service
+---
+
+### Helper Scripts
+
+Scripts are provided in the `scripts/` directory for easy management:
+
+| Script | Windows | macOS/Linux |
+|--------|---------|-------------|
+| **Docker Start** | `docker-start.bat` | `docker-start.sh` |
+| **Docker Stop** | `docker-stop.bat` | `docker-stop.sh` |
+| **Docker Update** | `docker-update.bat` | `docker-update.sh` |
+| **Docker Logs** | `docker-logs.bat` | `docker-logs.sh` |
+| **Docker Status** | `docker-status.bat` | `docker-status.sh` |
+| **Install Service** | `install-service.bat` | `install-service.sh` (macOS) / `install-service-linux.sh` |
+| **Uninstall Service** | `uninstall-service.bat` | `uninstall-service.sh` (macOS) / `uninstall-service-linux.sh` |
+| **Update Dashboard** | `update-dashboard.bat` | `update-dashboard.sh` (macOS) / `update-dashboard-linux.sh` |
+
+**On macOS/Linux, make scripts executable first:**
+```bash
+chmod +x scripts/*.sh
+```
 
 ## Future Plans
 
