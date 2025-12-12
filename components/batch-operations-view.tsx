@@ -729,7 +729,15 @@ export default function BatchOperationsView({
           body: formData,
         });
 
-        const success = response.ok;
+        // Parse the response to get verification details
+        let responseData: { success?: boolean; version?: string; error?: string; expectedVersion?: string; actualVersion?: string } = {};
+        try {
+          responseData = await response.json();
+        } catch {
+          // Ignore JSON parse errors
+        }
+
+        const success = response.ok && responseData.success !== false;
         setPanelStatuses(prev => {
           const next = new Map(prev);
           next.set(ip, success ? "success" : "failed");
