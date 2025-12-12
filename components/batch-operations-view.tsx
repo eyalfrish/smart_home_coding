@@ -188,6 +188,8 @@ export default function BatchOperationsView({
   // File input refs
   const firmwareInputRef = useRef<HTMLInputElement>(null);
   const configInputRef = useRef<HTMLInputElement>(null);
+  // Firmware upload concurrency (how many panels to update in parallel)
+  const [firmwareConcurrency, setFirmwareConcurrency] = useState<number>(5);
   // Credentials for backup (HTTP Basic Auth)
   const [backupCredentials, setBackupCredentials] = useState<{ username: string; password: string } | null>(null);
   const [showCredentialsPrompt, setShowCredentialsPrompt] = useState(false);
@@ -692,10 +694,37 @@ export default function BatchOperationsView({
     setIsRunning(false);
   }, []);
 
-  // Execute firmware upload
+  // Parallel execution with concurrency limit
+  const runWithConcurrency = useCallback(async <T,>(
+    items: T[],
+    concurrency: number,
+    handler: (item: T) => Promise<void>
+  ): Promise<void> => {
+    const queue = [...items];
+    const workers: Promise<void>[] = [];
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (item !== undefined) {
+          await handler(item);
+        }
+      }
+    };
+
+    // Start up to `concurrency` workers
+    for (let i = 0; i < Math.min(concurrency, items.length); i++) {
+      workers.push(worker());
+    }
+
+    await Promise.all(workers);
+  }, []);
+
+  // Execute firmware upload - now runs in parallel with concurrency limit
   const executeFirmwareUpload = useCallback(async (
     file: File,
-    targetIps: string[]
+    targetIps: string[],
+    concurrency: number = 5 // Default: 5 parallel uploads
   ) => {
     if (!file || targetIps.length === 0) return;
 
@@ -717,8 +746,8 @@ export default function BatchOperationsView({
       return next;
     });
 
-    // Execute on each panel (sequentially to avoid overwhelming the network)
-    for (const ip of targetIps) {
+    // Execute on each panel with concurrency limit
+    await runWithConcurrency(targetIps, concurrency, async (ip) => {
       try {
         const formData = new FormData();
         formData.append("ip", ip);
@@ -750,10 +779,10 @@ export default function BatchOperationsView({
           return next;
         });
       }
-    }
+    });
 
     setIsRunning(false);
-  }, []);
+  }, [runWithConcurrency]);
 
   // Handle backup button click - show credentials prompt
   const handleBackupClick = useCallback(() => {
@@ -823,14 +852,16 @@ export default function BatchOperationsView({
     }
 
     const targetIps = selectedPanels.map(p => p.ip);
+    // Cap concurrency to not exceed number of panels
+    const effectiveConcurrency = Math.min(firmwareConcurrency, targetIps.length);
     const confirmed = window.confirm(
-      `Are you sure you want to upload firmware "${firmwareFile.name}" to ${targetIps.length} panel(s)?\n\nThis operation cannot be undone. Panels will restart after upload.`
+      `Are you sure you want to upload firmware "${firmwareFile.name}" to ${targetIps.length} panel(s)?\n\nThis operation cannot be undone. Panels will restart after upload.\n\nConcurrency: ${effectiveConcurrency} panels in parallel`
     );
     if (!confirmed) return;
 
     setPanelStatuses(new Map());
-    executeFirmwareUpload(firmwareFile, targetIps);
-  }, [firmwareFile, selectedPanels, executeFirmwareUpload]);
+    executeFirmwareUpload(firmwareFile, targetIps, effectiveConcurrency);
+  }, [firmwareFile, selectedPanels, executeFirmwareUpload, firmwareConcurrency]);
 
   const count = selectedPanels.length;
 
@@ -991,7 +1022,7 @@ export default function BatchOperationsView({
           <div className={styles.batchControlsSection}>
             <div className={styles.batchSectionHeader}>
               <h3>Firmware Upload</h3>
-              <span className={styles.batchSectionHint}>Upload firmware .bin file to all selected panels</span>
+              <span className={styles.batchSectionHint}>Upload firmware .bin file to all selected panels (in parallel)</span>
             </div>
             <div className={styles.batchControlsArea}>
               <div 
@@ -1039,6 +1070,22 @@ export default function BatchOperationsView({
                 )}
               </div>
               <div className={styles.firmwareUploadRow}>
+                <div className={styles.concurrencyControl}>
+                  <label htmlFor="firmware-concurrency" className={styles.concurrencyLabel}>
+                    Parallel uploads:
+                  </label>
+                  <input
+                    id="firmware-concurrency"
+                    type="range"
+                    min="1"
+                    max={Math.max(count, 1)}
+                    value={Math.min(firmwareConcurrency, count || 1)}
+                    onChange={(e) => setFirmwareConcurrency(parseInt(e.target.value, 10))}
+                    className={styles.concurrencySlider}
+                    disabled={isRunning || count === 0}
+                  />
+                  <span className={styles.concurrencyValue}>{Math.min(firmwareConcurrency, count || 1)}</span>
+                </div>
                 <button
                   type="button"
                   className={`${styles.batchControlButton} ${styles.batchControlDanger} ${styles.firmwareUploadButton} ${!firmwareFile ? styles.batchControlButtonDisabled : ""}`}

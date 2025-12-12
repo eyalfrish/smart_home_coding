@@ -1335,6 +1335,113 @@
   margin-top: 1rem;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* Concurrency control for parallel firmware uploads */
+.concurrencyControl {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.85rem;
+  background: rgba(99, 102, 241, 0.06);
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.concurrencyLabel {
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.concurrencySlider {
+  width: 120px;
+  height: 8px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, rgba(99, 102, 241, 0.3), rgba(99, 102, 241, 0.15));
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+/* Webkit (Chrome, Safari, Edge) slider thumb */
+.concurrencySlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.concurrencySlider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.5), 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+.concurrencySlider::-webkit-slider-thumb:active {
+  transform: scale(1.1);
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+}
+
+/* Firefox slider thumb */
+.concurrencySlider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.concurrencySlider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.5), 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Firefox track */
+.concurrencySlider::-moz-range-track {
+  height: 8px;
+  background: linear-gradient(to right, rgba(99, 102, 241, 0.3), rgba(99, 102, 241, 0.15));
+  border-radius: 4px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.concurrencySlider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.concurrencySlider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+  transform: none;
+}
+
+.concurrencySlider:disabled::-moz-range-thumb {
+  cursor: not-allowed;
+}
+
+.concurrencyValue {
+  min-width: 1.75rem;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
 }
 
 .firmwareUploadButton {
