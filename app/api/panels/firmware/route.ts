@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const FIRMWARE_REQUEST_TIMEOUT_MS = 60000; // 60 seconds for firmware upload
+const FIRMWARE_REQUEST_TIMEOUT_MS = 30000; // 60 seconds for firmware upload
 
 /**
  * POST /api/panels/firmware
