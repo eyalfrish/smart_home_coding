@@ -1,8 +1,16 @@
 'use client';
 
-import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useState, useRef, useEffect, type KeyboardEvent, type MouseEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
 import type { DiscoveryResponse, PanelInfo, LivePanelState, PanelCommand, PanelSettings } from "@/lib/discovery/types";
+
+// Type for tracking which device is being edited
+interface EditingDevice {
+  ip: string;
+  type: "relay" | "curtain";
+  index: number;
+  currentName: string;
+}
 
 interface DiscoveryResultsProps {
   data: DiscoveryResponse | null;
@@ -87,6 +95,21 @@ export default function DiscoveryResults({
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [switchSearchQuery, setSwitchSearchQuery] = useState("");
+  
+  // Inline editing state for switch names
+  const [editingDevice, setEditingDevice] = useState<EditingDevice | null>(null);
+  
+  // Column resize state
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
+    direct: 320,
+    link: 320,
+  });
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(0);
+  const [editValue, setEditValue] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   // Selection helpers
   const handleCheckboxChange = useCallback((ip: string, checked: boolean) => {
@@ -157,6 +180,117 @@ export default function DiscoveryResults({
       });
     }
   }, [onSendCommand]);
+
+  // Inline rename handlers
+  const handleRightClickRename = useCallback((
+    e: MouseEvent,
+    ip: string,
+    type: "relay" | "curtain",
+    index: number,
+    currentName: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingDevice({ ip, type, index, currentName });
+    setEditValue(currentName);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingDevice(null);
+    setEditValue("");
+  }, []);
+
+  const handleSaveRename = useCallback(async () => {
+    if (!editingDevice || savingRename) return;
+    
+    const trimmedValue = editValue.trim();
+    if (!trimmedValue || trimmedValue === editingDevice.currentName) {
+      handleCancelEdit();
+      return;
+    }
+    
+    setSavingRename(true);
+    try {
+      // POST through our API route to avoid CORS issues
+      const response = await fetch("/api/panels/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ip: editingDevice.ip,
+          type: editingDevice.type,
+          index: editingDevice.index,
+          name: trimmedValue,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`Failed to rename device: ${response.status}`, errorData);
+      } else {
+        console.log(`Renamed ${editingDevice.type} ${editingDevice.index} to "${trimmedValue}"`);
+      }
+      // The panel will broadcast the update via WebSocket, which will update livePanelStates
+    } catch (error) {
+      console.error("Error renaming device:", error);
+    } finally {
+      setSavingRename(false);
+      handleCancelEdit();
+    }
+  }, [editingDevice, editValue, savingRename, handleCancelEdit]);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveRename();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancelEdit();
+    }
+  }, [handleSaveRename, handleCancelEdit]);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingDevice && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingDevice]);
+
+  // Column resize handlers
+  const handleResizeStart = useCallback((e: MouseEvent, columnId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingColumn(columnId);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = columnWidths[columnId] || 180;
+  }, [columnWidths]);
+
+  const handleResizeMove = useCallback((e: globalThis.MouseEvent) => {
+    if (!resizingColumn) return;
+    const delta = e.clientX - resizeStartX.current;
+    const newWidth = Math.max(100, Math.min(600, resizeStartWidth.current + delta));
+    setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }));
+  }, [resizingColumn]);
+
+  const handleResizeEnd = useCallback(() => {
+    setResizingColumn(null);
+  }, []);
+
+  // Attach global mouse events for resize
+  useEffect(() => {
+    if (resizingColumn) {
+      document.addEventListener("mousemove", handleResizeMove);
+      document.addEventListener("mouseup", handleResizeEnd);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      return () => {
+        document.removeEventListener("mousemove", handleResizeMove);
+        document.removeEventListener("mouseup", handleResizeEnd);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+    }
+  }, [resizingColumn, handleResizeMove, handleResizeEnd]);
 
   const handleBacklightToggle = useCallback(async (
     e: MouseEvent,
@@ -640,8 +774,20 @@ export default function DiscoveryResults({
                   {sortColumn === "longpress" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
                 </span>
               </th>
-              <th className={styles.directLinkHeader}>Direct</th>
-              <th className={styles.directLinkHeader}>Link</th>
+              <th className={`${styles.directLinkHeader} ${styles.resizableHeader}`} style={{ width: columnWidths.direct }}>
+                Direct
+                <div
+                  className={`${styles.resizeHandle} ${resizingColumn === "direct" ? styles.resizing : ""}`}
+                  onMouseDown={(e) => handleResizeStart(e, "direct")}
+                />
+              </th>
+              <th className={`${styles.directLinkHeader} ${styles.resizableHeader}`} style={{ width: columnWidths.link }}>
+                Link
+                <div
+                  className={`${styles.resizeHandle} ${resizingColumn === "link" ? styles.resizing : ""}`}
+                  onMouseDown={(e) => handleResizeStart(e, "link")}
+                />
+              </th>
               <th 
                 className={`${styles.sortableHeader} ${styles.centeredColumn}`} 
                 onClick={() => handleSort("touched")}
@@ -794,7 +940,7 @@ export default function DiscoveryResults({
                       )}
                     </td>
                     {/* Direct Live State Column */}
-                    <td className={styles.directLinkCell}>
+                    <td className={styles.directLinkCell} style={{ width: columnWidths.direct }}>
                       {liveState?.fullState ? (
                         (() => {
                           // Hardware constraints:
@@ -849,37 +995,73 @@ export default function DiscoveryResults({
                             return name.replace(/[-_\s]?link$/i, "").trim() || "?";
                           };
                           
+                          // Check if a device is currently being edited
+                          const isEditing = (type: "relay" | "curtain", index: number) =>
+                            editingDevice?.ip === result.ip &&
+                            editingDevice?.type === type &&
+                            editingDevice?.index === index;
+                          
                           return (
                             <div className={styles.entityStates}>
                               {/* Lights (Relays that are actual lights) - Direct only */}
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
+                                const editing = isEditing("relay", relay.index);
                                 return (
                                   <span key={`L${relay.index}`} className={styles.deviceButtonWrapper}>
-                                    <button
-                                      className={`${styles.switchButton} ${styles.lightSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
-                                      onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
-                                      disabled={isPending || !onSendCommand}
-                                      title={relay.name || ""}
-                                    >
-                                      {getDisplayName(relay.name)}
-                                    </button>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <button
+                                        className={`${styles.switchButton} ${styles.lightSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
+                                        onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        disabled={isPending || !onSendCommand}
+                                        title={`${relay.name || ""} (right-click to rename)`}
+                                      >
+                                        {getDisplayName(relay.name)}
+                                      </button>
+                                    )}
                                   </span>
                                 );
                               })}
                               {/* Doors (Relays with door/lock in name) - Direct only */}
                               {doorRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
+                                const editing = isEditing("relay", relay.index);
                                 return (
                                   <span key={`D${relay.index}`} className={styles.deviceButtonWrapper}>
-                                    <button
-                                      className={`${styles.switchButton} ${styles.doorSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
-                                      onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
-                                      disabled={isPending || !onSendCommand}
-                                      title={relay.name || ""}
-                                    >
-                                      {getDisplayName(relay.name)}
-                                    </button>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <button
+                                        className={`${styles.switchButton} ${styles.doorSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
+                                        onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        disabled={isPending || !onSendCommand}
+                                        title={`${relay.name || ""} (right-click to rename)`}
+                                      >
+                                        {getDisplayName(relay.name)}
+                                      </button>
+                                    )}
                                   </span>
                                 );
                               })}
@@ -890,22 +1072,40 @@ export default function DiscoveryResults({
                                 const isOpen = curtain.state === "open";
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
+                                const editing = isEditing("curtain", curtain.index);
                                 return (
-                                  <span key={`S${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={curtain.name || ""}>
-                                    <button
-                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeUpButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
-                                      onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
-                                      disabled={openPending || !onSendCommand}
-                                    >
-                                      {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
-                                    </button>
-                                    <button
-                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
-                                      onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
-                                      disabled={closePending || !onSendCommand}
-                                    >
-                                      {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
-                                    </button>
+                                  <span key={`S${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} (right-click to rename)`}>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeUpButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={openPending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                        </button>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={closePending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                        </button>
+                                      </>
+                                    )}
                                   </span>
                                 );
                               })}
@@ -925,7 +1125,7 @@ export default function DiscoveryResults({
                       )}
                     </td>
                     {/* Link Live State Column */}
-                    <td className={styles.directLinkCell}>
+                    <td className={styles.directLinkCell} style={{ width: columnWidths.link }}>
                       {liveState?.fullState ? (
                         (() => {
                           const TOTAL_RELAY_SLOTS = 6;
@@ -969,37 +1169,73 @@ export default function DiscoveryResults({
                             return name.replace(/[-_\s]?link$/i, "").trim() || "?";
                           };
                           
+                          // Check if a device is currently being edited (Link column)
+                          const isEditingLink = (type: "relay" | "curtain", index: number) =>
+                            editingDevice?.ip === result.ip &&
+                            editingDevice?.type === type &&
+                            editingDevice?.index === index;
+                          
                           return (
                             <div className={styles.entityStates}>
                               {/* Link Lights */}
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
+                                const editing = isEditingLink("relay", relay.index);
                                 return (
                                   <span key={`LL${relay.index}`} className={styles.deviceButtonWrapper}>
-                                    <button
-                                      className={`${styles.switchButton} ${styles.lightSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
-                                      onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
-                                      disabled={isPending || !onSendCommand}
-                                      title={relay.name || ""}
-                                    >
-                                      {getDisplayName(relay.name)}
-                                    </button>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <button
+                                        className={`${styles.switchButton} ${styles.lightSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
+                                        onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        disabled={isPending || !onSendCommand}
+                                        title={`${relay.name || ""} (right-click to rename)`}
+                                      >
+                                        {getDisplayName(relay.name)}
+                                      </button>
+                                    )}
                                   </span>
                                 );
                               })}
                               {/* Link Doors */}
                               {doorRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
+                                const editing = isEditingLink("relay", relay.index);
                                 return (
                                   <span key={`LD${relay.index}`} className={styles.deviceButtonWrapper}>
-                                    <button
-                                      className={`${styles.switchButton} ${styles.doorSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
-                                      onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
-                                      disabled={isPending || !onSendCommand}
-                                      title={relay.name || ""}
-                                    >
-                                      {getDisplayName(relay.name)}
-                                    </button>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <button
+                                        className={`${styles.switchButton} ${styles.doorSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
+                                        onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        disabled={isPending || !onSendCommand}
+                                        title={`${relay.name || ""} (right-click to rename)`}
+                                      >
+                                        {getDisplayName(relay.name)}
+                                      </button>
+                                    )}
                                   </span>
                                 );
                               })}
@@ -1010,22 +1246,40 @@ export default function DiscoveryResults({
                                 const isOpen = curtain.state === "open";
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
+                                const editing = isEditingLink("curtain", curtain.index);
                                 return (
-                                  <span key={`LS${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={curtain.name || ""}>
-                                    <button
-                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeUpButton} ${styles.linkButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
-                                      onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
-                                      disabled={openPending || !onSendCommand}
-                                    >
-                                      {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
-                                    </button>
-                                    <button
-                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${styles.linkButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
-                                      onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
-                                      disabled={closePending || !onSendCommand}
-                                    >
-                                      {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
-                                    </button>
+                                  <span key={`LS${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} (right-click to rename)`}>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeUpButton} ${styles.linkButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={openPending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                        </button>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${styles.linkButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={closePending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                        </button>
+                                      </>
+                                    )}
                                   </span>
                                 );
                               })}

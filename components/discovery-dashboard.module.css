@@ -219,16 +219,41 @@
 .table th {
   background: rgba(15, 23, 42, 0.03);
   font-weight: 600;
+  position: relative;
 }
 
-/* Direct/Link columns - now wider for full switch names */
+/* Resizable column handle */
+.resizeHandle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+  z-index: 1;
+}
+
+.resizeHandle:hover,
+.resizeHandle.resizing {
+  background: var(--accent);
+}
+
+.resizableHeader {
+  user-select: none;
+}
+
+/* Direct/Link columns - wider with wrapping buttons */
 .directLinkHeader {
-  min-width: 180px;
+  min-width: 160px;
   text-align: center;
+  position: relative;
 }
 
 .directLinkCell {
-  min-width: 180px;
+  min-width: 160px;
+  white-space: normal !important;
 }
 
 .directLinkCell .entityStates {
@@ -715,9 +740,6 @@
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .switchButton:hover:not(:disabled) {
@@ -781,9 +803,6 @@
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .shadeNameButton:hover:not(:disabled) {
@@ -820,6 +839,31 @@
 .deviceButtonWrapper {
   position: relative;
   display: inline-flex;
+}
+
+/* Inline edit input for switch names (right-click rename) */
+.inlineEditInput {
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 2px solid var(--accent);
+  background: #fff;
+  color: #1e293b;
+  min-width: 60px;
+  max-width: 120px;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  transition: box-shadow 0.15s ease;
+}
+
+.inlineEditInput:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+.inlineEditInput:disabled {
+  opacity: 0.6;
+  background: #f1f5f9;
 }
 
 /* Link button visual distinction - dashed border and slightly muted */

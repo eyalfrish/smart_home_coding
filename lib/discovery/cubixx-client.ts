@@ -264,11 +264,17 @@ export class CubixxClient {
           this.onMessage("network_status", parsed);
           break;
 
+        case "device_label":
+          this.handleDeviceLabel(parsed);
+          break;
+
+        case "device_label_update":
+          this.handleDeviceLabelUpdate(parsed);
+          break;
+
         case "ack":
         case "error":
         case "config_saved":
-        case "device_label":
-        case "device_label_update":
           this.onMessage(event, parsed);
           break;
 
@@ -454,6 +460,99 @@ export class CubixxClient {
     }
 
     this.onMessage("contact_update", update);
+  }
+
+  private handleDeviceLabel(data: Record<string, unknown>): void {
+    // device_label event has sub-objects for each type: relay, curtain, contact, scene
+    // Example: { event: "device_label", relay: { index: 0, name: "New Name" } }
+    
+    if (!this.fullState) return;
+
+    const relay = data.relay as { index: number; name: string } | undefined;
+    const curtain = data.curtain as { index: number; name: string } | undefined;
+    const contact = data.contact as { index: number; name: string } | undefined;
+
+    let updated = false;
+
+    if (relay && this.fullState.relays) {
+      const existing = this.fullState.relays.find((r) => r.index === relay.index);
+      if (existing) {
+        existing.name = relay.name;
+        updated = true;
+        console.log(`[${this.ip}] Relay ${relay.index} renamed to "${relay.name}"`);
+      }
+    }
+
+    if (curtain && this.fullState.curtains) {
+      const existing = this.fullState.curtains.find((c) => c.index === curtain.index);
+      if (existing) {
+        existing.name = curtain.name;
+        updated = true;
+        console.log(`[${this.ip}] Curtain ${curtain.index} renamed to "${curtain.name}"`);
+      }
+    }
+
+    if (contact && this.fullState.contacts) {
+      const existing = this.fullState.contacts.find((c) => c.index === contact.index);
+      if (existing) {
+        existing.name = contact.name;
+        updated = true;
+        console.log(`[${this.ip}] Contact ${contact.index} renamed to "${contact.name}"`);
+      }
+    }
+
+    if (updated) {
+      // Create a new object reference to ensure React detects the change
+      this.fullState = { ...this.fullState };
+      // Trigger a full_state update so React re-renders with new names
+      this.onMessage("full_state", this.fullState);
+    }
+    
+    this.onMessage("device_label", data);
+  }
+
+  private handleDeviceLabelUpdate(data: Record<string, unknown>): void {
+    // device_label_update format: { event: "device_label_update", target: "relay", index: 0, name: "New Name" }
+    
+    if (!this.fullState) return;
+
+    const target = data.target as string;
+    const index = data.index as number;
+    const name = data.name as string;
+
+    let updated = false;
+
+    if (target === "relay" && this.fullState.relays) {
+      const existing = this.fullState.relays.find((r) => r.index === index);
+      if (existing) {
+        existing.name = name;
+        updated = true;
+        console.log(`[${this.ip}] Relay ${index} renamed to "${name}"`);
+      }
+    } else if (target === "curtain" && this.fullState.curtains) {
+      const existing = this.fullState.curtains.find((c) => c.index === index);
+      if (existing) {
+        existing.name = name;
+        updated = true;
+        console.log(`[${this.ip}] Curtain ${index} renamed to "${name}"`);
+      }
+    } else if (target === "contact" && this.fullState.contacts) {
+      const existing = this.fullState.contacts.find((c) => c.index === index);
+      if (existing) {
+        existing.name = name;
+        updated = true;
+        console.log(`[${this.ip}] Contact ${index} renamed to "${name}"`);
+      }
+    }
+
+    if (updated) {
+      // Create a new object reference to ensure React detects the change
+      this.fullState = { ...this.fullState };
+      // Trigger a full_state update so React re-renders with new names
+      this.onMessage("full_state", this.fullState);
+    }
+    
+    this.onMessage("device_label_update", data);
   }
 
   private handleError(message: string): void {
