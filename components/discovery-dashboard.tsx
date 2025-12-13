@@ -74,18 +74,6 @@ export default function DiscoveryDashboard() {
   const [showOnlyLightActive, setShowOnlyLightActive] = useState(false);
   // Selection state for batch operations - persists across filters/views
   const [selectedPanelIps, setSelectedPanelIps] = useState<Set<string>>(new Set());
-  // Only connect to panels AFTER explicit discovery in THIS page session
-  // Use sessionStorage to detect if this is a fresh page load
-  const [hasDiscoveredThisSession, setHasDiscoveredThisSession] = useState(() => {
-    // Check if we're in the browser and if there's a discovery flag
-    if (typeof window !== 'undefined') {
-      const flag = sessionStorage.getItem('discoveredThisSession');
-      // Clear the flag on fresh load - it will be set again when discovery runs
-      sessionStorage.removeItem('discoveredThisSession');
-      return false; // Always start fresh on page load
-    }
-    return false;
-  });
   
   // Track if registry has been reset
   const [registryReady, setRegistryReady] = useState(false);
@@ -111,9 +99,7 @@ export default function DiscoveryDashboard() {
     setResponse(null);
     setPanelInfoMap({});
     setSelectedPanelIps(new Set());
-    setHasDiscoveredThisSession(false);
     setServerSessionId(null); // Clear session until we get a new one
-    sessionStorage.removeItem('discoveredThisSession');
     
     const checkServerAndReset = async () => {
       try {
@@ -259,13 +245,14 @@ export default function DiscoveryDashboard() {
   }, []);
 
   // Real-time panel stream
-  // Only connect AFTER:
+  // Connect as soon as we have panels - don't wait for discovery to complete!
+  // This allows progressive loading where panels show their full state as they're discovered.
+  // Requirements:
   // 1. Registry has been reset (registryReady)
-  // 2. Explicit discovery in this session (hasDiscoveredThisSession)
-  // 3. Not currently loading
-  // 4. We have discovered panels
-  // 5. We have a valid server session ID
-  const shouldConnectToPanels = registryReady && hasDiscoveredThisSession && !isLoading && discoveredPanelIps.length > 0 && !!serverSessionId;
+  // 2. We have discovered panels (discoveredPanelIps.length > 0)
+  // 3. We have a valid server session ID
+  // Note: We no longer wait for !isLoading - panels connect progressively during discovery
+  const shouldConnectToPanels = registryReady && discoveredPanelIps.length > 0 && !!serverSessionId;
   
   const { isConnected: isStreamConnected, panelStates, error: streamError } = usePanelStream({
     ips: shouldConnectToPanels ? discoveredPanelIps : [], // Pass empty array if not ready
@@ -400,10 +387,6 @@ export default function DiscoveryDashboard() {
           
           updateResponseFromMap(true); // Force final update
           setIsLoading(false);
-          setHasDiscoveredThisSession(true); // Enable panel connections
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('discoveredThisSession', 'true');
-          }
         }
       };
 

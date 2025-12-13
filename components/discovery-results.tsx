@@ -38,10 +38,10 @@ interface DiscoveryResultsProps {
 const statusConfig: Record<string, { icon: string; label: string; className: string }> = {
   panel: { icon: "●", label: "Cubixx", className: "statusPanel" },
   "not-panel": { icon: "○", label: "NotCubixx", className: "statusOther" },
-  "no-response": { icon: "○", label: "Timeout", className: "statusNone" },
+  "no-response": { icon: "○", label: "No Response", className: "statusNone" },
   error: { icon: "⚠", label: "Error", className: "statusError" },
-  pending: { icon: "◌", label: "Scanning", className: "statusPending" },
-  initial: { icon: "·", label: "", className: "statusInitial" },
+  pending: { icon: "◌", label: "Scanning...", className: "statusPending" },
+  initial: { icon: "◌", label: "Waiting...", className: "statusInitial" },
 };
 
 // Compare two semver-like version strings, returns positive if a > b, negative if a < b, 0 if equal

@@ -34,14 +34,15 @@ interface PhaseConfig {
   baseRetryDelay: number;
 }
 
-// Phase configuration - balanced for speed and reliability
+// Phase configuration - optimized for speed while catching slow panels
+// Most panels respond in <500ms, slow panels need ~1-1.5s, non-responsive IPs should timeout fast
 const PHASES: PhaseConfig[] = [
-  { name: "quick-sweep", timeout: 500, concurrency: 20, retries: 0, baseRetryDelay: 0 },
-  { name: "standard", timeout: 1200, concurrency: 15, retries: 1, baseRetryDelay: 100 },
-  { name: "deep", timeout: 2500, concurrency: 8, retries: 2, baseRetryDelay: 150 },
+  { name: "quick-sweep", timeout: 400, concurrency: 25, retries: 0, baseRetryDelay: 0 },
+  { name: "standard", timeout: 1000, concurrency: 20, retries: 0, baseRetryDelay: 0 },
+  { name: "deep", timeout: 1500, concurrency: 15, retries: 1, baseRetryDelay: 50 },
 ];
 
-const SETTINGS_TIMEOUT = 2500;  // Fetch settings quickly, don't block
+const SETTINGS_TIMEOUT = 2000;  // Settings page should respond quickly
 
 export type DiscoveryEventType = 
   | "phase_start" 
@@ -231,6 +232,7 @@ export async function runMultiPhaseDiscovery(
       durationMs: phaseDuration,
     });
 
+    const totalPanelsFound = countByStatus(results, "panel");
     console.log(`[Discovery] Phase ${phase.name} done in ${phaseDuration}ms: found ${panelsFoundInPhase} panels, ${pendingIps.size} IPs remaining (${(phaseDuration / ipsToScan.length).toFixed(0)}ms/IP avg)`);
 
     onEvent({ 
@@ -239,9 +241,10 @@ export async function runMultiPhaseDiscovery(
       progress: {
         completed: allTargets.length - pendingIps.size,
         total: allTargets.length,
-        panelsFound: countByStatus(results, "panel"),
+        panelsFound: totalPanelsFound,
       }
     });
+
   }
 
   // Mark remaining pending IPs as no-response
@@ -252,10 +255,12 @@ export async function runMultiPhaseDiscovery(
     }
   });
 
-  // Wait for any remaining settings fetches (with a timeout so we don't hang)
+  // Wait for any remaining settings fetches (with reasonable timeout)
+  // Settings include Log/LongPress which aren't available via WebSocket
   if (pendingSettingsFetches.length > 0) {
-    console.log(`[Discovery] Waiting for ${pendingSettingsFetches.length} settings fetches...`);
-    const settingsTimeout = new Promise<void>(resolve => setTimeout(resolve, 3000));
+    const waitTime = Math.min(2500, Math.max(1500, pendingSettingsFetches.length * 50));
+    console.log(`[Discovery] Waiting for ${pendingSettingsFetches.length} settings fetches (max ${waitTime}ms)...`);
+    const settingsTimeout = new Promise<void>(resolve => setTimeout(resolve, waitTime));
     await Promise.race([
       Promise.allSettled(pendingSettingsFetches),
       settingsTimeout,

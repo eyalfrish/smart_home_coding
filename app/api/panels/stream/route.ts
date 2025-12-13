@@ -106,18 +106,21 @@ export async function GET(request: NextRequest) {
       // Register listener
       registry.addListener(listener);
 
-      // Disconnect panels not in the new list (cleanup stale connections)
-      const currentIps = new Set(ips);
+      // Connect to requested panels (registry handles deduplication)
+      // Don't disconnect panels not in the list - during progressive discovery,
+      // the client may reconnect with a subset temporarily. We only want to add panels.
       const connectedIps = registry.getConnectedPanelIps();
-      const staleIps = connectedIps.filter(ip => !currentIps.has(ip));
-      if (staleIps.length > 0) {
-        console.log(`[SSE] Cleaning up ${staleIps.length} stale panels`);
-        staleIps.forEach(ip => registry.disconnectPanel(ip));
+      const newIps = ips.filter(ip => !connectedIps.includes(ip));
+      
+      if (newIps.length > 0) {
+        console.log(`[SSE] Connecting to ${newIps.length} new panels: ${newIps.join(", ")}`);
+        registry.connectPanels(newIps);
+      } else if (ips.length > 0 && connectedIps.length > 0) {
+        console.log(`[SSE] All ${ips.length} requested panels already connected`);
+      } else {
+        console.log(`[SSE] Connecting to panels: ${ips.join(", ")}`);
+        registry.connectPanels(ips);
       }
-
-      // Connect to requested panels
-      console.log(`[SSE] Connecting to panels: ${ips.join(", ")}`);
-      registry.connectPanels(ips);
 
       // Cleanup when the connection is closed
       request.signal.addEventListener("abort", () => {

@@ -46,6 +46,7 @@ interface UsePanelStreamReturn {
 }
 
 const RECONNECT_DELAY_MS = 1500;
+const IP_CHANGE_DEBOUNCE_MS = 200; // Debounce rapid IP additions during discovery
 
 export function usePanelStream(
   options: UsePanelStreamOptions
@@ -71,6 +72,8 @@ export function usePanelStream(
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ipChangeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingIpsRef = useRef<string[]>([]);
   const shouldReconnectRef = useRef(true);
 
   // Store callbacks in refs to avoid dependency issues
@@ -233,12 +236,17 @@ export function usePanelStream(
     }
   }, []);
 
+  // Use ref to always have current IPs without causing reconnects
+  const currentIpsRef = useRef<string[]>([]);
+  currentIpsRef.current = ips;
+  
   const connect = useCallback(() => {
-    if (ips.length === 0 || eventSourceRef.current || !sessionId) {
+    const currentIps = currentIpsRef.current;
+    if (currentIps.length === 0 || eventSourceRef.current || !sessionId) {
       return;
     }
 
-    const url = `/api/panels/stream?ips=${encodeURIComponent(ips.join(","))}&session=${encodeURIComponent(sessionId)}`;
+    const url = `/api/panels/stream?ips=${encodeURIComponent(currentIps.join(","))}&session=${encodeURIComponent(sessionId)}`;
     console.log("[usePanelStream] Connecting to:", url);
 
     const eventSource = new EventSource(url);
@@ -291,7 +299,7 @@ export function usePanelStream(
         }, RECONNECT_DELAY_MS);
       }
     };
-  }, [ips, sessionId, handleMessage]);
+  }, [sessionId, handleMessage]); // Removed ips dependency - use ref instead
 
   const disconnect = useCallback(() => {
     shouldReconnectRef.current = false;
@@ -318,36 +326,121 @@ export function usePanelStream(
   // Track IPs to detect changes
   const ipsKey = ips.join(",");
   const prevIpsKeyRef = useRef<string>("");
+  const prevIpsSetRef = useRef<Set<string>>(new Set());
+  
+  // Debounced reconnect function - waits for rapid changes to settle
+  const debouncedReconnect = useCallback(() => {
+    // Clear any pending debounce
+    if (ipChangeDebounceRef.current) {
+      clearTimeout(ipChangeDebounceRef.current);
+    }
+    
+    // Schedule reconnect after debounce period
+    ipChangeDebounceRef.current = setTimeout(() => {
+      ipChangeDebounceRef.current = null;
+      const ipsToConnect = pendingIpsRef.current;
+      
+      if (ipsToConnect.length > 0 && sessionId) {
+        console.log(`[usePanelStream] Debounced reconnect with ${ipsToConnect.length} panels`);
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+        // Update refs to current state
+        prevIpsKeyRef.current = ipsToConnect.join(",");
+        prevIpsSetRef.current = new Set(ipsToConnect);
+        // Connect will use the current ips from closure
+        shouldReconnectRef.current = true;
+        
+        // Build URL with pending IPs
+        const url = `/api/panels/stream?ips=${encodeURIComponent(ipsToConnect.join(","))}&session=${encodeURIComponent(sessionId)}`;
+        console.log("[usePanelStream] Reconnecting to:", url);
+        
+        const eventSource = new EventSource(url);
+        eventSourceRef.current = eventSource;
+        
+        eventSource.onopen = () => {
+          console.log("[usePanelStream] Connected");
+          setIsConnected(true);
+          setError(null);
+        };
+        
+        eventSource.onmessage = handleMessage;
+        
+        eventSource.onerror = () => {
+          setIsConnected(false);
+          eventSource.close();
+          eventSourceRef.current = null;
+          setError("Connection lost during reconnect");
+        };
+      }
+    }, IP_CHANGE_DEBOUNCE_MS);
+  }, [sessionId, handleMessage]);
   
   // Connect/disconnect based on enabled state and ips
   useEffect(() => {
+    const currentIpsSet = new Set(ips);
+    const prevIpsSet = prevIpsSetRef.current;
     const ipsChanged = prevIpsKeyRef.current !== ipsKey;
     
+    // Always update pending IPs for debounced reconnect
+    pendingIpsRef.current = ips;
+    
     if (ipsChanged) {
-      // IPs changed - disconnect and clear states to start fresh
-      if (eventSourceRef.current) {
-        console.log("[usePanelStream] IPs changed, reconnecting...");
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+      // Calculate what changed
+      const addedIps = ips.filter(ip => !prevIpsSet.has(ip));
+      const removedIps = Array.from(prevIpsSet).filter(ip => !currentIpsSet.has(ip));
+      
+      // Only disconnect and reconnect if IPs actually changed (not just order)
+      const hasRealChanges = addedIps.length > 0 || removedIps.length > 0;
+      
+      if (hasRealChanges) {
+        // Remove states for IPs that are no longer in the list (immediate)
+        if (removedIps.length > 0) {
+          console.log(`[usePanelStream] Removing ${removedIps.length} panels: ${removedIps.join(", ")}`);
+          setPanelStates((prev) => {
+            const next = new Map(prev);
+            for (const ip of removedIps) {
+              next.delete(ip);
+            }
+            return next;
+          });
+        }
+        
+        // For added IPs, use debounced reconnect to batch rapid additions
+        if (addedIps.length > 0 && eventSourceRef.current) {
+          console.log(`[usePanelStream] ${addedIps.length} new panels detected, scheduling debounced reconnect`);
+          debouncedReconnect();
+        }
       }
-      setPanelStates(new Map());
+      
       prevIpsKeyRef.current = ipsKey;
+      prevIpsSetRef.current = currentIpsSet;
     }
     
     if (enabled && ips.length > 0 && sessionId) {
       shouldReconnectRef.current = true;
       // Only connect if not already connected (or just disconnected above)
-      if (!eventSourceRef.current) {
+      if (!eventSourceRef.current && !ipChangeDebounceRef.current) {
         connect();
       }
     } else {
+      // Clear debounce timer when disabling
+      if (ipChangeDebounceRef.current) {
+        clearTimeout(ipChangeDebounceRef.current);
+        ipChangeDebounceRef.current = null;
+      }
       disconnect();
     }
 
     return () => {
+      if (ipChangeDebounceRef.current) {
+        clearTimeout(ipChangeDebounceRef.current);
+        ipChangeDebounceRef.current = null;
+      }
       disconnect();
     };
-  }, [enabled, ipsKey, sessionId, connect, disconnect]);
+  }, [enabled, ipsKey, sessionId, connect, disconnect, debouncedReconnect]);
 
   return {
     isConnected,
