@@ -221,30 +221,19 @@
   font-weight: 600;
 }
 
-/* Notes column - allow text wrap */
-.notesHeader,
-.notesCell {
-  max-width: 100px;
-  white-space: normal !important;
-  word-wrap: break-word;
-  font-size: 0.8rem;
-}
-
-/* Direct/Link columns - compact with icon wrapping */
+/* Direct/Link columns - now wider for full switch names */
 .directLinkHeader {
-  max-width: 140px;
-  min-width: 100px;
+  min-width: 180px;
   text-align: center;
 }
 
 .directLinkCell {
-  max-width: 150px;
-  min-width: 100px;
+  min-width: 180px;
 }
 
 .directLinkCell .entityStates {
   flex-wrap: wrap;
-  max-width: 150px;
+  gap: 0.3rem;
 }
 
 /* Centered columns (FW, Signal, BL, Logging, LP, Touch) */
@@ -618,9 +607,9 @@
 }
 
 .doorOn {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
   color: white;
-  box-shadow: 0 0 8px rgba(249, 115, 22, 0.4);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
 }
 
 .doorOff {
@@ -629,17 +618,35 @@
 }
 
 .doorOff:hover:not(:disabled) {
-  background: rgba(249, 115, 22, 0.25);
-  color: #ea580c;
+  background: rgba(168, 85, 247, 0.25);
+  color: #9333ea;
 }
 
-/* Shade button group */
+/* Shade button group (old L/S/D style) */
 .shadeGroup {
   display: inline-flex;
   gap: 2px;
   background: rgba(15, 23, 42, 0.08);
   border-radius: 4px;
   padding: 1px;
+}
+
+/* Shade pair group - keeps up/down buttons together as a unit */
+.shadePairGroup {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.shadeUpButton {
+  border-radius: 4px 4px 2px 2px;
+}
+
+.shadeDownButton {
+  border-radius: 2px 2px 4px 4px;
 }
 
 /* Shade buttons (S1↑, S1↓, etc.) */
@@ -693,6 +700,120 @@
   to {
     opacity: 0.7;
   }
+}
+
+/* New switch buttons with full names */
+.switchButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switchButton:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.switchButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.switchButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Light switches - yellow/amber tones */
+.lightSwitch.switchOn {
+  background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%);
+  color: #78350f;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.lightSwitch.switchOff {
+  background: rgba(251, 191, 36, 0.15);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.lightSwitch.switchOff:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.25);
+}
+
+/* Door switches - purple tones */
+.doorSwitch.switchOn {
+  background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+  color: white;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+}
+
+.doorSwitch.switchOff {
+  background: rgba(168, 85, 247, 0.12);
+  color: #7c3aed;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.doorSwitch.switchOff:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.25);
+}
+
+/* Shade switches - blue tones */
+.shadeNameButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shadeNameButton:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.shadeNameButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.shadeNameButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.shadeSwitch.switchOn {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: white;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
+}
+
+.shadeSwitch.switchOff {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.shadeSwitch.switchOff:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
 }
 
 /* Device button wrapper - provides tooltip positioning context */

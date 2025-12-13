@@ -26,13 +26,13 @@ interface DiscoveryResultsProps {
   cubixxPanelIps?: string[];
 }
 
-// Short status indicators with icons
+// Status indicators - now includes detailed status from discovery
 const statusConfig: Record<string, { icon: string; label: string; className: string }> = {
-  panel: { icon: "●", label: "Panel", className: "statusPanel" },
-  "not-panel": { icon: "○", label: "Other", className: "statusOther" },
-  "no-response": { icon: "○", label: "None", className: "statusNone" },
+  panel: { icon: "●", label: "Cubixx", className: "statusPanel" },
+  "not-panel": { icon: "○", label: "NotCubixx", className: "statusOther" },
+  "no-response": { icon: "○", label: "Timeout", className: "statusNone" },
   error: { icon: "⚠", label: "Error", className: "statusError" },
-  pending: { icon: "◌", label: "Scan", className: "statusPending" },
+  pending: { icon: "◌", label: "Scanning", className: "statusPending" },
   initial: { icon: "·", label: "", className: "statusInitial" },
 };
 
@@ -256,11 +256,11 @@ export default function DiscoveryResults({
       return true;
     };
     
-    // A relay is a "door" if its name contains door/lock/unlock keywords
+    // A relay is a "door lock" if its name contains "lock" or "unlock" (not just "door")
     const isDoorRelay = (relay: { name?: string }) => {
       if (!relay.name) return false;
       const name = relay.name.toLowerCase();
-      return name.includes("door") || name.includes("lock") || name.includes("unlock");
+      return name.includes("lock") || name.includes("unlock");
     };
     
     // Light relays are configured relays that are not doors
@@ -651,13 +651,12 @@ export default function DiscoveryResults({
                   {sortColumn === "touched" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
                 </span>
               </th>
-              <th className={styles.notesHeader}>Notes</th>
             </tr>
           </thead>
           <tbody>
             {sortedResults.length === 0 ? (
               <tr>
-                <td colSpan={14}>No entries match that search.</td>
+                <td colSpan={13}>No entries match that search.</td>
               </tr>
             ) : (
               sortedResults.map((result) => {
@@ -814,11 +813,11 @@ export default function DiscoveryResults({
                             return true;
                           };
                           
-                          // A relay is a "door" if its name contains door/lock/unlock keywords
+                          // A relay is a "door lock" if its name contains "lock" or "unlock" (not just "door")
                           const isDoorRelay = (relay: { name?: string }) => {
                             if (!relay.name) return false;
                             const name = relay.name.toLowerCase();
-                            return name.includes("door") || name.includes("lock") || name.includes("unlock");
+                            return name.includes("lock") || name.includes("unlock");
                           };
                           
                           // A curtain is configured if its name is NOT a generic "Curtain N" pattern
@@ -844,19 +843,26 @@ export default function DiscoveryResults({
                           // Only show curtains up to the max possible (in case of phantom entries)
                           const validDirectCurtains = directCurtains.slice(0, maxPossibleShades);
                           
+                          // Helper to get display name (strip -Link suffix if present)
+                          const getDisplayName = (name?: string) => {
+                            if (!name) return "?";
+                            return name.replace(/[-_\s]?link$/i, "").trim() || "?";
+                          };
+                          
                           return (
                             <div className={styles.entityStates}>
                               {/* Lights (Relays that are actual lights) - Direct only */}
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 return (
-                                  <span key={`L${relay.index}`} className={styles.deviceButtonWrapper} title={relay.name || ""}>
+                                  <span key={`L${relay.index}`} className={styles.deviceButtonWrapper}>
                                     <button
-                                      className={`${styles.lightButton} ${relay.state ? styles.lightOn : styles.lightOff} ${isPending ? styles.pending : ""}`}
+                                      className={`${styles.switchButton} ${styles.lightSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
                                       onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                       disabled={isPending || !onSendCommand}
+                                      title={relay.name || ""}
                                     >
-                                      L{relay.index + 1}
+                                      {getDisplayName(relay.name)}
                                     </button>
                                   </span>
                                 );
@@ -865,13 +871,14 @@ export default function DiscoveryResults({
                               {doorRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 return (
-                                  <span key={`D${relay.index}`} className={styles.deviceButtonWrapper} title={relay.name || ""}>
+                                  <span key={`D${relay.index}`} className={styles.deviceButtonWrapper}>
                                     <button
-                                      className={`${styles.doorButton} ${relay.state ? styles.doorOn : styles.doorOff} ${isPending ? styles.pending : ""}`}
+                                      className={`${styles.switchButton} ${styles.doorSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
                                       onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                       disabled={isPending || !onSendCommand}
+                                      title={relay.name || ""}
                                     >
-                                      D{relay.index + 1}
+                                      {getDisplayName(relay.name)}
                                     </button>
                                   </span>
                                 );
@@ -884,20 +891,20 @@ export default function DiscoveryResults({
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
                                 return (
-                                  <span key={`S${curtain.index}`} className={`${styles.shadeGroup} ${styles.deviceButtonWrapper}`} title={curtain.name || ""}>
+                                  <span key={`S${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={curtain.name || ""}>
                                     <button
-                                      className={`${styles.shadeButton} ${isOpen ? styles.shadeActive : ""} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
+                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeUpButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
                                       onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
                                       disabled={openPending || !onSendCommand}
                                     >
-                                      {isMoving ? "■" : `S${curtain.index + 1}↑`}
+                                      {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
                                     </button>
                                     <button
-                                      className={`${styles.shadeButton} ${isClosed ? styles.shadeActive : ""} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
+                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
                                       onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
                                       disabled={closePending || !onSendCommand}
                                     >
-                                      {isMoving ? "■" : `S${curtain.index + 1}↓`}
+                                      {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
                                     </button>
                                   </span>
                                 );
@@ -930,10 +937,11 @@ export default function DiscoveryResults({
                             return true;
                           };
                           
+                          // A relay is a "door lock" if its name contains "lock" or "unlock" (not just "door")
                           const isDoorRelay = (relay: { name?: string }) => {
                             if (!relay.name) return false;
                             const name = relay.name.toLowerCase();
-                            return name.includes("door") || name.includes("lock") || name.includes("unlock");
+                            return name.includes("lock") || name.includes("unlock");
                           };
                           
                           const isConfiguredCurtain = (curtain: { name?: string }) => {
@@ -955,19 +963,26 @@ export default function DiscoveryResults({
                           const maxPossibleShades = Math.floor(availableSlots / SLOTS_PER_SHADE);
                           const validLinkCurtains = linkCurtains.slice(0, maxPossibleShades);
                           
+                          // Helper to get display name (strip -Link suffix if present)
+                          const getDisplayName = (name?: string) => {
+                            if (!name) return "?";
+                            return name.replace(/[-_\s]?link$/i, "").trim() || "?";
+                          };
+                          
                           return (
                             <div className={styles.entityStates}>
                               {/* Link Lights */}
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 return (
-                                  <span key={`LL${relay.index}`} className={styles.deviceButtonWrapper} title={relay.name || ""}>
+                                  <span key={`LL${relay.index}`} className={styles.deviceButtonWrapper}>
                                     <button
-                                      className={`${styles.lightButton} ${styles.linkButton} ${relay.state ? styles.lightOn : styles.lightOff} ${isPending ? styles.pending : ""}`}
+                                      className={`${styles.switchButton} ${styles.lightSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
                                       onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                       disabled={isPending || !onSendCommand}
+                                      title={relay.name || ""}
                                     >
-                                      L{relay.index + 1}
+                                      {getDisplayName(relay.name)}
                                     </button>
                                   </span>
                                 );
@@ -976,13 +991,14 @@ export default function DiscoveryResults({
                               {doorRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 return (
-                                  <span key={`LD${relay.index}`} className={styles.deviceButtonWrapper} title={relay.name || ""}>
+                                  <span key={`LD${relay.index}`} className={styles.deviceButtonWrapper}>
                                     <button
-                                      className={`${styles.doorButton} ${styles.linkButton} ${relay.state ? styles.doorOn : styles.doorOff} ${isPending ? styles.pending : ""}`}
+                                      className={`${styles.switchButton} ${styles.doorSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
                                       onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                       disabled={isPending || !onSendCommand}
+                                      title={relay.name || ""}
                                     >
-                                      D{relay.index + 1}
+                                      {getDisplayName(relay.name)}
                                     </button>
                                   </span>
                                 );
@@ -995,20 +1011,20 @@ export default function DiscoveryResults({
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
                                 return (
-                                  <span key={`LS${curtain.index}`} className={`${styles.shadeGroup} ${styles.deviceButtonWrapper}`} title={curtain.name || ""}>
+                                  <span key={`LS${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={curtain.name || ""}>
                                     <button
-                                      className={`${styles.shadeButton} ${styles.linkButton} ${isOpen ? styles.shadeActive : ""} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
+                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeUpButton} ${styles.linkButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
                                       onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
                                       disabled={openPending || !onSendCommand}
                                     >
-                                      {isMoving ? "■" : `S${curtain.index + 1}↑`}
+                                      {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
                                     </button>
                                     <button
-                                      className={`${styles.shadeButton} ${styles.linkButton} ${isClosed ? styles.shadeActive : ""} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
+                                      className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${styles.linkButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
                                       onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
                                       disabled={closePending || !onSendCommand}
                                     >
-                                      {isMoving ? "■" : `S${curtain.index + 1}↓`}
+                                      {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
                                     </button>
                                   </span>
                                 );
@@ -1032,11 +1048,6 @@ export default function DiscoveryResults({
                       <span className={`${styles.touchedBadge} ${touchedClass}`}>
                         {touched ? "Yes" : "No"}
                       </span>
-                    </td>
-                    <td className={styles.notesCell}>
-                      {result.status === "panel" && result.discoveryTimeMs != null
-                        ? `${result.discoveryTimeMs}ms`
-                        : result.errorMessage ?? "—"}
                     </td>
                   </tr>
                 );
