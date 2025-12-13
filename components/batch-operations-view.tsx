@@ -161,6 +161,13 @@ function isDoorRelay(relay: { name?: string }): boolean {
   return name.includes("door") || name.includes("lock") || name.includes("unlock");
 }
 
+// Check if a device name indicates it's a "Link" device (ends with -Link, _Link, Link, etc.)
+function isLinkDevice(name?: string): boolean {
+  if (!name) return false;
+  const normalized = name.trim().toLowerCase();
+  return /[-_\s]?link$/i.test(normalized);
+}
+
 export default function BatchOperationsView({
   selectedPanelIps,
   panelResults,
@@ -1433,7 +1440,8 @@ export default function BatchOperationsView({
                 <th>Backlight</th>
                 <th>Logging</th>
                 <th>LongPress</th>
-                <th>Live State</th>
+                <th>Direct</th>
+                <th>Link</th>
               </tr>
             </thead>
             <tbody>
@@ -1551,37 +1559,40 @@ export default function BatchOperationsView({
                         <span className={styles.settingUnknown}>—</span>
                       )}
                     </td>
+                    {/* Direct Live State Column */}
                     <td>
                       {liveState?.fullState ? (
                         (() => {
                           const configuredRelays = liveState.fullState.relays?.filter(isConfiguredRelay) ?? [];
-                          const doorRelays = configuredRelays.filter(isDoorRelay);
-                          const lightRelays = configuredRelays.filter(r => !isDoorRelay(r));
-                          const curtainCount = liveState.fullState.curtains?.filter(
+                          const directRelays = configuredRelays.filter(r => !isLinkDevice(r.name));
+                          const doorRelays = directRelays.filter(isDoorRelay);
+                          const lightRelays = directRelays.filter(r => !isDoorRelay(r));
+                          const configuredCurtains = liveState.fullState.curtains?.filter(
                             c => c.name && !/^Curtain\s+\d+$/i.test(c.name.trim())
-                          ).length ?? 0;
+                          ) ?? [];
+                          const directCurtains = configuredCurtains.filter(c => !isLinkDevice(c.name));
                           const lightsOnCount = lightRelays.filter(r => r.state).length;
                           const doorsOnCount = doorRelays.filter(r => r.state).length;
 
-                          if (lightRelays.length === 0 && doorRelays.length === 0 && curtainCount === 0) {
+                          if (lightRelays.length === 0 && doorRelays.length === 0 && directCurtains.length === 0) {
                             return <span style={{ color: "var(--muted)" }}>—</span>;
                           }
 
                           return (
                             <span className={styles.liveStateSummary}>
                               {lightRelays.length > 0 && (
-                                <span className={styles.lightsSummary}>
+                                <span className={styles.lightsSummary} title={lightRelays.map(r => r.name).join(", ")}>
                                   💡 {lightsOnCount}/{lightRelays.length}
                                 </span>
                               )}
                               {doorRelays.length > 0 && (
-                                <span className={styles.doorsSummary}>
+                                <span className={styles.doorsSummary} title={doorRelays.map(r => r.name).join(", ")}>
                                   🚪 {doorsOnCount}/{doorRelays.length}
                                 </span>
                               )}
-                              {curtainCount > 0 && (
-                                <span className={styles.shadesSummary}>
-                                  🪟 {curtainCount}
+                              {directCurtains.length > 0 && (
+                                <span className={styles.shadesSummary} title={directCurtains.map(c => c.name).join(", ")}>
+                                  🪟 {directCurtains.length}
                                 </span>
                               )}
                             </span>
@@ -1589,7 +1600,52 @@ export default function BatchOperationsView({
                         })()
                       ) : (
                         <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                          Connecting...
+                          ...
+                        </span>
+                      )}
+                    </td>
+                    {/* Link Live State Column */}
+                    <td>
+                      {liveState?.fullState ? (
+                        (() => {
+                          const configuredRelays = liveState.fullState.relays?.filter(isConfiguredRelay) ?? [];
+                          const linkRelays = configuredRelays.filter(r => isLinkDevice(r.name));
+                          const doorRelays = linkRelays.filter(isDoorRelay);
+                          const lightRelays = linkRelays.filter(r => !isDoorRelay(r));
+                          const configuredCurtains = liveState.fullState.curtains?.filter(
+                            c => c.name && !/^Curtain\s+\d+$/i.test(c.name.trim())
+                          ) ?? [];
+                          const linkCurtains = configuredCurtains.filter(c => isLinkDevice(c.name));
+                          const lightsOnCount = lightRelays.filter(r => r.state).length;
+                          const doorsOnCount = doorRelays.filter(r => r.state).length;
+
+                          if (lightRelays.length === 0 && doorRelays.length === 0 && linkCurtains.length === 0) {
+                            return <span style={{ color: "var(--muted)" }}>—</span>;
+                          }
+
+                          return (
+                            <span className={styles.liveStateSummary}>
+                              {lightRelays.length > 0 && (
+                                <span className={styles.lightsSummary} title={lightRelays.map(r => r.name).join(", ")}>
+                                  💡 {lightsOnCount}/{lightRelays.length}
+                                </span>
+                              )}
+                              {doorRelays.length > 0 && (
+                                <span className={styles.doorsSummary} title={doorRelays.map(r => r.name).join(", ")}>
+                                  🚪 {doorsOnCount}/{doorRelays.length}
+                                </span>
+                              )}
+                              {linkCurtains.length > 0 && (
+                                <span className={styles.shadesSummary} title={linkCurtains.map(c => c.name).join(", ")}>
+                                  🪟 {linkCurtains.length}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()
+                      ) : (
+                        <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                          ...
                         </span>
                       )}
                     </td>

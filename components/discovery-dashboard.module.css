@@ -125,11 +125,16 @@
 
 .searchRow {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  gap: 1.5rem;
   margin: 1rem 0;
-  min-width: 220px;
   width: 100%;
+}
+
+.searchGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
 }
 
 .filtersRow {
@@ -189,7 +194,7 @@
   border-radius: 8px;
   border: 1px solid rgba(15, 23, 42, 0.18);
   font-size: 0.95rem;
-  width: 100%;
+  flex: 1;
 }
 
 .table {
@@ -214,6 +219,37 @@
 .table th {
   background: rgba(15, 23, 42, 0.03);
   font-weight: 600;
+}
+
+/* Notes column - allow text wrap */
+.notesHeader,
+.notesCell {
+  max-width: 100px;
+  white-space: normal !important;
+  word-wrap: break-word;
+  font-size: 0.8rem;
+}
+
+/* Direct/Link columns - compact with icon wrapping */
+.directLinkHeader {
+  max-width: 140px;
+  min-width: 100px;
+  text-align: center;
+}
+
+.directLinkCell {
+  max-width: 150px;
+  min-width: 100px;
+}
+
+.directLinkCell .entityStates {
+  flex-wrap: wrap;
+  max-width: 150px;
+}
+
+/* Centered columns (FW, Signal, BL, Logging, LP, Touch) */
+.centeredColumn {
+  text-align: center !important;
 }
 
 .badge {
@@ -657,6 +693,22 @@
   to {
     opacity: 0.7;
   }
+}
+
+/* Device button wrapper - provides tooltip positioning context */
+.deviceButtonWrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Link button visual distinction - dashed border and slightly muted */
+.linkButton {
+  border: 1px dashed currentColor !important;
+  opacity: 0.85;
+}
+
+.linkButton:hover:not(:disabled) {
+  opacity: 1;
 }
 
 /* Pending state for buttons */
