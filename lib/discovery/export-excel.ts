@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { DiscoveryResult, PanelInfo, LivePanelState } from './types';
+import { getRelayDeviceType, getCurtainDeviceType } from './types';
 
 interface ExportData {
   results: DiscoveryResult[];
@@ -45,28 +46,29 @@ export function exportDiscoveryToExcel(data: ExportData): void {
     const isPanel = result.status === 'panel';
 
     // Get live state summary (lights/shades status) - only for panels
+    // Uses settings-based classification for robust device type detection
     const getLiveStateSummary = () => {
       if (!fullState || !isPanel) return '';
       
-      const lightRelays = fullState.relays.filter(r => {
-        if (!r.name || r.name.trim() === '') return false;
-        if (/^Relay\s+\d+$/i.test(r.name.trim())) return false;
-        const name = r.name.toLowerCase();
-        if (name.includes('door') || name.includes('lock') || name.includes('unlock')) return false;
-        return true;
-      });
+      const relayPairs = result.settings?.relayPairs;
       
-      const doorRelays = fullState.relays.filter(r => {
-        if (!r.name) return false;
-        const name = r.name.toLowerCase();
-        return name.includes('door') || name.includes('lock') || name.includes('unlock');
-      });
+      // Classify relays using settings-based classification
+      const classifiedRelays = fullState.relays.map(relay => ({
+        ...relay,
+        deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs),
+      }));
       
-      const configuredCurtains = fullState.curtains.filter(c => {
-        if (!c.name || c.name.trim() === '') return false;
-        if (/^Curtain\s+\d+$/i.test(c.name.trim())) return false;
-        return true;
-      });
+      const lightRelays = classifiedRelays.filter(r => r.deviceType === 'light');
+      const momentaryRelays = classifiedRelays.filter(r => r.deviceType === 'momentary');
+      
+      // Classify curtains using settings-based classification
+      const classifiedCurtains = fullState.curtains.map(curtain => ({
+        ...curtain,
+        deviceType: getCurtainDeviceType(curtain.index, curtain.name, relayPairs),
+      }));
+      
+      const curtainDevices = classifiedCurtains.filter(c => c.deviceType === 'curtain');
+      const venetianDevices = classifiedCurtains.filter(c => c.deviceType === 'venetian');
 
       const parts: string[] = [];
       
@@ -75,13 +77,17 @@ export function exportDiscoveryToExcel(data: ExportData): void {
         parts.push(`Lights: ${onCount}/${lightRelays.length} on`);
       }
       
-      if (doorRelays.length > 0) {
-        const onCount = doorRelays.filter(r => r.state).length;
-        parts.push(`Doors: ${onCount}/${doorRelays.length}`);
+      if (momentaryRelays.length > 0) {
+        const onCount = momentaryRelays.filter(r => r.state).length;
+        parts.push(`Momentary: ${onCount}/${momentaryRelays.length}`);
       }
       
-      if (configuredCurtains.length > 0) {
-        parts.push(`Shades: ${configuredCurtains.length}`);
+      if (curtainDevices.length > 0) {
+        parts.push(`Curtains: ${curtainDevices.length}`);
+      }
+      
+      if (venetianDevices.length > 0) {
+        parts.push(`Venetian: ${venetianDevices.length}`);
       }
       
       return parts.join(', ');

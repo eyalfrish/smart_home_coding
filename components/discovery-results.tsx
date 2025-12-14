@@ -2,7 +2,8 @@
 
 import { useCallback, useState, useRef, useEffect, type KeyboardEvent, type MouseEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryResponse, PanelInfo, LivePanelState, PanelCommand, PanelSettings } from "@/lib/discovery/types";
+import type { DiscoveryResponse, PanelInfo, LivePanelState, PanelCommand, PanelSettings, RelayPairConfig, DeviceType } from "@/lib/discovery/types";
+import { getRelayDeviceType, getCurtainDeviceType } from "@/lib/discovery/types";
 
 // Type for tracking which device is being edited
 interface EditingDevice {
@@ -379,27 +380,19 @@ export default function DiscoveryResults({
   })();
 
   // Helper to check if a panel has at least one configured light relay that is ON
+  // Uses settings-based classification for robust device type detection
   const hasLightOn = (ip: string): boolean => {
     const liveState = livePanelStates?.get(ip);
     if (!liveState?.fullState?.relays) return false;
     
-    // A relay is a "light" if its name is NOT a generic "Relay N" pattern
-    const isConfiguredRelay = (relay: { name?: string }) => {
-      if (!relay.name || relay.name.trim() === "") return false;
-      if (/^Relay\s+\d+$/i.test(relay.name.trim())) return false;
-      return true;
-    };
+    // Get panel result to access settings
+    const panelResult = data?.results.find(r => r.ip === ip);
+    const relayPairs = panelResult?.settings?.relayPairs;
     
-    // A relay is a "door lock" if its name contains "lock" or "unlock" (not just "door")
-    const isDoorRelay = (relay: { name?: string }) => {
-      if (!relay.name) return false;
-      const name = relay.name.toLowerCase();
-      return name.includes("lock") || name.includes("unlock");
-    };
-    
-    // Light relays are configured relays that are not doors
-    const lightRelays = liveState.fullState.relays
-      .filter(r => isConfiguredRelay(r) && !isDoorRelay(r));
+    // Find light relays using settings-based classification
+    const lightRelays = liveState.fullState.relays.filter(relay => 
+      getRelayDeviceType(relay.index, relay.name, relayPairs) === "light"
+    );
     
     // Return true if any light relay is ON
     return lightRelays.some(r => r.state === true);
@@ -943,51 +936,32 @@ export default function DiscoveryResults({
                     <td className={styles.directLinkCell} style={{ width: columnWidths.direct }}>
                       {liveState?.fullState ? (
                         (() => {
-                          // Hardware constraints:
-                          // - Each panel has 6 relay slots total
-                          // - Each LIGHT uses 1 slot
-                          // - Each SHADE uses 2 slots (for up/down motors)
-                          // So max_shades = floor((6 - light_count) / 2)
+                          // Get relay pair configuration from settings (for robust classification)
+                          const relayPairs = result.settings?.relayPairs;
                           
-                          const TOTAL_RELAY_SLOTS = 6;
-                          const SLOTS_PER_SHADE = 2;
+                          // Classify relays by device type using settings-based classification
+                          const classifiedRelays = liveState.fullState.relays
+                            .filter(r => !isLinkDevice(r.name)) // Direct only
+                            .map(relay => ({
+                              ...relay,
+                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs),
+                            }))
+                            .filter(r => r.deviceType !== "hidden");
                           
-                          // A relay is a "light" if its name is NOT a generic "Relay N" pattern
-                          const isConfiguredRelay = (relay: { name?: string }) => {
-                            if (!relay.name || relay.name.trim() === "") return false;
-                            if (/^Relay\s+\d+$/i.test(relay.name.trim())) return false;
-                            return true;
-                          };
+                          const lightRelays = classifiedRelays.filter(r => r.deviceType === "light");
+                          const momentaryRelays = classifiedRelays.filter(r => r.deviceType === "momentary");
                           
-                          // A relay is a "door lock" if its name contains "lock" or "unlock" (not just "door")
-                          const isDoorRelay = (relay: { name?: string }) => {
-                            if (!relay.name) return false;
-                            const name = relay.name.toLowerCase();
-                            return name.includes("lock") || name.includes("unlock");
-                          };
+                          // Classify curtains by device type
+                          const classifiedCurtains = liveState.fullState.curtains
+                            .filter(c => !isLinkDevice(c.name)) // Direct only
+                            .map(curtain => ({
+                              ...curtain,
+                              deviceType: getCurtainDeviceType(curtain.index, curtain.name, relayPairs),
+                            }))
+                            .filter(c => c.deviceType !== "hidden");
                           
-                          // A curtain is configured if its name is NOT a generic "Curtain N" pattern
-                          const isConfiguredCurtain = (curtain: { name?: string }) => {
-                            if (!curtain.name || curtain.name.trim() === "") return false;
-                            if (/^Curtain\s+\d+$/i.test(curtain.name.trim())) return false;
-                            return true;
-                          };
-                          
-                          // Separate doors from lights, then filter to Direct only (non-Link)
-                          const configuredRelays = liveState.fullState.relays.filter(isConfiguredRelay);
-                          const directRelays = configuredRelays.filter(r => !isLinkDevice(r.name));
-                          const doorRelays = directRelays.filter(isDoorRelay);
-                          const lightRelays = directRelays.filter(r => !isDoorRelay(r));
-                          const configuredCurtains = liveState.fullState.curtains.filter(isConfiguredCurtain);
-                          const directCurtains = configuredCurtains.filter(c => !isLinkDevice(c.name));
-                          
-                          // Calculate max possible shades based on remaining relay slots
-                          const usedSlots = configuredRelays.length;
-                          const availableSlots = TOTAL_RELAY_SLOTS - usedSlots;
-                          const maxPossibleShades = Math.floor(availableSlots / SLOTS_PER_SHADE);
-                          
-                          // Only show curtains up to the max possible (in case of phantom entries)
-                          const validDirectCurtains = directCurtains.slice(0, maxPossibleShades);
+                          const curtainDevices = classifiedCurtains.filter(c => c.deviceType === "curtain");
+                          const venetianDevices = classifiedCurtains.filter(c => c.deviceType === "venetian");
                           
                           // Helper to get display name (strip -Link suffix if present)
                           const getDisplayName = (name?: string) => {
@@ -1003,7 +977,7 @@ export default function DiscoveryResults({
                           
                           return (
                             <div className={styles.entityStates}>
-                              {/* Lights (Relays that are actual lights) - Direct only */}
+                              {/* Lights (Normal -> Switch mode) - Direct only */}
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditing("relay", relay.index);
@@ -1034,8 +1008,8 @@ export default function DiscoveryResults({
                                   </span>
                                 );
                               })}
-                              {/* Doors (Relays with door/lock in name) - Direct only */}
-                              {doorRelays.map((relay) => {
+                              {/* Door locks / Momentary (Normal -> Momentary mode) - Direct only */}
+                              {momentaryRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditing("relay", relay.index);
                                 return (
@@ -1065,8 +1039,8 @@ export default function DiscoveryResults({
                                   </span>
                                 );
                               })}
-                              {/* Shades (Curtains) - Direct only */}
-                              {validDirectCurtains.map((curtain) => {
+                              {/* Curtains (Curtain pair mode) - Direct only */}
+                              {curtainDevices.map((curtain) => {
                                 const openPending = pendingCommands.has(`${result.ip}-S${curtain.index}-open`);
                                 const closePending = pendingCommands.has(`${result.ip}-S${curtain.index}-close`);
                                 const isOpen = curtain.state === "open";
@@ -1109,8 +1083,52 @@ export default function DiscoveryResults({
                                   </span>
                                 );
                               })}
+                              {/* Venetian blinds (Venetian pair mode) - Direct only */}
+                              {venetianDevices.map((curtain) => {
+                                const openPending = pendingCommands.has(`${result.ip}-S${curtain.index}-open`);
+                                const closePending = pendingCommands.has(`${result.ip}-S${curtain.index}-close`);
+                                const isOpen = curtain.state === "open";
+                                const isClosed = curtain.state === "closed";
+                                const isMoving = curtain.state === "opening" || curtain.state === "closing";
+                                const editing = isEditing("curtain", curtain.index);
+                                return (
+                                  <span key={`V${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} - Venetian (right-click to rename)`}>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.venetianSwitch} ${styles.shadeUpButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={openPending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                        </button>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.venetianSwitch} ${styles.shadeDownButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={closePending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                        </button>
+                                      </>
+                                    )}
+                                  </span>
+                                );
+                              })}
                               {/* Show dash if no Direct entities */}
-                              {lightRelays.length === 0 && doorRelays.length === 0 && validDirectCurtains.length === 0 && (
+                              {lightRelays.length === 0 && momentaryRelays.length === 0 && curtainDevices.length === 0 && venetianDevices.length === 0 && (
                                 <span style={{ color: "var(--muted)" }}>—</span>
                               )}
                             </div>
@@ -1128,40 +1146,33 @@ export default function DiscoveryResults({
                     <td className={styles.directLinkCell} style={{ width: columnWidths.link }}>
                       {liveState?.fullState ? (
                         (() => {
-                          const TOTAL_RELAY_SLOTS = 6;
-                          const SLOTS_PER_SHADE = 2;
+                          // Get relay pair configuration from settings (for robust classification)
+                          const relayPairs = result.settings?.relayPairs;
                           
-                          const isConfiguredRelay = (relay: { name?: string }) => {
-                            if (!relay.name || relay.name.trim() === "") return false;
-                            if (/^Relay\s+\d+$/i.test(relay.name.trim())) return false;
-                            return true;
-                          };
+                          // Classify relays by device type using settings-based classification
+                          // Link devices only
+                          const classifiedRelays = liveState.fullState.relays
+                            .filter(r => isLinkDevice(r.name)) // Link only
+                            .map(relay => ({
+                              ...relay,
+                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs),
+                            }))
+                            .filter(r => r.deviceType !== "hidden");
                           
-                          // A relay is a "door lock" if its name contains "lock" or "unlock" (not just "door")
-                          const isDoorRelay = (relay: { name?: string }) => {
-                            if (!relay.name) return false;
-                            const name = relay.name.toLowerCase();
-                            return name.includes("lock") || name.includes("unlock");
-                          };
+                          const lightRelays = classifiedRelays.filter(r => r.deviceType === "light");
+                          const momentaryRelays = classifiedRelays.filter(r => r.deviceType === "momentary");
                           
-                          const isConfiguredCurtain = (curtain: { name?: string }) => {
-                            if (!curtain.name || curtain.name.trim() === "") return false;
-                            if (/^Curtain\s+\d+$/i.test(curtain.name.trim())) return false;
-                            return true;
-                          };
+                          // Classify curtains by device type
+                          const classifiedCurtains = liveState.fullState.curtains
+                            .filter(c => isLinkDevice(c.name)) // Link only
+                            .map(curtain => ({
+                              ...curtain,
+                              deviceType: getCurtainDeviceType(curtain.index, curtain.name, relayPairs),
+                            }))
+                            .filter(c => c.deviceType !== "hidden");
                           
-                          // Filter to Link only devices
-                          const configuredRelays = liveState.fullState.relays.filter(isConfiguredRelay);
-                          const linkRelays = configuredRelays.filter(r => isLinkDevice(r.name));
-                          const doorRelays = linkRelays.filter(isDoorRelay);
-                          const lightRelays = linkRelays.filter(r => !isDoorRelay(r));
-                          const configuredCurtains = liveState.fullState.curtains.filter(isConfiguredCurtain);
-                          const linkCurtains = configuredCurtains.filter(c => isLinkDevice(c.name));
-                          
-                          const usedSlots = configuredRelays.length;
-                          const availableSlots = TOTAL_RELAY_SLOTS - usedSlots;
-                          const maxPossibleShades = Math.floor(availableSlots / SLOTS_PER_SHADE);
-                          const validLinkCurtains = linkCurtains.slice(0, maxPossibleShades);
+                          const curtainDevices = classifiedCurtains.filter(c => c.deviceType === "curtain");
+                          const venetianDevices = classifiedCurtains.filter(c => c.deviceType === "venetian");
                           
                           // Helper to get display name (strip -Link suffix if present)
                           const getDisplayName = (name?: string) => {
@@ -1177,7 +1188,7 @@ export default function DiscoveryResults({
                           
                           return (
                             <div className={styles.entityStates}>
-                              {/* Link Lights */}
+                              {/* Link Lights (Normal -> Switch mode) */}
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditingLink("relay", relay.index);
@@ -1208,8 +1219,8 @@ export default function DiscoveryResults({
                                   </span>
                                 );
                               })}
-                              {/* Link Doors */}
-                              {doorRelays.map((relay) => {
+                              {/* Link Door locks / Momentary (Normal -> Momentary mode) */}
+                              {momentaryRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditingLink("relay", relay.index);
                                 return (
@@ -1239,8 +1250,8 @@ export default function DiscoveryResults({
                                   </span>
                                 );
                               })}
-                              {/* Link Shades */}
-                              {validLinkCurtains.map((curtain) => {
+                              {/* Link Curtains (Curtain pair mode) */}
+                              {curtainDevices.map((curtain) => {
                                 const openPending = pendingCommands.has(`${result.ip}-S${curtain.index}-open`);
                                 const closePending = pendingCommands.has(`${result.ip}-S${curtain.index}-close`);
                                 const isOpen = curtain.state === "open";
@@ -1283,8 +1294,52 @@ export default function DiscoveryResults({
                                   </span>
                                 );
                               })}
+                              {/* Link Venetian blinds (Venetian pair mode) */}
+                              {venetianDevices.map((curtain) => {
+                                const openPending = pendingCommands.has(`${result.ip}-S${curtain.index}-open`);
+                                const closePending = pendingCommands.has(`${result.ip}-S${curtain.index}-close`);
+                                const isOpen = curtain.state === "open";
+                                const isClosed = curtain.state === "closed";
+                                const isMoving = curtain.state === "opening" || curtain.state === "closing";
+                                const editing = isEditingLink("curtain", curtain.index);
+                                return (
+                                  <span key={`LV${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} - Venetian (right-click to rename)`}>
+                                    {editing ? (
+                                      <input
+                                        ref={editInputRef}
+                                        type="text"
+                                        className={styles.inlineEditInput}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveRename}
+                                        disabled={savingRename}
+                                      />
+                                    ) : (
+                                      <>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.venetianSwitch} ${styles.shadeUpButton} ${styles.linkButton} ${isOpen ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${openPending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "open", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={openPending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                        </button>
+                                        <button
+                                          className={`${styles.shadeNameButton} ${styles.venetianSwitch} ${styles.shadeDownButton} ${styles.linkButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
+                                          onClick={(e) => handleShadeAction(e, result.ip, curtain.index, "close", curtain.state)}
+                                          onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
+                                          disabled={closePending || !onSendCommand}
+                                        >
+                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                        </button>
+                                      </>
+                                    )}
+                                  </span>
+                                );
+                              })}
                               {/* Show dash if no Link entities */}
-                              {lightRelays.length === 0 && doorRelays.length === 0 && validLinkCurtains.length === 0 && (
+                              {lightRelays.length === 0 && momentaryRelays.length === 0 && curtainDevices.length === 0 && venetianDevices.length === 0 && (
                                 <span style={{ color: "var(--muted)" }}>—</span>
                               )}
                             </div>

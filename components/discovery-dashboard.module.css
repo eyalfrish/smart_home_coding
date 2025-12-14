@@ -835,6 +835,23 @@
   background: rgba(59, 130, 246, 0.2);
 }
 
+/* Venetian blind switches - teal/cyan tones (distinct from curtains) */
+.venetianSwitch.switchOn {
+  background: linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%);
+  color: white;
+  box-shadow: 0 0 6px rgba(20, 184, 166, 0.3);
+}
+
+.venetianSwitch.switchOff {
+  background: rgba(20, 184, 166, 0.12);
+  color: #0d9488;
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+
+.venetianSwitch.switchOff:hover:not(:disabled) {
+  background: rgba(20, 184, 166, 0.2);
+}
+
 /* Device button wrapper - provides tooltip positioning context */
 .deviceButtonWrapper {
   position: relative;
@@ -1406,6 +1423,12 @@
 .shadesSummary {
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+.venetianSummary {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #14b8a6; /* teal to match venetian buttons */
 }
 
 /* Settings input group in batch view */

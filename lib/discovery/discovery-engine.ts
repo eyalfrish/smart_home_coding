@@ -20,7 +20,7 @@
  * not in a batch at the end - this provides instant panel names!
  */
 
-import type { DiscoveryResult, PanelSettings } from "./types";
+import type { DiscoveryResult, PanelSettings, RelayPairConfig, RelayPairMode, RelayMode } from "./types";
 import { startProgress, updatePhase, addResult, finishProgress, resetProgress } from "./discovery-progress";
 
 // Phase configuration
@@ -409,6 +409,7 @@ interface PanelSettingsResult {
   name: string | null;
   logging: boolean | null;
   longPressMs: number | null;
+  relayPairs: RelayPairConfig[] | null;
 }
 
 async function fetchPanelSettings(ip: string): Promise<PanelSettingsResult> {
@@ -423,7 +424,7 @@ async function fetchPanelSettings(ip: string): Promise<PanelSettingsResult> {
     });
 
     if (!response.ok) {
-      return { name: null, logging: null, longPressMs: null };
+      return { name: null, logging: null, longPressMs: null, relayPairs: null };
     }
 
     const html = await response.text();
@@ -446,18 +447,92 @@ async function fetchPanelSettings(ip: string): Promise<PanelSettingsResult> {
     const longPressMatch = html.match(/id=["']long_press_duration["'][^>]*value=["'](\d+)["']/i);
     const longPressMs = longPressMatch ? parseInt(longPressMatch[1], 10) : null;
     
-    return { name, logging, longPressMs };
+    // Parse relay pair configurations
+    const relayPairs = parseRelayPairConfigs(html);
+    
+    return { name, logging, longPressMs, relayPairs };
   } catch {
-    return { name: null, logging: null, longPressMs: null };
+    return { name: null, logging: null, longPressMs: null, relayPairs: null };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Parse relay pair configurations from the settings page HTML.
+ * 
+ * Structure (3 pairs):
+ * - mode0, mode1, mode2: Pair mode selects (0=Normal, 1=Curtain, 2=Venetian)
+ * - relay_mode0..5: Individual relay modes (0=Switch, 1=Momentary, 2=Disabled)
+ */
+function parseRelayPairConfigs(html: string): RelayPairConfig[] | null {
+  const pairs: RelayPairConfig[] = [];
+  
+  // Helper to get selected value from a select element
+  const getSelectedValue = (selectHtml: string): string | null => {
+    // Match option with 'selected' attribute
+    const selectedMatch = selectHtml.match(/<option[^>]*value=["'](\d+)["'][^>]*selected/i);
+    if (selectedMatch) return selectedMatch[1];
+    // Also try: selected comes before value
+    const selectedMatch2 = selectHtml.match(/<option[^>]*selected[^>]*value=["'](\d+)["']/i);
+    if (selectedMatch2) return selectedMatch2[1];
+    return null;
+  };
+  
+  // Parse 3 relay pairs (indices 0, 1, 2)
+  for (let pairIndex = 0; pairIndex < 3; pairIndex++) {
+    // Find pair mode select: <select id='mode0' name='mode0'>
+    const pairModeRegex = new RegExp(
+      `<select[^>]*(?:id|name)=["']mode${pairIndex}["'][^>]*>[\\s\\S]*?<\\/select>`,
+      'i'
+    );
+    const pairModeMatch = html.match(pairModeRegex);
+    
+    if (!pairModeMatch) {
+      // If we can't find pair mode config, settings page might be older format
+      continue;
+    }
+    
+    const pairModeValue = getSelectedValue(pairModeMatch[0]);
+    let pairMode: RelayPairMode = "normal";
+    if (pairModeValue === "1") pairMode = "curtain";
+    else if (pairModeValue === "2") pairMode = "venetian";
+    
+    // Parse individual relay modes for both relays in the pair
+    // Relay indices: pair 0 -> relays 0,1; pair 1 -> relays 2,3; pair 2 -> relays 4,5
+    const relayModes: [RelayMode, RelayMode] = ["disabled", "disabled"];
+    
+    for (let i = 0; i < 2; i++) {
+      const relayIndex = pairIndex * 2 + i;
+      const relayModeRegex = new RegExp(
+        `<select[^>]*name=["']relay_mode${relayIndex}["'][^>]*>[\\s\\S]*?<\\/select>`,
+        'i'
+      );
+      const relayModeMatch = html.match(relayModeRegex);
+      
+      if (relayModeMatch) {
+        const relayModeValue = getSelectedValue(relayModeMatch[0]);
+        if (relayModeValue === "0") relayModes[i] = "switch";
+        else if (relayModeValue === "1") relayModes[i] = "momentary";
+        else relayModes[i] = "disabled";
+      }
+    }
+    
+    pairs.push({
+      pairIndex,
+      pairMode,
+      relayModes,
+    });
+  }
+  
+  return pairs.length > 0 ? pairs : null;
 }
 
 function buildSettingsObject(settings: PanelSettingsResult): PanelSettings | undefined {
   const obj: PanelSettings = {};
   if (settings.logging !== null) obj.logging = settings.logging;
   if (settings.longPressMs !== null) obj.longPressMs = settings.longPressMs;
+  if (settings.relayPairs !== null) obj.relayPairs = settings.relayPairs;
   return Object.keys(obj).length > 0 ? obj : undefined;
 }
 

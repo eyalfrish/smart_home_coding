@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo, useState, useRef, type DragEvent, type ChangeEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
-import type { DiscoveryResult, PanelInfo, LivePanelState, PanelCommand } from "@/lib/discovery/types";
+import type { DiscoveryResult, PanelInfo, LivePanelState, PanelCommand, RelayPairConfig } from "@/lib/discovery/types";
+import { getRelayDeviceType, getCurtainDeviceType } from "@/lib/discovery/types";
 
 interface BatchOperationsViewProps {
   selectedPanelIps: Set<string>;
@@ -147,18 +148,24 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-// Check if a relay is a configured light (not a generic "Relay N" name)
-function isConfiguredRelay(relay: { name?: string }): boolean {
-  if (!relay.name || relay.name.trim() === "") return false;
-  if (/^Relay\s+\d+$/i.test(relay.name.trim())) return false;
-  return true;
+// Helper to get light relays using settings-based classification
+function getLightRelays(
+  relays: { index: number; name?: string; state: boolean }[],
+  relayPairs: RelayPairConfig[] | undefined
+): { index: number; name?: string; state: boolean }[] {
+  return relays.filter(relay => 
+    getRelayDeviceType(relay.index, relay.name, relayPairs) === "light"
+  );
 }
 
-// Check if a relay is a door (has door/lock/unlock in name)
-function isDoorRelay(relay: { name?: string }): boolean {
-  if (!relay.name) return false;
-  const name = relay.name.toLowerCase();
-  return name.includes("door") || name.includes("lock") || name.includes("unlock");
+// Helper to get momentary relays (door locks) using settings-based classification
+function getMomentaryRelays(
+  relays: { index: number; name?: string; state: boolean }[],
+  relayPairs: RelayPairConfig[] | undefined
+): { index: number; name?: string; state: boolean }[] {
+  return relays.filter(relay => 
+    getRelayDeviceType(relay.index, relay.name, relayPairs) === "momentary"
+  );
 }
 
 // Check if a device name indicates it's a "Link" device (ends with -Link, _Link, Link, etc.)
@@ -435,15 +442,17 @@ export default function BatchOperationsView({
           return { ip, success };
         }
 
-        // Handle all lights operations (configured relays only)
+        // Handle all lights operations (only light relays, using settings-based classification)
         if (operation.id === "virtual-all-lights-on" || operation.id === "virtual-all-lights-off") {
           const targetState = operation.id === "virtual-all-lights-on";
           const panelState = livePanelStates?.get(ip);
+          const panelResult = panelResults.find(r => r.ip === ip);
+          const relayPairs = panelResult?.settings?.relayPairs;
           const relays = panelState?.fullState?.relays ?? [];
-          const configuredRelays = relays.filter(isConfiguredRelay);
+          const lightRelays = getLightRelays(relays, relayPairs);
 
-          if (configuredRelays.length === 0) {
-            // No configured relays, mark as success (nothing to do)
+          if (lightRelays.length === 0) {
+            // No light relays, mark as success (nothing to do)
             setPanelStatuses(prev => {
               const next = new Map(prev);
               next.set(ip, "success");
@@ -452,8 +461,8 @@ export default function BatchOperationsView({
             return { ip, success: true };
           }
 
-          // Send set_relay command for each configured relay
-          const relayPromises = configuredRelays.map(relay =>
+          // Send set_relay command for each light relay
+          const relayPromises = lightRelays.map(relay =>
             onSendCommand(ip, { command: "set_relay", index: relay.index, state: targetState })
           );
 
@@ -1563,18 +1572,37 @@ export default function BatchOperationsView({
                     <td>
                       {liveState?.fullState ? (
                         (() => {
-                          const configuredRelays = liveState.fullState.relays?.filter(isConfiguredRelay) ?? [];
-                          const directRelays = configuredRelays.filter(r => !isLinkDevice(r.name));
-                          const doorRelays = directRelays.filter(isDoorRelay);
-                          const lightRelays = directRelays.filter(r => !isDoorRelay(r));
-                          const configuredCurtains = liveState.fullState.curtains?.filter(
-                            c => c.name && !/^Curtain\s+\d+$/i.test(c.name.trim())
-                          ) ?? [];
-                          const directCurtains = configuredCurtains.filter(c => !isLinkDevice(c.name));
+                          const relayPairs = panel.settings?.relayPairs;
+                          const relays = liveState.fullState.relays ?? [];
+                          
+                          // Classify relays using settings-based classification
+                          const classifiedRelays = relays
+                            .filter(r => !isLinkDevice(r.name)) // Direct only
+                            .map(relay => ({
+                              ...relay,
+                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs),
+                            }))
+                            .filter(r => r.deviceType !== "hidden");
+                          
+                          const lightRelays = classifiedRelays.filter(r => r.deviceType === "light");
+                          const momentaryRelays = classifiedRelays.filter(r => r.deviceType === "momentary");
+                          
+                          // Classify curtains
+                          const classifiedCurtains = (liveState.fullState.curtains ?? [])
+                            .filter(c => !isLinkDevice(c.name)) // Direct only
+                            .map(curtain => ({
+                              ...curtain,
+                              deviceType: getCurtainDeviceType(curtain.index, curtain.name, relayPairs),
+                            }))
+                            .filter(c => c.deviceType !== "hidden");
+                          
+                          const curtainDevices = classifiedCurtains.filter(c => c.deviceType === "curtain");
+                          const venetianDevices = classifiedCurtains.filter(c => c.deviceType === "venetian");
+                          
                           const lightsOnCount = lightRelays.filter(r => r.state).length;
-                          const doorsOnCount = doorRelays.filter(r => r.state).length;
+                          const momentaryOnCount = momentaryRelays.filter(r => r.state).length;
 
-                          if (lightRelays.length === 0 && doorRelays.length === 0 && directCurtains.length === 0) {
+                          if (lightRelays.length === 0 && momentaryRelays.length === 0 && curtainDevices.length === 0 && venetianDevices.length === 0) {
                             return <span style={{ color: "var(--muted)" }}>—</span>;
                           }
 
@@ -1585,14 +1613,19 @@ export default function BatchOperationsView({
                                   💡 {lightsOnCount}/{lightRelays.length}
                                 </span>
                               )}
-                              {doorRelays.length > 0 && (
-                                <span className={styles.doorsSummary} title={doorRelays.map(r => r.name).join(", ")}>
-                                  🚪 {doorsOnCount}/{doorRelays.length}
+                              {momentaryRelays.length > 0 && (
+                                <span className={styles.doorsSummary} title={momentaryRelays.map(r => r.name).join(", ")}>
+                                  🚪 {momentaryOnCount}/{momentaryRelays.length}
                                 </span>
                               )}
-                              {directCurtains.length > 0 && (
-                                <span className={styles.shadesSummary} title={directCurtains.map(c => c.name).join(", ")}>
-                                  🪟 {directCurtains.length}
+                              {curtainDevices.length > 0 && (
+                                <span className={styles.shadesSummary} title={curtainDevices.map(c => c.name).join(", ")}>
+                                  🪟 {curtainDevices.length}
+                                </span>
+                              )}
+                              {venetianDevices.length > 0 && (
+                                <span className={styles.venetianSummary} title={venetianDevices.map(c => c.name).join(", ")}>
+                                  🏠 {venetianDevices.length}
                                 </span>
                               )}
                             </span>
@@ -1608,18 +1641,37 @@ export default function BatchOperationsView({
                     <td>
                       {liveState?.fullState ? (
                         (() => {
-                          const configuredRelays = liveState.fullState.relays?.filter(isConfiguredRelay) ?? [];
-                          const linkRelays = configuredRelays.filter(r => isLinkDevice(r.name));
-                          const doorRelays = linkRelays.filter(isDoorRelay);
-                          const lightRelays = linkRelays.filter(r => !isDoorRelay(r));
-                          const configuredCurtains = liveState.fullState.curtains?.filter(
-                            c => c.name && !/^Curtain\s+\d+$/i.test(c.name.trim())
-                          ) ?? [];
-                          const linkCurtains = configuredCurtains.filter(c => isLinkDevice(c.name));
+                          const relayPairs = panel.settings?.relayPairs;
+                          const relays = liveState.fullState.relays ?? [];
+                          
+                          // Classify relays using settings-based classification
+                          const classifiedRelays = relays
+                            .filter(r => isLinkDevice(r.name)) // Link only
+                            .map(relay => ({
+                              ...relay,
+                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs),
+                            }))
+                            .filter(r => r.deviceType !== "hidden");
+                          
+                          const lightRelays = classifiedRelays.filter(r => r.deviceType === "light");
+                          const momentaryRelays = classifiedRelays.filter(r => r.deviceType === "momentary");
+                          
+                          // Classify curtains
+                          const classifiedCurtains = (liveState.fullState.curtains ?? [])
+                            .filter(c => isLinkDevice(c.name)) // Link only
+                            .map(curtain => ({
+                              ...curtain,
+                              deviceType: getCurtainDeviceType(curtain.index, curtain.name, relayPairs),
+                            }))
+                            .filter(c => c.deviceType !== "hidden");
+                          
+                          const curtainDevices = classifiedCurtains.filter(c => c.deviceType === "curtain");
+                          const venetianDevices = classifiedCurtains.filter(c => c.deviceType === "venetian");
+                          
                           const lightsOnCount = lightRelays.filter(r => r.state).length;
-                          const doorsOnCount = doorRelays.filter(r => r.state).length;
+                          const momentaryOnCount = momentaryRelays.filter(r => r.state).length;
 
-                          if (lightRelays.length === 0 && doorRelays.length === 0 && linkCurtains.length === 0) {
+                          if (lightRelays.length === 0 && momentaryRelays.length === 0 && curtainDevices.length === 0 && venetianDevices.length === 0) {
                             return <span style={{ color: "var(--muted)" }}>—</span>;
                           }
 
@@ -1630,14 +1682,19 @@ export default function BatchOperationsView({
                                   💡 {lightsOnCount}/{lightRelays.length}
                                 </span>
                               )}
-                              {doorRelays.length > 0 && (
-                                <span className={styles.doorsSummary} title={doorRelays.map(r => r.name).join(", ")}>
-                                  🚪 {doorsOnCount}/{doorRelays.length}
+                              {momentaryRelays.length > 0 && (
+                                <span className={styles.doorsSummary} title={momentaryRelays.map(r => r.name).join(", ")}>
+                                  🚪 {momentaryOnCount}/{momentaryRelays.length}
                                 </span>
                               )}
-                              {linkCurtains.length > 0 && (
-                                <span className={styles.shadesSummary} title={linkCurtains.map(c => c.name).join(", ")}>
-                                  🪟 {linkCurtains.length}
+                              {curtainDevices.length > 0 && (
+                                <span className={styles.shadesSummary} title={curtainDevices.map(c => c.name).join(", ")}>
+                                  🪟 {curtainDevices.length}
+                                </span>
+                              )}
+                              {venetianDevices.length > 0 && (
+                                <span className={styles.venetianSummary} title={venetianDevices.map(c => c.name).join(", ")}>
+                                  🏠 {venetianDevices.length}
                                 </span>
                               )}
                             </span>
