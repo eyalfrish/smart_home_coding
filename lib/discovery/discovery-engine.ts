@@ -3,20 +3,18 @@
  * 
  * This engine uses a multi-phase approach to maximize panel detection reliability:
  * 
- * Phase 1: Quick Sweep (500ms timeout)
+ * Phase 1: Quick Sweep (400ms timeout)
  *   - Fast initial scan to identify definitely-responsive hosts
- *   - High concurrency (20 parallel)
+ *   - High concurrency (25 parallel), no retries
  *   - Settings fetched IMMEDIATELY for discovered panels
  *   
- * Phase 2: Standard Scan (1200ms timeout)  
+ * Phase 2: Standard Scan (1000ms timeout)  
  *   - Re-scan non-responsive IPs from Phase 1
- *   - Medium concurrency (15 parallel)
- *   - 1 retry
+ *   - Medium concurrency (20 parallel), no retries
  *   
- * Phase 3: Deep Scan (2500ms timeout)
+ * Phase 3: Deep Scan (1800ms timeout)
  *   - Final attempt for stubborn/slow IPs
- *   - Lower concurrency (8 parallel)
- *   - 2 retries
+ *   - Lower concurrency (12 parallel), 1 retry
  *   
  * Settings are fetched incrementally as panels are discovered,
  * not in a batch at the end - this provides instant panel names!
@@ -39,7 +37,7 @@ interface PhaseConfig {
 const PHASES: PhaseConfig[] = [
   { name: "quick-sweep", timeout: 400, concurrency: 25, retries: 0, baseRetryDelay: 0 },
   { name: "standard", timeout: 1000, concurrency: 20, retries: 0, baseRetryDelay: 0 },
-  { name: "deep", timeout: 1500, concurrency: 15, retries: 1, baseRetryDelay: 50 },
+  { name: "deep", timeout: 1800, concurrency: 12, retries: 1, baseRetryDelay: 100 },
 ];
 
 const SETTINGS_TIMEOUT = 2000;  // Settings page should respond quickly
@@ -352,10 +350,9 @@ async function checkHostWithRetry(
       return { ...result, discoveryTimeMs: Date.now() - startTime };
     }
     
-    // On timeout/error, retry after delay
+    // On timeout/error, retry after short delay
     if (attempt < config.retries) {
-      const delayMs = config.baseRetryDelay * (attempt + 1);
-      await delay(delayMs);
+      await delay(config.baseRetryDelay + Math.random() * 30);
     }
   }
   
