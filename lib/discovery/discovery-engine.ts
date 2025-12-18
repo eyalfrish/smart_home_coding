@@ -1,7 +1,7 @@
 /**
  * Robust Multi-Phase Discovery Engine
  * 
- * This engine uses a multi-phase approach to maximize panel detection reliability:
+ * This engine uses a multi-phase approach to maximize panel detection:
  * 
  * Phase 1: Quick Sweep (400ms timeout)
  *   - Fast initial scan to identify definitely-responsive hosts
@@ -16,8 +16,11 @@
  *   - Final attempt for stubborn/slow IPs
  *   - Lower concurrency (12 parallel), 1 retry
  *   
- * Settings are fetched incrementally as panels are discovered,
- * not in a batch at the end - this provides instant panel names!
+ * THOROUGH MODE (optional):
+ *   User-configurable mode for difficult networks or recovering panels.
+ *   Multiplies timeouts, reduces concurrency, adds retries.
+ *   
+ * Settings are fetched incrementally as panels are discovered.
  */
 
 import type { DiscoveryResult, PanelSettings, RelayPairConfig, RelayPairMode, RelayMode } from "./types";
@@ -32,13 +35,62 @@ interface PhaseConfig {
   baseRetryDelay: number;
 }
 
-// Phase configuration - optimized for speed while catching slow panels
-// Most panels respond in <500ms, slow panels need ~1-1.5s, non-responsive IPs should timeout fast
-const PHASES: PhaseConfig[] = [
+/**
+ * Thorough Mode Settings - user-configurable actual values
+ */
+export interface ThoroughModeSettings {
+  /** Timeout in milliseconds for deep phase (default: 5400ms) */
+  timeout?: number;
+  /** Number of parallel requests for deep phase (default: 2) */
+  concurrency?: number;
+  /** Number of retries for deep phase (default: 3) */
+  retries?: number;
+}
+
+// Normal mode - original fast settings
+const PHASES_NORMAL: PhaseConfig[] = [
   { name: "quick-sweep", timeout: 400, concurrency: 25, retries: 0, baseRetryDelay: 0 },
   { name: "standard", timeout: 1000, concurrency: 20, retries: 0, baseRetryDelay: 0 },
   { name: "deep", timeout: 1800, concurrency: 12, retries: 1, baseRetryDelay: 100 },
 ];
+
+// Default factors to calculate thorough defaults from normal mode
+const DEFAULT_FACTORS = {
+  timeoutMultiplier: 3,      // 1800 * 3 = 5400ms
+  concurrencyDivisor: 8,     // 12 / 8 ≈ 2 parallel  
+  extraRetries: 2,           // 1 + 2 = 3 retries
+};
+
+// Discovery options that can be customized per-scan
+export interface DiscoveryOptions {
+  /** Enable thorough mode for slow/recovering panels */
+  thoroughMode?: boolean;
+  /** Custom thorough mode settings - actual values (timeout ms, concurrency, retries) */
+  thoroughSettings?: ThoroughModeSettings;
+}
+
+/** Generate thorough mode phases based on user settings or defaults */
+function generateThoroughPhases(settings: ThoroughModeSettings): PhaseConfig[] {
+  const normalDeep = PHASES_NORMAL[2]; // deep phase
+  
+  // User provides actual values; calculate defaults from normal mode if not provided
+  const deepTimeout = settings.timeout ?? Math.round(normalDeep.timeout * DEFAULT_FACTORS.timeoutMultiplier);
+  const deepConcurrency = settings.concurrency ?? Math.max(1, Math.round(normalDeep.concurrency / DEFAULT_FACTORS.concurrencyDivisor));
+  const deepRetries = settings.retries ?? (normalDeep.retries + DEFAULT_FACTORS.extraRetries);
+  
+  // Scale earlier phases proportionally based on the deep phase ratios
+  const timeoutRatio = deepTimeout / normalDeep.timeout;
+  const concurrencyRatio = deepConcurrency / normalDeep.concurrency;
+  const extraRetries = deepRetries - normalDeep.retries;
+  
+  return PHASES_NORMAL.map(phase => ({
+    ...phase,
+    timeout: Math.round(phase.timeout * timeoutRatio),
+    concurrency: Math.max(1, Math.round(phase.concurrency * concurrencyRatio)),
+    retries: phase.retries + extraRetries,
+    baseRetryDelay: phase.baseRetryDelay + 100 * Math.max(0, extraRetries),
+  }));
+}
 
 const SETTINGS_TIMEOUT = 2000;  // Settings page should respond quickly
 
@@ -89,10 +141,30 @@ export async function runMultiPhaseDiscovery(
   baseIp: string,
   start: number,
   end: number,
-  onEvent: DiscoveryCallback
+  onEvent: DiscoveryCallback,
+  options: DiscoveryOptions = {}
 ): Promise<Map<string, DiscoveryResult>> {
   const startTime = Date.now();
   const allTargets: string[] = [];
+  const thoroughMode = options.thoroughMode ?? false;
+  
+  // Select phase configuration based on mode
+  let PHASES: PhaseConfig[];
+  let settingsTimeout: number;
+  
+  if (thoroughMode) {
+    const settings: ThoroughModeSettings = options.thoroughSettings ?? {};
+    PHASES = generateThoroughPhases(settings);
+    // Scale settings timeout based on deep phase timeout ratio
+    const normalDeepTimeout = PHASES_NORMAL[2].timeout;
+    const deepTimeout = settings.timeout ?? Math.round(normalDeepTimeout * DEFAULT_FACTORS.timeoutMultiplier);
+    settingsTimeout = Math.round(SETTINGS_TIMEOUT * (deepTimeout / normalDeepTimeout));
+    console.log(`[Discovery] Mode: THOROUGH (timeout: ${deepTimeout}ms, concurrency: ${settings.concurrency ?? Math.round(12/DEFAULT_FACTORS.concurrencyDivisor)}, retries: ${settings.retries ?? (1+DEFAULT_FACTORS.extraRetries)})`);
+  } else {
+    PHASES = PHASES_NORMAL;
+    settingsTimeout = SETTINGS_TIMEOUT;
+    console.log(`[Discovery] Mode: normal`);
+  }
   
   for (let octet = start; octet <= end; octet++) {
     allTargets.push(`${baseIp}.${octet}`);
@@ -124,7 +196,7 @@ export async function runMultiPhaseDiscovery(
   const fetchSettingsForPanel = (ip: string) => {
     const fetchPromise = (async () => {
       try {
-        const settings = await fetchPanelSettings(ip);
+        const settings = await fetchPanelSettings(ip, settingsTimeout);
         const existing = results.get(ip);
         if (existing && existing.status === "panel") {
           const enriched: DiscoveryResult = {
@@ -316,7 +388,7 @@ async function runPhase(
     while (true) {
       const ip = getNext();
       if (!ip) break;
-
+      
       const result = await checkHostWithRetry(ip, config);
       onResult(ip, result);
       
@@ -412,9 +484,9 @@ interface PanelSettingsResult {
   relayPairs: RelayPairConfig[] | null;
 }
 
-async function fetchPanelSettings(ip: string): Promise<PanelSettingsResult> {
+async function fetchPanelSettings(ip: string, timeoutMs: number = SETTINGS_TIMEOUT): Promise<PanelSettingsResult> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SETTINGS_TIMEOUT);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`http://${ip}/settings`, {

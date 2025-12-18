@@ -110,8 +110,42 @@ function findOverlaps(ranges: IpRange[]): Set<string> {
   return overlappingIds;
 }
 
+// Normal mode deep phase settings (for reference and default calculation)
+// These match PHASES_NORMAL deep phase in discovery-engine.ts
+const NORMAL_DEEP_PHASE = {
+  timeout: 1800,      // ms
+  concurrency: 12,    // parallel requests
+  retries: 1,         // retry count
+};
+
+// Default factors applied to normal mode to get thorough defaults
+const DEFAULT_FACTORS = {
+  timeoutMultiplier: 3,      // 1800 * 3 = 5400ms
+  concurrencyDivisor: 8,     // 12 / 8 = ~2 parallel  
+  extraRetries: 2,           // 1 + 2 = 3 retries
+};
+
+/** 
+ * Thorough mode settings - actual values the user configures
+ * (timeout in ms, concurrency count, retry count)
+ */
+export interface ThoroughSettings {
+  timeout: number;       // milliseconds
+  concurrency: number;   // parallel requests
+  retries: number;       // retry count
+}
+
+/** Default thorough settings calculated from normal mode × factors */
+export const DEFAULT_THOROUGH_SETTINGS: ThoroughSettings = {
+  timeout: Math.round(NORMAL_DEEP_PHASE.timeout * DEFAULT_FACTORS.timeoutMultiplier),
+  concurrency: Math.max(1, Math.round(NORMAL_DEEP_PHASE.concurrency / DEFAULT_FACTORS.concurrencyDivisor)),
+  retries: NORMAL_DEEP_PHASE.retries + DEFAULT_FACTORS.extraRetries,
+};
+
 export interface DiscoveryFormValues {
   ranges: IpRange[];
+  thoroughMode?: boolean;
+  thoroughSettings?: ThoroughSettings;
 }
 
 // =============================================================================
@@ -576,6 +610,135 @@ export default function DiscoveryForm({
         {hasOverlap && (
           <div className={styles.rangeValidationError}>
             ⚠️ Some IP ranges overlap. Please adjust the ranges to continue.
+          </div>
+        )}
+      </div>
+
+      {/* Thorough Mode Toggle */}
+      <div className={styles.thoroughModeSection}>
+        <label className={styles.thoroughModeLabel}>
+          <input
+            type="checkbox"
+            checked={values.thoroughMode ?? false}
+            onChange={(e) => onChange({ 
+              ...values, 
+              thoroughMode: e.target.checked,
+              thoroughSettings: e.target.checked ? (values.thoroughSettings ?? DEFAULT_THOROUGH_SETTINGS) : undefined,
+            })}
+            disabled={disabled}
+            className={styles.thoroughModeCheckbox}
+          />
+          <span className={styles.thoroughModeText}>
+            🔬 Thorough Mode
+          </span>
+          <span className={styles.thoroughModeHint}>
+            (slower scan for panels recovering from power outages)
+          </span>
+        </label>
+        
+        {/* Thorough Mode Settings */}
+        {values.thoroughMode && (
+          <div className={styles.thoroughSettings}>
+            <div className={styles.thoroughSettingsHeader}>
+              <span className={styles.thoroughSettingsTitle}>Thorough Mode Settings</span>
+              <span className={styles.thoroughSettingsNormal}>
+                Normal mode: {NORMAL_DEEP_PHASE.timeout}ms, {NORMAL_DEEP_PHASE.concurrency} parallel, {NORMAL_DEEP_PHASE.retries} retry
+              </span>
+            </div>
+            
+            <div className={styles.thoroughSettingRow}>
+              <label 
+                className={styles.thoroughSettingLabel}
+                title="Maximum time to wait for each panel response. Increase for slow/recovering panels."
+              >
+                ⏱️ Timeout
+              </label>
+              <div className={styles.thoroughSettingInputGroup}>
+                <input
+                  type="number"
+                  min="500"
+                  max="30000"
+                  step="100"
+                  value={values.thoroughSettings?.timeout ?? DEFAULT_THOROUGH_SETTINGS.timeout}
+                  onChange={(e) => onChange({
+                    ...values,
+                    thoroughSettings: {
+                      ...DEFAULT_THOROUGH_SETTINGS,
+                      ...values.thoroughSettings,
+                      timeout: parseInt(e.target.value, 10) || DEFAULT_THOROUGH_SETTINGS.timeout,
+                    },
+                  })}
+                  disabled={disabled}
+                  className={styles.thoroughSettingInput}
+                />
+                <span className={styles.thoroughSettingSuffix}>ms</span>
+              </div>
+              <span className={styles.thoroughSettingNormalValue}>
+                normal: {NORMAL_DEEP_PHASE.timeout}ms
+              </span>
+            </div>
+            
+            <div className={styles.thoroughSettingRow}>
+              <label 
+                className={styles.thoroughSettingLabel}
+                title="Number of simultaneous panel requests. Lower = less network load, better for VPN/slow networks."
+              >
+                🔀 Parallel Requests
+              </label>
+              <div className={styles.thoroughSettingInputGroup}>
+                <input
+                  type="number"
+                  min="1"
+                  max="25"
+                  step="1"
+                  value={values.thoroughSettings?.concurrency ?? DEFAULT_THOROUGH_SETTINGS.concurrency}
+                  onChange={(e) => onChange({
+                    ...values,
+                    thoroughSettings: {
+                      ...DEFAULT_THOROUGH_SETTINGS,
+                      ...values.thoroughSettings,
+                      concurrency: Math.max(1, parseInt(e.target.value, 10) || DEFAULT_THOROUGH_SETTINGS.concurrency),
+                    },
+                  })}
+                  disabled={disabled}
+                  className={styles.thoroughSettingInput}
+                />
+              </div>
+              <span className={styles.thoroughSettingNormalValue}>
+                normal: {NORMAL_DEEP_PHASE.concurrency}
+              </span>
+            </div>
+            
+            <div className={styles.thoroughSettingRow}>
+              <label 
+                className={styles.thoroughSettingLabel}
+                title="Number of retry attempts per panel. Increase for flaky networks."
+              >
+                🔄 Retries
+              </label>
+              <div className={styles.thoroughSettingInputGroup}>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="1"
+                  value={values.thoroughSettings?.retries ?? DEFAULT_THOROUGH_SETTINGS.retries}
+                  onChange={(e) => onChange({
+                    ...values,
+                    thoroughSettings: {
+                      ...DEFAULT_THOROUGH_SETTINGS,
+                      ...values.thoroughSettings,
+                      retries: Math.max(0, parseInt(e.target.value, 10) ?? DEFAULT_THOROUGH_SETTINGS.retries),
+                    },
+                  })}
+                  disabled={disabled}
+                  className={styles.thoroughSettingInput}
+                />
+              </div>
+              <span className={styles.thoroughSettingNormalValue}>
+                normal: {NORMAL_DEEP_PHASE.retries}
+              </span>
+            </div>
           </div>
         )}
       </div>

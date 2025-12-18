@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { runMultiPhaseDiscovery, type DiscoveryEvent } from "@/lib/discovery/discovery-engine";
+import { runMultiPhaseDiscovery, type DiscoveryEvent, type DiscoveryOptions } from "@/lib/discovery/discovery-engine";
 import { getPanelRegistry } from "@/lib/discovery/panel-registry";
 
 export const runtime = "nodejs";
@@ -10,6 +10,15 @@ const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 /**
  * Streaming discovery endpoint using SSE.
  * Results are streamed in real-time as they complete.
+ * 
+ * Query params:
+ * - baseIp: Base IP (e.g., "10.88.99")
+ * - start: Start of range (0-254)
+ * - end: End of range (0-254)
+ * - thorough: Enable thorough mode (optional, "true" to enable)
+ * - timeout: Thorough mode timeout in ms (default: 5400)
+ * - concurrency: Thorough mode parallel requests (default: 2)
+ * - retries: Thorough mode retry count (default: 3)
  */
 export async function GET(request: NextRequest) {
   // Reset panel registry before starting new discovery
@@ -22,6 +31,12 @@ export async function GET(request: NextRequest) {
   const baseIp = searchParams.get("baseIp");
   const startStr = searchParams.get("start");
   const endStr = searchParams.get("end");
+  const thoroughMode = searchParams.get("thorough") === "true";
+  
+  // Parse thorough mode settings (actual values, not multipliers)
+  const timeout = parseInt(searchParams.get("timeout") ?? "", 10) || undefined;
+  const concurrency = parseInt(searchParams.get("concurrency") ?? "", 10) || undefined;
+  const retries = parseInt(searchParams.get("retries") ?? "", 10) ?? undefined;
 
   // Validate
   if (!baseIp || !BASE_IP_REGEX.test(baseIp)) {
@@ -80,7 +95,15 @@ export async function GET(request: NextRequest) {
 
       try {
         // Run discovery with real-time event streaming
-        await runMultiPhaseDiscovery(baseIp, start, end, sendEvent);
+        const options: DiscoveryOptions = { 
+          thoroughMode,
+          thoroughSettings: thoroughMode ? {
+            timeout,
+            concurrency,
+            retries,
+          } : undefined,
+        };
+        await runMultiPhaseDiscovery(baseIp, start, end, sendEvent, options);
       } catch (err) {
         console.error("[Discovery] Error during discovery:", err);
         sendEvent({

@@ -4,7 +4,18 @@ import type {
   DiscoveryResponse,
   DiscoverySummary,
 } from "@/lib/discovery/types";
-import { runMultiPhaseDiscovery } from "@/lib/discovery/discovery-engine";
+import { runMultiPhaseDiscovery, type DiscoveryOptions } from "@/lib/discovery/discovery-engine";
+
+interface ThoroughSettings {
+  timeout?: number;      // ms
+  concurrency?: number;  // parallel requests
+  retries?: number;      // retry count
+}
+
+interface ExtendedDiscoveryRequest extends DiscoveryRequest {
+  thoroughMode?: boolean;
+  thoroughSettings?: ThoroughSettings;
+}
 
 export const runtime = "nodejs";
 
@@ -19,10 +30,10 @@ const BASE_IP_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
  * For better UX, prefer the streaming endpoint at /api/discover/stream
  */
 export async function POST(request: Request) {
-  let body: DiscoveryRequest;
+  let body: ExtendedDiscoveryRequest;
 
   try {
-    body = (await request.json()) as DiscoveryRequest;
+    body = (await request.json()) as ExtendedDiscoveryRequest;
   } catch {
     return NextResponse.json(
       { message: "Request body must be valid JSON." },
@@ -36,11 +47,16 @@ export async function POST(request: Request) {
   }
 
   try {
+    const options: DiscoveryOptions = { 
+      thoroughMode: body.thoroughMode ?? false,
+      thoroughSettings: body.thoroughSettings,
+    };
     const resultsMap = await runMultiPhaseDiscovery(
       body.baseIp,
       body.start,
       body.end,
-      () => {} // No-op callback for non-streaming mode
+      () => {}, // No-op callback for non-streaming mode
+      options
     );
 
     // Build ordered results array

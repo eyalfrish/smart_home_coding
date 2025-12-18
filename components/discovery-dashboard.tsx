@@ -392,8 +392,18 @@ export default function DiscoveryDashboard() {
 
       try {
         // Create event sources for each range (run in parallel)
+        const thoroughMode = formValues.thoroughMode ?? false;
+        const thoroughSettings = formValues.thoroughSettings;
         for (const payload of requests) {
-          const url = `/api/discover/stream?baseIp=${encodeURIComponent(payload.baseIp)}&start=${payload.start}&end=${payload.end}`;
+          let url = `/api/discover/stream?baseIp=${encodeURIComponent(payload.baseIp)}&start=${payload.start}&end=${payload.end}`;
+          if (thoroughMode) {
+            url += '&thorough=true';
+            if (thoroughSettings) {
+              url += `&timeout=${thoroughSettings.timeout}`;
+              url += `&concurrency=${thoroughSettings.concurrency}`;
+              url += `&retries=${thoroughSettings.retries}`;
+            }
+          }
           const eventSource = new EventSource(url);
 
           eventSource.onmessage = (event) => {

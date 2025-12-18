@@ -2174,6 +2174,150 @@
   font-weight: 500;
 }
 
+/* ===========================================
+   Thorough Mode Toggle
+   =========================================== */
+
+.thoroughModeSection {
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(234, 88, 12, 0.06) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 10px;
+}
+
+.thoroughModeLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.thoroughModeCheckbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #f59e0b;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.thoroughModeText {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #92400e;
+}
+
+.thoroughModeHint {
+  font-size: 0.85rem;
+  color: #b45309;
+  font-style: italic;
+}
+
+/* Thorough Mode Settings */
+.thoroughSettings {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed rgba(245, 158, 11, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.thoroughSettingsHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.thoroughSettingsTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.thoroughSettingsNormal {
+  font-size: 0.75rem;
+  color: #b45309;
+  font-style: italic;
+}
+
+.thoroughSettingRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.thoroughSettingLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #92400e;
+  min-width: 150px;
+  cursor: help;
+}
+
+.thoroughSettingInputGroup {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.thoroughSettingInput {
+  width: 70px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px 0 0 6px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #92400e;
+  text-align: center;
+}
+
+.thoroughSettingInput:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.thoroughSettingInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.thoroughSettingSuffix {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  height: 34px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #b45309;
+}
+
+/* When there's no suffix, give the input full border radius */
+.thoroughSettingInputGroup .thoroughSettingInput:last-child {
+  border-radius: 6px;
+}
+
+.thoroughSettingNormalValue {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-style: italic;
+  margin-left: 0.5rem;
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
   .ipRangeRow {
@@ -2211,6 +2355,15 @@
   .addRangeButton {
     padding: 0.4rem 0.75rem;
     font-size: 0.8rem;
+  }
+
+  .thoroughModeLabel {
+    flex-wrap: wrap;
+  }
+
+  .thoroughModeHint {
+    flex-basis: 100%;
+    margin-left: calc(18px + 0.65rem);
   }
 }
 
