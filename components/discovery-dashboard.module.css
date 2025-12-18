@@ -893,6 +893,59 @@
   opacity: 1;
 }
 
+/* ===========================================
+   Device Hover Highlight - Flash matching devices
+   =========================================== */
+
+/* Link devices get purple/blue highlight */
+.deviceHighlighted {
+  animation: deviceFlash 0.6s ease-in-out infinite !important;
+  box-shadow: 0 0 12px 3px rgba(139, 92, 246, 0.7),
+              0 0 20px 6px rgba(139, 92, 246, 0.35) !important;
+  z-index: 10;
+  position: relative;
+}
+
+/* Direct devices (primary) get green highlight */
+.deviceHighlightedSource {
+  animation: deviceFlashSource 0.6s ease-in-out infinite !important;
+  box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.7),
+              0 0 28px 8px rgba(34, 197, 94, 0.35) !important;
+  z-index: 11;
+  position: relative;
+}
+
+@keyframes deviceFlash {
+  0%, 100% {
+    box-shadow: 0 0 12px 3px rgba(139, 92, 246, 0.7),
+                0 0 20px 6px rgba(139, 92, 246, 0.35);
+    transform: scale(1.02);
+  }
+  50% {
+    box-shadow: 0 0 18px 5px rgba(139, 92, 246, 0.9),
+                0 0 30px 10px rgba(139, 92, 246, 0.5);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes deviceFlashSource {
+  0%, 100% {
+    box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.7),
+                0 0 28px 8px rgba(34, 197, 94, 0.35);
+    transform: scale(1.03);
+  }
+  50% {
+    box-shadow: 0 0 22px 6px rgba(34, 197, 94, 0.9),
+                0 0 36px 12px rgba(34, 197, 94, 0.5);
+    transform: scale(1.07);
+  }
+}
+
+/* Add a subtle connector line visual for highlighted rows */
+.rowHasHighlight {
+  background: rgba(99, 102, 241, 0.04) !important;
+}
+
 /* Pending state for buttons */
 .pending {
   animation: buttonPulse 0.5s ease-in-out infinite;

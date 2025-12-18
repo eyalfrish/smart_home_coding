@@ -72,6 +72,12 @@ function isLinkDevice(name?: string): boolean {
 type SortColumn = "ip" | "name" | "status" | "version" | "signal" | "backlight" | "logging" | "longpress" | "touched" | null;
 type SortDirection = "asc" | "desc";
 
+// Helper to get the base device name (strip -Link, _Link, etc. suffix)
+function getBaseDeviceName(name?: string): string {
+  if (!name) return "";
+  return name.replace(/[-_\s]?link$/i, "").trim().toLowerCase();
+}
+
 export default function DiscoveryResults({
   data,
   onPanelsSummaryClick,
@@ -96,6 +102,15 @@ export default function DiscoveryResults({
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [switchSearchQuery, setSwitchSearchQuery] = useState("");
+  
+  // Track hovered device for cross-panel highlighting
+  // Stores: { baseName: string, sourceIp: string, sourceType: "relay"|"curtain", sourceIndex: number }
+  const [hoveredDevice, setHoveredDevice] = useState<{
+    baseName: string;
+    sourceIp: string;
+    sourceType: "relay" | "curtain";
+    sourceIndex: number;
+  } | null>(null);
   
   // Inline editing state for switch names
   const [editingDevice, setEditingDevice] = useState<EditingDevice | null>(null);
@@ -256,6 +271,41 @@ export default function DiscoveryResults({
       editInputRef.current.select();
     }
   }, [editingDevice]);
+
+  // Device hover handlers for cross-panel highlighting
+  const handleDeviceMouseEnter = useCallback((
+    ip: string,
+    type: "relay" | "curtain",
+    index: number,
+    deviceName?: string
+  ) => {
+    const baseName = getBaseDeviceName(deviceName);
+    if (baseName) {
+      setHoveredDevice({ baseName, sourceIp: ip, sourceType: type, sourceIndex: index });
+    }
+  }, []);
+
+  const handleDeviceMouseLeave = useCallback(() => {
+    setHoveredDevice(null);
+  }, []);
+
+  // Helper to check if a device should be highlighted
+  const getDeviceHighlightClass = useCallback((
+    ip: string,
+    type: "relay" | "curtain",
+    index: number,
+    deviceName?: string
+  ): string => {
+    if (!hoveredDevice) return "";
+    const baseName = getBaseDeviceName(deviceName);
+    if (!baseName || baseName !== hoveredDevice.baseName) return "";
+    
+    // Direct devices (no -Link suffix) get green highlight
+    // Link devices get purple/blue highlight
+    const isLink = isLinkDevice(deviceName);
+    
+    return isLink ? styles.deviceHighlighted : styles.deviceHighlightedSource;
+  }, [hoveredDevice]);
 
   // Column resize handlers
   const handleResizeStart = useCallback((e: MouseEvent, columnId: string) => {
@@ -981,6 +1031,7 @@ export default function DiscoveryResults({
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditing("relay", relay.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "relay", relay.index, relay.name);
                                 return (
                                   <span key={`L${relay.index}`} className={styles.deviceButtonWrapper}>
                                     {editing ? (
@@ -996,9 +1047,11 @@ export default function DiscoveryResults({
                                       />
                                     ) : (
                                       <button
-                                        className={`${styles.switchButton} ${styles.lightSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        className={`${styles.switchButton} ${styles.lightSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""} ${highlightClass}`}
                                         onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
+                                        onMouseLeave={handleDeviceMouseLeave}
                                         disabled={isPending || !onSendCommand}
                                         title={`${relay.name || ""} (right-click to rename)`}
                                       >
@@ -1012,6 +1065,7 @@ export default function DiscoveryResults({
                               {momentaryRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditing("relay", relay.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "relay", relay.index, relay.name);
                                 return (
                                   <span key={`D${relay.index}`} className={styles.deviceButtonWrapper}>
                                     {editing ? (
@@ -1027,9 +1081,11 @@ export default function DiscoveryResults({
                                       />
                                     ) : (
                                       <button
-                                        className={`${styles.switchButton} ${styles.doorSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        className={`${styles.switchButton} ${styles.doorSwitch} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""} ${highlightClass}`}
                                         onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
+                                        onMouseLeave={handleDeviceMouseLeave}
                                         disabled={isPending || !onSendCommand}
                                         title={`${relay.name || ""} (right-click to rename)`}
                                       >
@@ -1047,8 +1103,15 @@ export default function DiscoveryResults({
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
                                 const editing = isEditing("curtain", curtain.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "curtain", curtain.index, curtain.name);
                                 return (
-                                  <span key={`S${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} (right-click to rename)`}>
+                                  <span
+                                    key={`S${curtain.index}`}
+                                    className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
+                                    title={`${curtain.name || ""} (right-click to rename)`}
+                                    onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onMouseLeave={handleDeviceMouseLeave}
+                                  >
                                     {editing ? (
                                       <input
                                         ref={editInputRef}
@@ -1091,8 +1154,15 @@ export default function DiscoveryResults({
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
                                 const editing = isEditing("curtain", curtain.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "curtain", curtain.index, curtain.name);
                                 return (
-                                  <span key={`V${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} - Venetian (right-click to rename)`}>
+                                  <span
+                                    key={`V${curtain.index}`}
+                                    className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
+                                    title={`${curtain.name || ""} - Venetian (right-click to rename)`}
+                                    onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onMouseLeave={handleDeviceMouseLeave}
+                                  >
                                     {editing ? (
                                       <input
                                         ref={editInputRef}
@@ -1192,6 +1262,7 @@ export default function DiscoveryResults({
                               {lightRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditingLink("relay", relay.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "relay", relay.index, relay.name);
                                 return (
                                   <span key={`LL${relay.index}`} className={styles.deviceButtonWrapper}>
                                     {editing ? (
@@ -1207,9 +1278,11 @@ export default function DiscoveryResults({
                                       />
                                     ) : (
                                       <button
-                                        className={`${styles.switchButton} ${styles.lightSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        className={`${styles.switchButton} ${styles.lightSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""} ${highlightClass}`}
                                         onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
+                                        onMouseLeave={handleDeviceMouseLeave}
                                         disabled={isPending || !onSendCommand}
                                         title={`${relay.name || ""} (right-click to rename)`}
                                       >
@@ -1223,6 +1296,7 @@ export default function DiscoveryResults({
                               {momentaryRelays.map((relay) => {
                                 const isPending = pendingCommands.has(`${result.ip}-L${relay.index}`);
                                 const editing = isEditingLink("relay", relay.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "relay", relay.index, relay.name);
                                 return (
                                   <span key={`LD${relay.index}`} className={styles.deviceButtonWrapper}>
                                     {editing ? (
@@ -1238,9 +1312,11 @@ export default function DiscoveryResults({
                                       />
                                     ) : (
                                       <button
-                                        className={`${styles.switchButton} ${styles.doorSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""}`}
+                                        className={`${styles.switchButton} ${styles.doorSwitch} ${styles.linkButton} ${relay.state ? styles.switchOn : styles.switchOff} ${isPending ? styles.pending : ""} ${highlightClass}`}
                                         onClick={(e) => handleLightToggle(e, result.ip, relay.index)}
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
+                                        onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
+                                        onMouseLeave={handleDeviceMouseLeave}
                                         disabled={isPending || !onSendCommand}
                                         title={`${relay.name || ""} (right-click to rename)`}
                                       >
@@ -1258,8 +1334,15 @@ export default function DiscoveryResults({
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
                                 const editing = isEditingLink("curtain", curtain.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "curtain", curtain.index, curtain.name);
                                 return (
-                                  <span key={`LS${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} (right-click to rename)`}>
+                                  <span
+                                    key={`LS${curtain.index}`}
+                                    className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
+                                    title={`${curtain.name || ""} (right-click to rename)`}
+                                    onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onMouseLeave={handleDeviceMouseLeave}
+                                  >
                                     {editing ? (
                                       <input
                                         ref={editInputRef}
@@ -1302,8 +1385,15 @@ export default function DiscoveryResults({
                                 const isClosed = curtain.state === "closed";
                                 const isMoving = curtain.state === "opening" || curtain.state === "closing";
                                 const editing = isEditingLink("curtain", curtain.index);
+                                const highlightClass = getDeviceHighlightClass(result.ip, "curtain", curtain.index, curtain.name);
                                 return (
-                                  <span key={`LV${curtain.index}`} className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper}`} title={`${curtain.name || ""} - Venetian (right-click to rename)`}>
+                                  <span
+                                    key={`LV${curtain.index}`}
+                                    className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
+                                    title={`${curtain.name || ""} - Venetian (right-click to rename)`}
+                                    onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onMouseLeave={handleDeviceMouseLeave}
+                                  >
                                     {editing ? (
                                       <input
                                         ref={editInputRef}
