@@ -3,18 +3,18 @@
  * 
  * This engine uses a multi-phase approach to maximize panel detection:
  * 
- * Phase 1: Quick Sweep (400ms timeout)
+ * Phase 1: Quick Sweep (500ms timeout)
  *   - Fast initial scan to identify definitely-responsive hosts
  *   - High concurrency (25 parallel), no retries
  *   - Settings fetched IMMEDIATELY for discovered panels
  *   
- * Phase 2: Standard Scan (1000ms timeout)  
+ * Phase 2: Standard Scan (1200ms timeout)  
  *   - Re-scan non-responsive IPs from Phase 1
  *   - Medium concurrency (20 parallel), no retries
  *   
- * Phase 3: Deep Scan (1800ms timeout)
+ * Phase 3: Deep Scan (3500ms timeout)
  *   - Final attempt for stubborn/slow IPs
- *   - Lower concurrency (12 parallel), 1 retry
+ *   - Lower concurrency (10 parallel), 1 retry
  *   
  * THOROUGH MODE (optional):
  *   User-configurable mode for difficult networks or recovering panels.
@@ -47,11 +47,10 @@ export interface ThoroughModeSettings {
   retries?: number;
 }
 
-// Normal mode - original fast settings
 const PHASES_NORMAL: PhaseConfig[] = [
-  { name: "quick-sweep", timeout: 400, concurrency: 25, retries: 0, baseRetryDelay: 0 },
-  { name: "standard", timeout: 1000, concurrency: 20, retries: 0, baseRetryDelay: 0 },
-  { name: "deep", timeout: 1800, concurrency: 12, retries: 1, baseRetryDelay: 100 },
+  { name: "quick-sweep", timeout: 500, concurrency: 25, retries: 0, baseRetryDelay: 0 },
+  { name: "standard", timeout: 1200, concurrency: 20, retries: 0, baseRetryDelay: 0 },
+  { name: "deep", timeout: 3500, concurrency: 10, retries: 1, baseRetryDelay: 150 },
 ];
 
 // Default factors to calculate thorough defaults from normal mode
@@ -447,6 +446,9 @@ async function checkHost(ip: string, timeout: number): Promise<DiscoveryResult> 
     });
 
     if (response.status === 200) {
+      // Got a response - clear timeout to allow body transfer to complete
+      clearTimeout(timeoutId);
+      
       const html = await response.text();
       const isPanel = isPanelHtml(html);
       
