@@ -216,11 +216,14 @@ export default function BatchOperationsView({
     );
   }, [panelResults, selectedPanelIps]);
 
-  // Calculate the highest firmware version from selected panels
+  // Calculate the highest firmware version from ALL discovered panels (not just selected)
+  // This ensures version coloring is consistent with the main discovery view
   const highestVersion = useMemo(() => {
     if (!livePanelStates) return null;
     let highest: string | null = null;
-    selectedPanels.forEach((panel) => {
+    // Use all panel results, not just selected ones, for consistent version comparison
+    panelResults.forEach((panel) => {
+      if (panel.status !== "panel") return;
       const state = livePanelStates.get(panel.ip);
       const version = state?.fullState?.version;
       if (version) {
@@ -230,7 +233,7 @@ export default function BatchOperationsView({
       }
     });
     return highest;
-  }, [selectedPanels, livePanelStates]);
+  }, [panelResults, livePanelStates]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -249,12 +252,14 @@ export default function BatchOperationsView({
   }, [selectedPanels, panelStatuses]);
 
   // Calculate most common logging value and long press time for color coding
+  // Use ALL discovered panels (not just selected) for consistent comparison with main view
   const { mostCommonLogging, mostCommonLongPress } = useMemo(() => {
     const loggingCounts: Record<string, number> = { 'true': 0, 'false': 0 };
     const longPressCounts: Record<number, number> = {};
     
-    selectedPanels.forEach(result => {
-      if (!result.settings) return;
+    // Use all panel results for consistent highlighting with discovery view
+    panelResults.forEach(result => {
+      if (result.status !== "panel" || !result.settings) return;
       
       if (result.settings.logging !== undefined) {
         loggingCounts[String(result.settings.logging)]++;
@@ -282,7 +287,7 @@ export default function BatchOperationsView({
     }
     
     return { mostCommonLogging, mostCommonLongPress };
-  }, [selectedPanels]);
+  }, [panelResults]);
 
   const hasFailures = stats.failed > 0;
   const hasAnyStatus = stats.success > 0 || stats.failed > 0 || stats.inProgress > 0;

@@ -213,7 +213,12 @@ export function usePanelStream(
             const next = new Map(prev);
             const existing = next.get(ip);
             if (existing) {
-              existing.connectionStatus = "disconnected";
+              // Create a new object to ensure React detects the change
+              // (mutating in place can cause stale references after reconnect)
+              next.set(ip, {
+                ...existing,
+                connectionStatus: "disconnected",
+              });
             }
             return next;
           });
