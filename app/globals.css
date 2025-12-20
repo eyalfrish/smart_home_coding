@@ -80,6 +80,24 @@
   /* Code/mono text */
   --code-bg: rgba(15, 23, 42, 0.05);
   
+  /* Direct/Link device highlights */
+  --highlight-direct: #16a34a;
+  --highlight-direct-glow: rgba(22, 163, 74, 0.6);
+  --highlight-direct-glow-outer: rgba(22, 163, 74, 0.3);
+  --highlight-link: #7c3aed;
+  --highlight-link-glow: rgba(124, 58, 237, 0.55);
+  --highlight-link-glow-outer: rgba(124, 58, 237, 0.25);
+  --highlight-row-bg: rgba(124, 58, 237, 0.04);
+  
+  /* Thorough mode colors */
+  --thorough-bg: linear-gradient(135deg, rgba(217, 119, 6, 0.1) 0%, rgba(180, 83, 9, 0.08) 100%);
+  --thorough-border: rgba(217, 119, 6, 0.25);
+  --thorough-text: #92400e;
+  --thorough-hint: #b45309;
+  --thorough-accent: #d97706;
+  --thorough-input-border: rgba(217, 119, 6, 0.35);
+  --thorough-suffix-bg: rgba(217, 119, 6, 0.15);
+
   font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -165,6 +183,24 @@
   
   /* Code/mono text */
   --code-bg: rgba(148, 163, 184, 0.1);
+  
+  /* Direct/Link device highlights - brighter for dark backgrounds */
+  --highlight-direct: #4ade80;
+  --highlight-direct-glow: rgba(74, 222, 128, 0.65);
+  --highlight-direct-glow-outer: rgba(74, 222, 128, 0.3);
+  --highlight-link: #a78bfa;
+  --highlight-link-glow: rgba(167, 139, 250, 0.6);
+  --highlight-link-glow-outer: rgba(167, 139, 250, 0.28);
+  --highlight-row-bg: rgba(167, 139, 250, 0.08);
+  
+  /* Thorough mode colors - softer amber for dark mode */
+  --thorough-bg: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
+  --thorough-border: rgba(251, 191, 36, 0.25);
+  --thorough-text: #fbbf24;
+  --thorough-hint: #fcd34d;
+  --thorough-accent: #f59e0b;
+  --thorough-input-border: rgba(251, 191, 36, 0.3);
+  --thorough-suffix-bg: rgba(251, 191, 36, 0.15);
 }
 
 /* ============================================

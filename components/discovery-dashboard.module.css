@@ -940,53 +940,50 @@
    Device Hover Highlight - Flash matching devices
    =========================================== */
 
-/* Link devices get purple/blue highlight */
+/* Link devices get purple/violet highlight */
 .deviceHighlighted {
-  animation: deviceFlash 0.6s ease-in-out infinite !important;
-  box-shadow: 0 0 12px 3px rgba(139, 92, 246, 0.7),
-              0 0 20px 6px rgba(139, 92, 246, 0.35) !important;
+  animation: devicePulse 0.6s ease-in-out infinite !important;
+  box-shadow: 0 0 14px 4px var(--highlight-link-glow),
+              0 0 24px 8px var(--highlight-link-glow-outer) !important;
   z-index: 10;
   position: relative;
 }
 
 /* Direct devices (primary) get green highlight */
 .deviceHighlightedSource {
-  animation: deviceFlashSource 0.6s ease-in-out infinite !important;
-  box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.7),
-              0 0 28px 8px rgba(34, 197, 94, 0.35) !important;
+  animation: devicePulseSource 0.6s ease-in-out infinite !important;
+  box-shadow: 0 0 18px 5px var(--highlight-direct-glow),
+              0 0 32px 10px var(--highlight-direct-glow-outer) !important;
   z-index: 11;
   position: relative;
 }
 
-@keyframes deviceFlash {
+/* Pulse animations - only transform, colors come from box-shadow above */
+@keyframes devicePulse {
   0%, 100% {
-    box-shadow: 0 0 12px 3px rgba(139, 92, 246, 0.7),
-                0 0 20px 6px rgba(139, 92, 246, 0.35);
     transform: scale(1.02);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 18px 5px rgba(139, 92, 246, 0.9),
-                0 0 30px 10px rgba(139, 92, 246, 0.5);
-    transform: scale(1.05);
+    transform: scale(1.06);
+    opacity: 0.9;
   }
 }
 
-@keyframes deviceFlashSource {
+@keyframes devicePulseSource {
   0%, 100% {
-    box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.7),
-                0 0 28px 8px rgba(34, 197, 94, 0.35);
     transform: scale(1.03);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 22px 6px rgba(34, 197, 94, 0.9),
-                0 0 36px 12px rgba(34, 197, 94, 0.5);
-    transform: scale(1.07);
+    transform: scale(1.08);
+    opacity: 0.92;
   }
 }
 
 /* Add a subtle connector line visual for highlighted rows */
 .rowHasHighlight {
-  background: rgba(99, 102, 241, 0.04) !important;
+  background: var(--highlight-row-bg) !important;
 }
 
 /* Pending state for buttons */
@@ -2284,8 +2281,8 @@
 .thoroughModeSection {
   margin-bottom: 1.25rem;
   padding: 0.85rem 1rem;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(234, 88, 12, 0.06) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: var(--thorough-bg);
+  border: 1px solid var(--thorough-border);
   border-radius: 10px;
 }
 
@@ -2300,7 +2297,7 @@
 .thoroughModeCheckbox {
   width: 18px;
   height: 18px;
-  accent-color: #f59e0b;
+  accent-color: var(--thorough-accent);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -2308,31 +2305,20 @@
 .thoroughModeText {
   font-weight: 700;
   font-size: 0.95rem;
-  color: #92400e;
+  color: var(--thorough-text);
 }
 
 .thoroughModeHint {
   font-size: 0.85rem;
-  color: #b45309;
+  color: var(--thorough-hint);
   font-style: italic;
-}
-
-/* Dark mode adjustments for thorough mode */
-:root.dark .thoroughModeText,
-[data-theme="dark"] .thoroughModeText {
-  color: #fbbf24;
-}
-
-:root.dark .thoroughModeHint,
-[data-theme="dark"] .thoroughModeHint {
-  color: #f59e0b;
 }
 
 /* Thorough Mode Settings */
 .thoroughSettings {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px dashed rgba(245, 158, 11, 0.3);
+  border-top: 1px dashed var(--thorough-border);
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -2348,25 +2334,15 @@
 .thoroughSettingsTitle {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #92400e;
+  color: var(--thorough-text);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
-:root.dark .thoroughSettingsTitle,
-[data-theme="dark"] .thoroughSettingsTitle {
-  color: #fbbf24;
-}
-
 .thoroughSettingsNormal {
   font-size: 0.75rem;
-  color: #b45309;
+  color: var(--thorough-hint);
   font-style: italic;
-}
-
-:root.dark .thoroughSettingsNormal,
-[data-theme="dark"] .thoroughSettingsNormal {
-  color: #f59e0b;
 }
 
 .thoroughSettingRow {
@@ -2381,14 +2357,9 @@
   gap: 0.35rem;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #92400e;
+  color: var(--thorough-text);
   min-width: 150px;
   cursor: help;
-}
-
-:root.dark .thoroughSettingLabel,
-[data-theme="dark"] .thoroughSettingLabel {
-  color: #fbbf24;
 }
 
 .thoroughSettingInputGroup {
@@ -2402,22 +2373,16 @@
   padding: 0.4rem 0.5rem;
   font-size: 0.9rem;
   font-weight: 500;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  border: 1px solid var(--thorough-input-border);
   border-radius: 6px 0 0 6px;
   background: var(--card);
-  color: #92400e;
+  color: var(--thorough-text);
   text-align: center;
-}
-
-:root.dark .thoroughSettingInput,
-[data-theme="dark"] .thoroughSettingInput {
-  color: #fbbf24;
-  background: var(--surface);
 }
 
 .thoroughSettingInput:focus {
   outline: none;
-  border-color: #f59e0b;
+  border-color: var(--thorough-accent);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
 }
 
@@ -2432,18 +2397,13 @@
   justify-content: center;
   padding: 0 0.5rem;
   height: 34px;
-  background: rgba(245, 158, 11, 0.15);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: var(--thorough-suffix-bg);
+  border: 1px solid var(--thorough-input-border);
   border-left: none;
   border-radius: 0 6px 6px 0;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #b45309;
-}
-
-:root.dark .thoroughSettingSuffix,
-[data-theme="dark"] .thoroughSettingSuffix {
-  color: #f59e0b;
+  color: var(--thorough-hint);
 }
 
 /* When there's no suffix, give the input full border radius */
