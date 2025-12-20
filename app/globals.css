@@ -1,24 +1,249 @@
+/* ============================================
+   CSS Variables - Light Theme (Default)
+   ============================================ */
 :root {
+  /* Base colors */
   --background: #f5f5f5;
   --foreground: #0f172a;
+  --foreground-secondary: #1e293b;
+  
+  /* Semantic colors */
   --accent: #2563eb;
+  --accent-hover: #1d4ed8;
   --panel: #16a34a;
   --warning: #ea580c;
-  --muted: #94a3b8;
+  --danger: #dc2626;
+  --muted: #64748b;
+  --muted-foreground: #94a3b8;
+  
+  /* Surface colors */
+  --card: #ffffff;
+  --card-hover: #fafafa;
+  --surface: #f8fafc;
+  --surface-elevated: #ffffff;
+  
+  /* Border colors */
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.15);
+  --border-input: rgba(15, 23, 42, 0.18);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 20px 45px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 25px 50px rgba(15, 23, 42, 0.15);
+  
+  /* Table specific */
+  --table-header-bg: rgba(15, 23, 42, 0.03);
+  --table-row-hover: rgba(15, 23, 42, 0.02);
+  --table-border: rgba(15, 23, 42, 0.08);
+  
+  /* Button specific */
+  --button-secondary-bg: rgba(15, 23, 42, 0.08);
+  --button-secondary-hover: rgba(15, 23, 42, 0.12);
+  
+  /* Badge backgrounds */
+  --badge-panel-bg: rgba(22, 163, 74, 0.12);
+  --badge-accent-bg: rgba(37, 99, 235, 0.12);
+  --badge-warning-bg: rgba(234, 88, 12, 0.12);
+  --badge-danger-bg: rgba(220, 38, 38, 0.15);
+  --badge-muted-bg: rgba(148, 163, 184, 0.18);
+  
+  /* Input/Form */
+  --input-bg: #ffffff;
+  --input-border: rgba(15, 23, 42, 0.18);
+  --input-focus-ring: rgba(37, 99, 235, 0.15);
+  
+  /* Modal */
+  --modal-overlay: rgba(15, 23, 42, 0.5);
+  --modal-bg: #ffffff;
+  
+  /* Toggle (theme switcher) */
+  --toggle-bg: rgba(15, 23, 42, 0.06);
+  --toggle-border: rgba(15, 23, 42, 0.1);
+  --toggle-hover: rgba(15, 23, 42, 0.1);
+  --toggle-text: #64748b;
+  --toggle-active-bg: #ffffff;
+  --toggle-active-text: #0f172a;
+  
+  /* Status colors */
+  --success-bg: rgba(22, 163, 74, 0.08);
+  --warning-bg: rgba(202, 138, 4, 0.08);
+  --error-bg: rgba(220, 38, 38, 0.08);
+  
+  /* Light entity (on state) */
+  --light-on-gradient: linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%);
+  --light-on-text: #78350f;
+  --light-on-shadow: rgba(245, 158, 11, 0.4);
+  --light-off-bg: rgba(100, 116, 139, 0.2);
+  
+  /* Code/mono text */
+  --code-bg: rgba(15, 23, 42, 0.05);
+  
   font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* ============================================
+   CSS Variables - Dark Theme
+   ============================================ */
+:root.dark,
+[data-theme="dark"] {
+  /* Base colors */
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --foreground-secondary: #e2e8f0;
+  
+  /* Semantic colors */
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --panel: #22c55e;
+  --warning: #f97316;
+  --danger: #ef4444;
+  --muted: #94a3b8;
+  --muted-foreground: #64748b;
+  
+  /* Surface colors */
+  --card: #1e293b;
+  --card-hover: #283548;
+  --surface: #1e293b;
+  --surface-elevated: #283548;
+  
+  /* Border colors */
+  --border: rgba(148, 163, 184, 0.1);
+  --border-strong: rgba(148, 163, 184, 0.2);
+  --border-input: rgba(148, 163, 184, 0.25);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 20px 45px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 25px 50px rgba(0, 0, 0, 0.5);
+  
+  /* Table specific */
+  --table-header-bg: rgba(148, 163, 184, 0.08);
+  --table-row-hover: rgba(148, 163, 184, 0.05);
+  --table-border: rgba(148, 163, 184, 0.1);
+  
+  /* Button specific */
+  --button-secondary-bg: rgba(148, 163, 184, 0.12);
+  --button-secondary-hover: rgba(148, 163, 184, 0.18);
+  
+  /* Badge backgrounds */
+  --badge-panel-bg: rgba(34, 197, 94, 0.15);
+  --badge-accent-bg: rgba(59, 130, 246, 0.2);
+  --badge-warning-bg: rgba(249, 115, 22, 0.15);
+  --badge-danger-bg: rgba(239, 68, 68, 0.2);
+  --badge-muted-bg: rgba(148, 163, 184, 0.15);
+  
+  /* Input/Form */
+  --input-bg: #1e293b;
+  --input-border: rgba(148, 163, 184, 0.25);
+  --input-focus-ring: rgba(59, 130, 246, 0.25);
+  
+  /* Modal */
+  --modal-overlay: rgba(0, 0, 0, 0.7);
+  --modal-bg: #1e293b;
+  
+  /* Toggle (theme switcher) */
+  --toggle-bg: rgba(148, 163, 184, 0.12);
+  --toggle-border: rgba(148, 163, 184, 0.15);
+  --toggle-hover: rgba(148, 163, 184, 0.18);
+  --toggle-text: #94a3b8;
+  --toggle-active-bg: #334155;
+  --toggle-active-text: #f1f5f9;
+  
+  /* Status colors */
+  --success-bg: rgba(34, 197, 94, 0.15);
+  --warning-bg: rgba(245, 158, 11, 0.15);
+  --error-bg: rgba(239, 68, 68, 0.15);
+  
+  /* Light entity (on state) */
+  --light-on-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --light-on-text: #451a03;
+  --light-on-shadow: rgba(251, 191, 36, 0.5);
+  --light-off-bg: rgba(148, 163, 184, 0.15);
+  
+  /* Code/mono text */
+  --code-bg: rgba(148, 163, 184, 0.1);
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
 * {
   box-sizing: border-box;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 main {
   min-height: 100vh;
 }
 
+/* Smooth transitions for theme changes */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
+}
+
+/* Disable transitions on page load to prevent flash */
+.no-transitions *,
+.no-transitions *::before,
+.no-transitions *::after {
+  transition: none !important;
+}
+
+/* Links */
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* Selection */
+::selection {
+  background: var(--accent);
+  color: white;
+}
+
+/* Scrollbar styling for dark mode */
+:root.dark ::-webkit-scrollbar,
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:root.dark ::-webkit-scrollbar-track,
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+:root.dark ::-webkit-scrollbar-thumb,
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 5px;
+}
+
+:root.dark ::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}

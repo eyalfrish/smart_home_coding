@@ -1,9 +1,13 @@
 import styles from "./page.module.css";
 import DiscoveryDashboard from "@/components/discovery-dashboard";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   return (
     <main className={styles.page}>
+      <header className={styles.header}>
+        <ThemeToggle />
+      </header>
       <section className={styles.hero}>
         <h1>Cubixx Panel Explorer</h1>
         <p>
@@ -17,4 +21,3 @@ export default function Home() {
     </main>
   );
 }
-
