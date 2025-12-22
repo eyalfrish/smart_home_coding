@@ -1296,7 +1296,7 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={openPending || !onSendCommand}
                                         >
-                                          <span className={styles.deviceCompactName}>{getCompactName("shade", curtain.index, "up")}</span>
+                                          <span className={styles.deviceCompactName}>{isMoving ? "■" : getCompactName("shade", curtain.index, "up")}</span>
                                           <span className={styles.deviceFullName}>{isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                         <button
@@ -1305,7 +1305,7 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={closePending || !onSendCommand}
                                         >
-                                          <span className={styles.deviceCompactName}>{getCompactName("shade", curtain.index, "down")}</span>
+                                          <span className={styles.deviceCompactName}>{isMoving ? "■" : getCompactName("shade", curtain.index, "down")}</span>
                                           <span className={styles.deviceFullName}>{isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                       </>
@@ -1352,7 +1352,7 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={openPending || !onSendCommand}
                                         >
-                                          <span className={styles.deviceCompactName}>{getCompactName("venetian", curtain.index, "up")}</span>
+                                          <span className={styles.deviceCompactName}>{isMoving ? "■" : getCompactName("venetian", curtain.index, "up")}</span>
                                           <span className={styles.deviceFullName}>{isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                         <button
@@ -1361,7 +1361,7 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={closePending || !onSendCommand}
                                         >
-                                          <span className={styles.deviceCompactName}>{getCompactName("venetian", curtain.index, "down")}</span>
+                                          <span className={styles.deviceCompactName}>{isMoving ? "■" : getCompactName("venetian", curtain.index, "down")}</span>
                                           <span className={styles.deviceFullName}>{isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                       </>
