@@ -137,11 +137,91 @@ export default function DiscoveryResults({
   const [editValue, setEditValue] = useState("");
   const [savingRename, setSavingRename] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+  
+  // Swipe-to-toggle checkbox state (for selecting multiple panels by dragging)
+  const [isSwipeSelecting, setIsSwipeSelecting] = useState(false);
+  const swipeProcessedIps = useRef<Set<string>>(new Set());
 
   // Selection helpers
   const handleCheckboxChange = useCallback((ip: string, checked: boolean) => {
     onPanelSelectionChange?.(ip, checked);
   }, [onPanelSelectionChange]);
+
+  // Swipe-to-toggle handlers for checkboxes
+  const handleSwipeStart = useCallback((ip: string, currentlySelected: boolean, e: React.MouseEvent | React.TouchEvent) => {
+    // Prevent text selection during drag
+    e.preventDefault();
+    
+    swipeProcessedIps.current = new Set([ip]);
+    setIsSwipeSelecting(true);
+    
+    // Toggle the first checkbox
+    onPanelSelectionChange?.(ip, !currentlySelected);
+  }, [onPanelSelectionChange]);
+
+  const handleSwipeEnter = useCallback((ip: string, currentlySelected: boolean) => {
+    if (!isSwipeSelecting) return;
+    
+    // Skip if we already processed this IP in this swipe gesture
+    if (swipeProcessedIps.current.has(ip)) return;
+    
+    // Mark as processed and toggle
+    swipeProcessedIps.current.add(ip);
+    onPanelSelectionChange?.(ip, !currentlySelected);
+  }, [isSwipeSelecting, onPanelSelectionChange]);
+
+  const handleSwipeEnd = useCallback(() => {
+    setIsSwipeSelecting(false);
+    swipeProcessedIps.current.clear();
+  }, []);
+
+  // Touch move handler for swipe selection (detects which checkbox is under finger)
+  const handleSwipeTouchMove = useCallback((e: React.TouchEvent, selectedPanelIpsSet?: Set<string>) => {
+    if (!isSwipeSelecting) return;
+    
+    const touch = e.touches[0];
+    if (!touch) return;
+    
+    // Find the element under the touch point
+    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!elementUnderTouch) return;
+    
+    // Check if it's a checkbox or inside a checkbox cell
+    const checkboxCell = elementUnderTouch.closest('[data-swipe-ip]');
+    if (!checkboxCell) return;
+    
+    const ip = (checkboxCell as HTMLElement).dataset.swipeIp;
+    if (!ip) return;
+    
+    // Skip if we already processed this IP
+    if (swipeProcessedIps.current.has(ip)) return;
+    
+    // Mark as processed and toggle based on current state
+    swipeProcessedIps.current.add(ip);
+    const currentlySelected = selectedPanelIpsSet?.has(ip) ?? false;
+    onPanelSelectionChange?.(ip, !currentlySelected);
+  }, [isSwipeSelecting, onPanelSelectionChange]);
+
+  // Global mouse up handler for ending swipe selection
+  useEffect(() => {
+    if (!isSwipeSelecting) return;
+    
+    const handleGlobalMouseUp = () => {
+      handleSwipeEnd();
+    };
+    
+    const handleGlobalTouchEnd = () => {
+      handleSwipeEnd();
+    };
+    
+    document.addEventListener("mouseup", handleGlobalMouseUp);
+    document.addEventListener("touchend", handleGlobalTouchEnd);
+    
+    return () => {
+      document.removeEventListener("mouseup", handleGlobalMouseUp);
+      document.removeEventListener("touchend", handleGlobalTouchEnd);
+    };
+  }, [isSwipeSelecting, handleSwipeEnd]);
 
   const handleSort = useCallback((column: SortColumn) => {
     if (sortColumn === column) {
@@ -848,7 +928,7 @@ export default function DiscoveryResults({
             />
           </div>
         </div>
-        <table className={styles.table}>
+        <table className={`${styles.table} ${isSwipeSelecting ? styles.swipeSelecting : ""}`}>
           <thead>
             <tr>
               <th className={styles.checkboxHeader}>
@@ -1003,12 +1083,20 @@ export default function DiscoveryResults({
                     className={`${isSelected ? styles.selectedRow : ""} ${isExpanded ? styles.expandedRow : ""} ${isPanel ? styles.clickableRow : ""}`}
                     onClick={handleRowClick}
                   >
-                    <td className={styles.checkboxCell} data-label="">
+                    <td 
+                      className={styles.checkboxCell} 
+                      data-label=""
+                      data-swipe-ip={isPanel ? result.ip : undefined}
+                      onMouseEnter={() => isPanel && handleSwipeEnter(result.ip, isSelected)}
+                      onTouchMove={isPanel ? (e) => handleSwipeTouchMove(e, selectedPanelIps) : undefined}
+                    >
                       {isPanel ? (
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={(e) => handleCheckboxChange(result.ip, e.target.checked)}
+                          onMouseDown={(e) => handleSwipeStart(result.ip, isSelected, e)}
+                          onTouchStart={(e) => handleSwipeStart(result.ip, isSelected, e)}
                           className={styles.rowCheckbox}
                           aria-label={`Select ${result.name ?? result.ip}`}
                         />

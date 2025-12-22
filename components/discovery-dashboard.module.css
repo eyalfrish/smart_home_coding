@@ -472,6 +472,18 @@
   border-collapse: collapse;
 }
 
+/* During swipe-to-toggle selection, prevent text selection */
+.table.swipeSelecting {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+
+.table.swipeSelecting * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .table th,
 .table td {
   padding: 0.65rem 0.6rem;
@@ -1472,6 +1484,26 @@
   height: 18px;
   cursor: pointer;
   accent-color: var(--accent);
+}
+
+/* Swipe-to-toggle checkbox selection */
+.rowCheckbox {
+  /* Enlarge touch target for easier swiping */
+  touch-action: none;
+}
+
+.checkboxCell[data-swipe-ip] {
+  /* Prevent text selection during swipe */
+  user-select: none;
+  -webkit-user-select: none;
+  /* Slightly larger tap target */
+  cursor: pointer;
+}
+
+/* Visual feedback during swipe */
+.checkboxCell[data-swipe-ip]:hover .rowCheckbox {
+  transform: scale(1.1);
+  transition: transform 0.1s ease;
 }
 
 .noCheckbox {
