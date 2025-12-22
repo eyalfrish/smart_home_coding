@@ -7,6 +7,15 @@
   --foreground: #0f172a;
   --foreground-secondary: #1e293b;
   
+  /* Mobile-specific */
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --touch-target-min: 44px;
+  --mobile-spacing: 16px;
+  --mobile-radius: 14px;
+  
   /* Semantic colors */
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
@@ -80,23 +89,23 @@
   /* Code/mono text */
   --code-bg: rgba(15, 23, 42, 0.05);
   
-  /* Direct/Link device highlights */
-  --highlight-direct: #16a34a;
-  --highlight-direct-glow: rgba(22, 163, 74, 0.6);
-  --highlight-direct-glow-outer: rgba(22, 163, 74, 0.3);
-  --highlight-link: #7c3aed;
-  --highlight-link-glow: rgba(124, 58, 237, 0.55);
-  --highlight-link-glow-outer: rgba(124, 58, 237, 0.25);
-  --highlight-row-bg: rgba(124, 58, 237, 0.04);
+  /* Direct/Link device highlights - LIGHT MODE: deeper, richer colors */
+  --highlight-direct: #15803d;
+  --highlight-direct-glow: rgba(21, 128, 61, 0.7);
+  --highlight-direct-glow-outer: rgba(21, 128, 61, 0.35);
+  --highlight-link: #6d28d9;
+  --highlight-link-glow: rgba(109, 40, 217, 0.6);
+  --highlight-link-glow-outer: rgba(109, 40, 217, 0.3);
+  --highlight-row-bg: rgba(109, 40, 217, 0.06);
   
-  /* Thorough mode colors */
-  --thorough-bg: linear-gradient(135deg, rgba(217, 119, 6, 0.1) 0%, rgba(180, 83, 9, 0.08) 100%);
-  --thorough-border: rgba(217, 119, 6, 0.25);
-  --thorough-text: #92400e;
-  --thorough-hint: #b45309;
-  --thorough-accent: #d97706;
-  --thorough-input-border: rgba(217, 119, 6, 0.35);
-  --thorough-suffix-bg: rgba(217, 119, 6, 0.15);
+  /* Thorough mode colors - LIGHT MODE: warm brown/amber */
+  --thorough-bg: linear-gradient(135deg, rgba(180, 83, 9, 0.12) 0%, rgba(146, 64, 14, 0.08) 100%);
+  --thorough-border: rgba(180, 83, 9, 0.3);
+  --thorough-text: #78350f;
+  --thorough-hint: #92400e;
+  --thorough-accent: #b45309;
+  --thorough-input-border: rgba(180, 83, 9, 0.4);
+  --thorough-suffix-bg: rgba(180, 83, 9, 0.18);
 
   font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -184,23 +193,23 @@
   /* Code/mono text */
   --code-bg: rgba(148, 163, 184, 0.1);
   
-  /* Direct/Link device highlights - brighter for dark backgrounds */
-  --highlight-direct: #4ade80;
-  --highlight-direct-glow: rgba(74, 222, 128, 0.65);
-  --highlight-direct-glow-outer: rgba(74, 222, 128, 0.3);
-  --highlight-link: #a78bfa;
-  --highlight-link-glow: rgba(167, 139, 250, 0.6);
-  --highlight-link-glow-outer: rgba(167, 139, 250, 0.28);
-  --highlight-row-bg: rgba(167, 139, 250, 0.08);
+  /* Direct/Link device highlights - DARK MODE: bright, electric colors */
+  --highlight-direct: #86efac;
+  --highlight-direct-glow: rgba(134, 239, 172, 0.75);
+  --highlight-direct-glow-outer: rgba(134, 239, 172, 0.4);
+  --highlight-link: #c4b5fd;
+  --highlight-link-glow: rgba(196, 181, 253, 0.7);
+  --highlight-link-glow-outer: rgba(196, 181, 253, 0.35);
+  --highlight-row-bg: rgba(196, 181, 253, 0.1);
   
-  /* Thorough mode colors - softer amber for dark mode */
-  --thorough-bg: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
-  --thorough-border: rgba(251, 191, 36, 0.25);
-  --thorough-text: #fbbf24;
-  --thorough-hint: #fcd34d;
-  --thorough-accent: #f59e0b;
-  --thorough-input-border: rgba(251, 191, 36, 0.3);
-  --thorough-suffix-bg: rgba(251, 191, 36, 0.15);
+  /* Thorough mode colors - DARK MODE: bright gold/yellow */
+  --thorough-bg: linear-gradient(135deg, rgba(253, 224, 71, 0.15) 0%, rgba(250, 204, 21, 0.1) 100%);
+  --thorough-border: rgba(253, 224, 71, 0.35);
+  --thorough-text: #fde047;
+  --thorough-hint: #fef08a;
+  --thorough-accent: #facc15;
+  --thorough-input-border: rgba(253, 224, 71, 0.4);
+  --thorough-suffix-bg: rgba(253, 224, 71, 0.2);
 }
 
 /* ============================================
@@ -282,4 +291,102 @@ a:hover {
 :root.dark ::-webkit-scrollbar-thumb:hover,
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
+}
+
+/* ============================================
+   Mobile Native App Styles
+   ============================================ */
+
+/* Enable smooth scrolling everywhere */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent pull-to-refresh on Chrome Android */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* iOS momentum scrolling for all scrollable containers */
+.scrollable,
+[style*="overflow"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Disable text selection for app-like feel on buttons */
+button,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Active state animations for touch feedback */
+button:active:not(:disabled),
+[role="button"]:active:not(:disabled),
+.touchable:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
+}
+
+/* Mobile viewport safe areas */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ============================================
+   Mobile-First Media Queries
+   ============================================ */
+
+@media (max-width: 768px) {
+  /* Larger touch targets */
+  button,
+  input[type="checkbox"],
+  input[type="radio"],
+  [role="button"] {
+    min-height: var(--touch-target-min);
+  }
+  
+  /* Better input sizing */
+  input[type="text"],
+  input[type="number"],
+  input[type="search"],
+  select {
+    font-size: 16px !important; /* Prevent iOS zoom */
+    min-height: var(--touch-target-min);
+  }
+  
+  /* Prevent zoom on double-tap */
+  * {
+    touch-action: manipulation;
+  }
+}
+
+/* Small phones */
+@media (max-width: 380px) {
+  :root {
+    --mobile-spacing: 12px;
+    --mobile-radius: 12px;
+  }
+}
+
+/* ============================================
+   Hide scrollbars on mobile for cleaner look
+   ============================================ */
+@media (max-width: 768px) {
+  /* Hide scrollbars but keep functionality */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 }

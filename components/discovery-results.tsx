@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useState, useRef, useEffect, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useState, useRef, useEffect, type KeyboardEvent, type MouseEvent, type TouchEvent } from "react";
 import styles from "./discovery-dashboard.module.css";
 import type { DiscoveryResponse, PanelInfo, LivePanelState, PanelCommand, PanelSettings, RelayPairConfig, DeviceType } from "@/lib/discovery/types";
 import { getRelayDeviceType, getCurtainDeviceType } from "@/lib/discovery/types";
+
+// Long press duration for touch highlighting (ms)
+const LONG_PRESS_DURATION = 500;
 
 // Type for tracking which device is being edited
 interface EditingDevice {
@@ -103,7 +106,10 @@ export default function DiscoveryResults({
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [switchSearchQuery, setSwitchSearchQuery] = useState("");
   
-  // Track hovered device for cross-panel highlighting
+  // Track expanded panels on mobile (for showing extra info)
+  const [expandedPanels, setExpandedPanels] = useState<Set<string>>(new Set());
+  
+  // Track hovered/highlighted device for cross-panel highlighting
   // Stores: { baseName: string, sourceIp: string, sourceType: "relay"|"curtain", sourceIndex: number }
   const [hoveredDevice, setHoveredDevice] = useState<{
     baseName: string;
@@ -111,6 +117,11 @@ export default function DiscoveryResults({
     sourceType: "relay" | "curtain";
     sourceIndex: number;
   } | null>(null);
+  
+  // Long press state for touch highlighting
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const isTouchInteractionRef = useRef(false);
   
   // Inline editing state for switch names
   const [editingDevice, setEditingDevice] = useState<EditingDevice | null>(null);
@@ -150,6 +161,12 @@ export default function DiscoveryResults({
   ) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Skip if this was a long press (for highlighting)
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      return;
+    }
     
     if (!onSendCommand) return;
     
@@ -272,13 +289,16 @@ export default function DiscoveryResults({
     }
   }, [editingDevice]);
 
-  // Device hover handlers for cross-panel highlighting
+  // Device hover handlers for cross-panel highlighting (desktop)
   const handleDeviceMouseEnter = useCallback((
     ip: string,
     type: "relay" | "curtain",
     index: number,
     deviceName?: string
   ) => {
+    // Skip if this is from a touch interaction (mobile taps trigger mouseenter)
+    if (isTouchInteractionRef.current) return;
+    
     const baseName = getBaseDeviceName(deviceName);
     if (baseName) {
       setHoveredDevice({ baseName, sourceIp: ip, sourceType: type, sourceIndex: index });
@@ -286,7 +306,72 @@ export default function DiscoveryResults({
   }, []);
 
   const handleDeviceMouseLeave = useCallback(() => {
+    // Skip if this is from a touch interaction
+    if (isTouchInteractionRef.current) return;
+    
     setHoveredDevice(null);
+  }, []);
+
+  // Long press handlers for touch highlighting (mobile)
+  const handleDeviceTouchStart = useCallback((
+    ip: string,
+    type: "relay" | "curtain",
+    index: number,
+    deviceName?: string
+  ) => {
+    // Mark that we're in a touch interaction (to ignore mouseenter/leave)
+    isTouchInteractionRef.current = true;
+    
+    const baseName = getBaseDeviceName(deviceName);
+    if (!baseName) return;
+    
+    longPressTriggeredRef.current = false;
+    
+    // Start long press timer
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      // Toggle highlight - if same device, clear it; otherwise set it
+      setHoveredDevice(prev => {
+        if (prev?.baseName === baseName && prev?.sourceIp === ip) {
+          return null; // Clear highlight
+        }
+        return { baseName, sourceIp: ip, sourceType: type, sourceIndex: index };
+      });
+    }, LONG_PRESS_DURATION);
+  }, []);
+
+  const handleDeviceTouchEnd = useCallback(() => {
+    // Cancel long press timer
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    // Reset touch interaction flag after a delay (to ignore subsequent mouse events)
+    setTimeout(() => {
+      isTouchInteractionRef.current = false;
+    }, 300);
+  }, []);
+
+  const handleDeviceTouchMove = useCallback(() => {
+    // Cancel long press if user moves finger
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  // Toggle expanded state for a panel card on mobile
+  const togglePanelExpanded = useCallback((ip: string, e: MouseEvent) => {
+    e.stopPropagation();
+    setExpandedPanels(prev => {
+      const next = new Set(prev);
+      if (next.has(ip)) {
+        next.delete(ip);
+      } else {
+        next.add(ip);
+      }
+      return next;
+    });
   }, []);
 
   // Helper to check if a device should be highlighted
@@ -639,7 +724,10 @@ export default function DiscoveryResults({
     <>
       <div className={styles.summaryGrid}>
         <div className={styles.summaryItem}>
-          <h4>Total IPs checked</h4>
+          <h4>
+            <span className={styles.desktopText}>Total IPs checked</span>
+            <span className={styles.mobileText}>Total</span>
+          </h4>
           <p className={styles.summaryAccent}>{summary.totalChecked}</p>
         </div>
         <div
@@ -652,19 +740,31 @@ export default function DiscoveryResults({
           tabIndex={canOpenPanelsView ? 0 : undefined}
           aria-disabled={!canOpenPanelsView}
         >
-          <h4>Panels found</h4>
+          <h4>
+            <span className={styles.desktopText}>Panels found</span>
+            <span className={styles.mobileText}>Online</span>
+          </h4>
           <p className={styles.summaryPanel}>{summary.panelsFound}</p>
         </div>
         <div className={styles.summaryItem}>
-          <h4>Non Cubixx (HTTP 200)</h4>
+          <h4>
+            <span className={styles.desktopText}>Non Cubixx (HTTP 200)</span>
+            <span className={styles.mobileText}>Other</span>
+          </h4>
           <p className={styles.summaryNeutral}>{summary.notPanels}</p>
         </div>
         <div className={styles.summaryItem}>
-          <h4>No response</h4>
+          <h4>
+            <span className={styles.desktopText}>No response</span>
+            <span className={styles.mobileText}>Offline</span>
+          </h4>
           <p className={styles.summaryWarn}>{summary.noResponse}</p>
         </div>
         <div className={styles.summaryItem}>
-          <h4>Errors</h4>
+          <h4>
+            <span className={styles.desktopText}>Errors</span>
+            <span className={styles.mobileText}>Errors</span>
+          </h4>
           <p className={styles.summaryWarn}>{summary.errors}</p>
         </div>
       </div>
@@ -673,26 +773,28 @@ export default function DiscoveryResults({
         <div className={styles.searchRow}>
           <div className={styles.searchGroup}>
             <label className={styles.searchLabel} htmlFor="results-search">
-              Search Panels
+              <span className={styles.desktopText}>Search Panels</span>
+              <span className={styles.mobileText}>Panels</span>
             </label>
             <input
               id="results-search"
               type="text"
               className={styles.searchInput}
-              placeholder="Filter by IP or panel name"
+              placeholder="IP or name..."
               value={searchQuery}
               onChange={(event) => onSearchChange(event.target.value)}
             />
           </div>
           <div className={styles.searchGroup}>
             <label className={styles.searchLabel} htmlFor="switch-search">
-              Search Switches
+              <span className={styles.desktopText}>Search Switches</span>
+              <span className={styles.mobileText}>Switches</span>
             </label>
             <input
               id="switch-search"
               type="text"
               className={styles.searchInput}
-              placeholder="Filter by switch/curtain name"
+              placeholder="Switch name..."
               value={switchSearchQuery}
               onChange={(event) => setSwitchSearchQuery(event.target.value)}
             />
@@ -707,7 +809,8 @@ export default function DiscoveryResults({
                 onShowOnlyCubixxChange(event.target.checked)
               }
             />
-            Show only Live Cubixx panels
+            <span className={styles.desktopText}>Show only Live Cubixx panels</span>
+            <span className={styles.mobileText}>Live</span>
           </label>
           <label className={styles.checkboxLabel}>
             <input
@@ -717,7 +820,8 @@ export default function DiscoveryResults({
                 onShowOnlyTouchedChange(event.target.checked)
               }
             />
-            Show only touched panels
+            <span className={styles.desktopText}>Show only touched panels</span>
+            <span className={styles.mobileText}>Touched</span>
           </label>
           <label className={styles.checkboxLabel}>
             <input
@@ -727,8 +831,22 @@ export default function DiscoveryResults({
                 onShowOnlyLightActiveChange(event.target.checked)
               }
             />
-            Show only light-active panels
+            <span className={styles.desktopText}>Show only light-active panels</span>
+            <span className={styles.mobileText}>Lights On</span>
           </label>
+          <div className={styles.selectAllWrapper}>
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = isIndeterminate;
+              }}
+              onChange={(e) => handleSelectAllChange(e.target.checked)}
+              className={styles.selectAllCheckboxInline}
+              title={allFilteredSelected ? "Deselect all" : "Select all"}
+              aria-label={allFilteredSelected ? "Deselect all panels" : "Select all panels"}
+            />
+          </div>
         </div>
         <table className={styles.table}>
           <thead>
@@ -745,6 +863,7 @@ export default function DiscoveryResults({
                   className={styles.selectAllCheckbox}
                 />
               </th>
+              <th className={styles.expandHeader}></th>
               <th 
                 className={styles.sortableHeader} 
                 onClick={() => handleSort("ip")}
@@ -845,7 +964,7 @@ export default function DiscoveryResults({
           <tbody>
             {sortedResults.length === 0 ? (
               <tr>
-                <td colSpan={13}>No entries match that search.</td>
+                <td colSpan={14}>No entries match that search.</td>
               </tr>
             ) : (
               sortedResults.map((result) => {
@@ -857,22 +976,49 @@ export default function DiscoveryResults({
                   : styles.touchedNo;
                 const isPanel = result.status === "panel";
                 const isSelected = selectedPanelIps?.has(result.ip) ?? false;
+                const isExpanded = expandedPanels.has(result.ip);
+
+                // Handle row click for expand/collapse (mobile)
+                const handleRowClick = (e: React.MouseEvent) => {
+                  // Don't expand if clicking on interactive elements
+                  const target = e.target as HTMLElement;
+                  if (
+                    target.tagName === 'BUTTON' ||
+                    target.tagName === 'INPUT' ||
+                    target.tagName === 'A' ||
+                    target.closest('button') ||
+                    target.closest('input') ||
+                    target.closest('a')
+                  ) {
+                    return;
+                  }
+                  if (isPanel) {
+                    togglePanelExpanded(result.ip, e);
+                  }
+                };
 
                 return (
-                  <tr key={result.ip} className={isSelected ? styles.selectedRow : ""}>
-                    <td className={styles.checkboxCell}>
+                  <tr 
+                    key={result.ip} 
+                    className={`${isSelected ? styles.selectedRow : ""} ${isExpanded ? styles.expandedRow : ""} ${isPanel ? styles.clickableRow : ""}`}
+                    onClick={handleRowClick}
+                  >
+                    <td className={styles.checkboxCell} data-label="">
                       {isPanel ? (
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={(e) => handleCheckboxChange(result.ip, e.target.checked)}
                           className={styles.rowCheckbox}
+                          aria-label={`Select ${result.name ?? result.ip}`}
                         />
                       ) : (
                         <span className={styles.noCheckbox}></span>
                       )}
                     </td>
-                    <td>
+                    {/* Hidden expand column - kept for layout consistency */}
+                    <td className={styles.expandCell} data-label=""></td>
+                    <td data-label="IP">
                       {result.status === "panel" ? (
                         <a
                           href={`http://${result.ip}/`}
@@ -886,10 +1032,10 @@ export default function DiscoveryResults({
                         result.ip
                       )}
                     </td>
-                    <td>
+                    <td data-label="Name">
                       {liveState?.fullState?.hostname ?? metadata?.name ?? result.name ?? "—"}
                     </td>
-                    <td>
+                    <td data-label="Status">
                       {liveState?.connectionStatus === "connected" ? (
                         <span className={styles.statusLive}>● LIVE</span>
                       ) : (
@@ -898,7 +1044,8 @@ export default function DiscoveryResults({
                         </span>
                       )}
                     </td>
-                    <td className={styles.centeredColumn}>
+                    {/* Expandable extra info section - hidden on mobile unless expanded */}
+                    <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="FW">
                       {liveState?.fullState?.version ? (
                         <span className={
                           highestVersion && compareVersions(liveState.fullState.version, highestVersion) === 0
@@ -913,7 +1060,7 @@ export default function DiscoveryResults({
                         <span className={styles.versionUnknown}>—</span>
                       )}
                     </td>
-                    <td className={styles.centeredColumn}>
+                    <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="Signal">
                       {liveState?.fullState?.wifiQuality != null ? (
                         <span className={
                           liveState.fullState.wifiQuality >= 70
@@ -930,7 +1077,7 @@ export default function DiscoveryResults({
                         <span className={styles.signalUnknown}>—</span>
                       )}
                     </td>
-                    <td className={styles.centeredColumn}>
+                    <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="BL">
                       {liveState?.fullState?.statusLedOn != null ? (
                         (() => {
                           const isOn = liveState.fullState.statusLedOn;
@@ -952,7 +1099,7 @@ export default function DiscoveryResults({
                         <span className={styles.backlightUnknown}>—</span>
                       )}
                     </td>
-                    <td className={styles.centeredColumn}>
+                    <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="Log">
                       {result.settings?.logging !== undefined ? (
                         <span className={
                           result.settings.logging === mostCommonLogging
@@ -967,7 +1114,7 @@ export default function DiscoveryResults({
                         <span className={styles.settingUnknown}>—</span>
                       )}
                     </td>
-                    <td className={styles.centeredColumn}>
+                    <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="LP">
                       {result.settings?.longPressMs !== undefined ? (
                         <span className={
                           result.settings.longPressMs === mostCommonLongPress
@@ -983,7 +1130,7 @@ export default function DiscoveryResults({
                       )}
                     </td>
                     {/* Direct Live State Column */}
-                    <td className={styles.directLinkCell} style={{ width: columnWidths.direct }}>
+                    <td className={styles.directLinkCell} style={{ width: columnWidths.direct }} data-label="Direct">
                       {liveState?.fullState ? (
                         (() => {
                           // Get relay pair configuration from settings (for robust classification)
@@ -1019,6 +1166,13 @@ export default function DiscoveryResults({
                             return name.replace(/[-_\s]?link$/i, "").trim() || "?";
                           };
                           
+                          // Helper to get compact name (L1, S1, D1, etc.)
+                          const getCompactName = (type: "light" | "door" | "shade" | "venetian", index: number, direction?: "up" | "down") => {
+                            const prefix = type === "light" ? "L" : type === "door" ? "D" : "S";
+                            const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "";
+                            return `${prefix}${index}${arrow}`;
+                          };
+                          
                           // Check if a device is currently being edited
                           const isEditing = (type: "relay" | "curtain", index: number) =>
                             editingDevice?.ip === result.ip &&
@@ -1052,10 +1206,14 @@ export default function DiscoveryResults({
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
                                         onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
                                         onMouseLeave={handleDeviceMouseLeave}
+                                        onTouchStart={() => handleDeviceTouchStart(result.ip, "relay", relay.index, relay.name)}
+                                        onTouchEnd={handleDeviceTouchEnd}
+                                        onTouchMove={handleDeviceTouchMove}
                                         disabled={isPending || !onSendCommand}
-                                        title={`${relay.name || ""} (right-click to rename)`}
+                                        title={`${relay.name || ""} (long-press to highlight)`}
                                       >
-                                        {getDisplayName(relay.name)}
+                                        <span className={styles.deviceCompactName}>{getCompactName("light", relay.index)}</span>
+                                        <span className={styles.deviceFullName}>{getDisplayName(relay.name)}</span>
                                       </button>
                                     )}
                                   </span>
@@ -1086,10 +1244,14 @@ export default function DiscoveryResults({
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
                                         onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
                                         onMouseLeave={handleDeviceMouseLeave}
+                                        onTouchStart={() => handleDeviceTouchStart(result.ip, "relay", relay.index, relay.name)}
+                                        onTouchEnd={handleDeviceTouchEnd}
+                                        onTouchMove={handleDeviceTouchMove}
                                         disabled={isPending || !onSendCommand}
-                                        title={`${relay.name || ""} (right-click to rename)`}
+                                        title={`${relay.name || ""} (long-press to highlight)`}
                                       >
-                                        {getDisplayName(relay.name)}
+                                        <span className={styles.deviceCompactName}>{getCompactName("door", relay.index)}</span>
+                                        <span className={styles.deviceFullName}>{getDisplayName(relay.name)}</span>
                                       </button>
                                     )}
                                   </span>
@@ -1108,9 +1270,12 @@ export default function DiscoveryResults({
                                   <span
                                     key={`S${curtain.index}`}
                                     className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
-                                    title={`${curtain.name || ""} (right-click to rename)`}
+                                    title={`${curtain.name || ""} (long-press to highlight)`}
                                     onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
                                     onMouseLeave={handleDeviceMouseLeave}
+                                    onTouchStart={() => handleDeviceTouchStart(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onTouchEnd={handleDeviceTouchEnd}
+                                    onTouchMove={handleDeviceTouchMove}
                                   >
                                     {editing ? (
                                       <input
@@ -1131,7 +1296,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={openPending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("shade", curtain.index, "up")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                         <button
                                           className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
@@ -1139,7 +1305,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={closePending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("shade", curtain.index, "down")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                       </>
                                     )}
@@ -1159,9 +1326,12 @@ export default function DiscoveryResults({
                                   <span
                                     key={`V${curtain.index}`}
                                     className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
-                                    title={`${curtain.name || ""} - Venetian (right-click to rename)`}
+                                    title={`${curtain.name || ""} - Venetian (long-press to highlight)`}
                                     onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
                                     onMouseLeave={handleDeviceMouseLeave}
+                                    onTouchStart={() => handleDeviceTouchStart(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onTouchEnd={handleDeviceTouchEnd}
+                                    onTouchMove={handleDeviceTouchMove}
                                   >
                                     {editing ? (
                                       <input
@@ -1182,7 +1352,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={openPending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("venetian", curtain.index, "up")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                         <button
                                           className={`${styles.shadeNameButton} ${styles.venetianSwitch} ${styles.shadeDownButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
@@ -1190,7 +1361,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={closePending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("venetian", curtain.index, "down")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                       </>
                                     )}
@@ -1213,7 +1385,7 @@ export default function DiscoveryResults({
                       )}
                     </td>
                     {/* Link Live State Column */}
-                    <td className={styles.directLinkCell} style={{ width: columnWidths.link }}>
+                    <td className={styles.directLinkCell} style={{ width: columnWidths.link }} data-label="Link">
                       {liveState?.fullState ? (
                         (() => {
                           // Get relay pair configuration from settings (for robust classification)
@@ -1250,6 +1422,13 @@ export default function DiscoveryResults({
                             return name.replace(/[-_\s]?link$/i, "").trim() || "?";
                           };
                           
+                          // Helper to get compact name (L1, S1, D1, etc.)
+                          const getCompactName = (type: "light" | "door" | "shade" | "venetian", index: number, direction?: "up" | "down") => {
+                            const prefix = type === "light" ? "L" : type === "door" ? "D" : "S";
+                            const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "";
+                            return `${prefix}${index}${arrow}`;
+                          };
+                          
                           // Check if a device is currently being edited (Link column)
                           const isEditingLink = (type: "relay" | "curtain", index: number) =>
                             editingDevice?.ip === result.ip &&
@@ -1283,10 +1462,14 @@ export default function DiscoveryResults({
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
                                         onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
                                         onMouseLeave={handleDeviceMouseLeave}
+                                        onTouchStart={() => handleDeviceTouchStart(result.ip, "relay", relay.index, relay.name)}
+                                        onTouchEnd={handleDeviceTouchEnd}
+                                        onTouchMove={handleDeviceTouchMove}
                                         disabled={isPending || !onSendCommand}
-                                        title={`${relay.name || ""} (right-click to rename)`}
+                                        title={`${relay.name || ""} (long-press to highlight)`}
                                       >
-                                        {getDisplayName(relay.name)}
+                                        <span className={styles.deviceCompactName}>{getCompactName("light", relay.index)}</span>
+                                        <span className={styles.deviceFullName}>{getDisplayName(relay.name)}</span>
                                       </button>
                                     )}
                                   </span>
@@ -1317,10 +1500,14 @@ export default function DiscoveryResults({
                                         onContextMenu={(e) => handleRightClickRename(e, result.ip, "relay", relay.index, relay.name || "")}
                                         onMouseEnter={() => handleDeviceMouseEnter(result.ip, "relay", relay.index, relay.name)}
                                         onMouseLeave={handleDeviceMouseLeave}
+                                        onTouchStart={() => handleDeviceTouchStart(result.ip, "relay", relay.index, relay.name)}
+                                        onTouchEnd={handleDeviceTouchEnd}
+                                        onTouchMove={handleDeviceTouchMove}
                                         disabled={isPending || !onSendCommand}
-                                        title={`${relay.name || ""} (right-click to rename)`}
+                                        title={`${relay.name || ""} (long-press to highlight)`}
                                       >
-                                        {getDisplayName(relay.name)}
+                                        <span className={styles.deviceCompactName}>{getCompactName("door", relay.index)}</span>
+                                        <span className={styles.deviceFullName}>{getDisplayName(relay.name)}</span>
                                       </button>
                                     )}
                                   </span>
@@ -1339,9 +1526,12 @@ export default function DiscoveryResults({
                                   <span
                                     key={`LS${curtain.index}`}
                                     className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
-                                    title={`${curtain.name || ""} (right-click to rename)`}
+                                    title={`${curtain.name || ""} (long-press to highlight)`}
                                     onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
                                     onMouseLeave={handleDeviceMouseLeave}
+                                    onTouchStart={() => handleDeviceTouchStart(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onTouchEnd={handleDeviceTouchEnd}
+                                    onTouchMove={handleDeviceTouchMove}
                                   >
                                     {editing ? (
                                       <input
@@ -1362,7 +1552,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={openPending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("shade", curtain.index, "up")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                         <button
                                           className={`${styles.shadeNameButton} ${styles.shadeSwitch} ${styles.shadeDownButton} ${styles.linkButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
@@ -1370,7 +1561,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={closePending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("shade", curtain.index, "down")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                       </>
                                     )}
@@ -1390,9 +1582,12 @@ export default function DiscoveryResults({
                                   <span
                                     key={`LV${curtain.index}`}
                                     className={`${styles.shadePairGroup} ${styles.deviceButtonWrapper} ${highlightClass}`}
-                                    title={`${curtain.name || ""} - Venetian (right-click to rename)`}
+                                    title={`${curtain.name || ""} - Venetian (long-press to highlight)`}
                                     onMouseEnter={() => handleDeviceMouseEnter(result.ip, "curtain", curtain.index, curtain.name)}
                                     onMouseLeave={handleDeviceMouseLeave}
+                                    onTouchStart={() => handleDeviceTouchStart(result.ip, "curtain", curtain.index, curtain.name)}
+                                    onTouchEnd={handleDeviceTouchEnd}
+                                    onTouchMove={handleDeviceTouchMove}
                                   >
                                     {editing ? (
                                       <input
@@ -1413,7 +1608,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={openPending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("venetian", curtain.index, "up")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↑"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                         <button
                                           className={`${styles.shadeNameButton} ${styles.venetianSwitch} ${styles.shadeDownButton} ${styles.linkButton} ${isClosed ? styles.switchOn : styles.switchOff} ${isMoving ? styles.shadeMoving : ""} ${closePending ? styles.pending : ""}`}
@@ -1421,7 +1617,8 @@ export default function DiscoveryResults({
                                           onContextMenu={(e) => handleRightClickRename(e, result.ip, "curtain", curtain.index, curtain.name || "")}
                                           disabled={closePending || !onSendCommand}
                                         >
-                                          {isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}
+                                          <span className={styles.deviceCompactName}>{getCompactName("venetian", curtain.index, "down")}</span>
+                                          <span className={styles.deviceFullName}>{isMoving ? "■" : "↓"} {getDisplayName(curtain.name)}</span>
                                         </button>
                                       </>
                                     )}
@@ -1443,7 +1640,7 @@ export default function DiscoveryResults({
                         "—"
                       )}
                     </td>
-                    <td className={styles.centeredColumn}>
+                    <td className={styles.centeredColumn} data-label="Touch">
                       <span className={`${styles.touchedBadge} ${touchedClass}`}>
                         {touched ? "Yes" : "No"}
                       </span>

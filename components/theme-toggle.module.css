@@ -47,17 +47,42 @@
   font-size: 0.8rem;
 }
 
+/* Mobile - better touch targets */
+@media (max-width: 768px) {
+  .toggleGroup {
+    padding: 3px;
+  }
+  
+  .toggleButton {
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0.5rem 0.75rem;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .toggleButton:active:not(.active) {
+    transform: scale(0.95);
+  }
+  
+  .icon {
+    font-size: 1.1rem;
+  }
+}
+
 @media (max-width: 480px) {
   .label {
     display: none;
   }
   
   .toggleButton {
-    padding: 0.45rem 0.6rem;
+    padding: 0.5rem 0.65rem;
+    min-height: 38px;
+    min-width: 38px;
   }
   
   .icon {
-    font-size: 1rem;
+    font-size: 1.15rem;
   }
 }
 

@@ -758,7 +758,17 @@ export default function DiscoveryForm({
               : undefined
           }
         >
-          {isLoading ? "⏳ Scanning…" : "🔍 Discover"}
+          {isLoading ? (
+            <>
+              <span className={styles.desktopText}>⏳ Scanning…</span>
+              <span className={styles.mobileText}>⏳</span>
+            </>
+          ) : (
+            <>
+              <span className={styles.desktopText}>🔍 Discover</span>
+              <span className={styles.mobileText}>🔍 Scan</span>
+            </>
+          )}
         </button>
         <button
           type="button"
@@ -766,7 +776,12 @@ export default function DiscoveryForm({
           disabled={!hasBatchSelection || isLoading}
           onClick={onBatchOperationsClick}
         >
-          ⚡ Batch Operations{hasBatchSelection ? ` (${selectedCount})` : ""}
+          <span className={styles.desktopText}>
+            ⚡ Batch Operations{hasBatchSelection ? ` (${selectedCount})` : ""}
+          </span>
+          <span className={styles.mobileText}>
+            ⚡ Batch{hasBatchSelection ? ` (${selectedCount})` : ""}
+          </span>
         </button>
         <button
           type="button"
@@ -775,7 +790,8 @@ export default function DiscoveryForm({
           onClick={onExportClick}
           title="Export all discovery results to Excel"
         >
-          📊 Export
+          <span className={styles.desktopText}>📊 Export</span>
+          <span className={styles.mobileText}>📊</span>
         </button>
       </div>
     </form>

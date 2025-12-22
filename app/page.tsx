@@ -6,6 +6,10 @@ export default function Home() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
+        <div className={styles.headerLeft}>
+          <span className={styles.appIcon}>🏠</span>
+          <span className={styles.appTitle}>Cubixx Devices</span>
+        </div>
         <ThemeToggle />
       </header>
       <section className={styles.hero}>
