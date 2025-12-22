@@ -653,17 +653,77 @@ export default function DiscoveryDashboard() {
             hasResults={!!response && response.results.length > 0}
             onExportClick={handleExportToExcel}
           />
-          {isLoading && (
-            <div className={styles.loadingBox}>
-              <div className={styles.loadingSpinner} />
-              <div className={styles.loadingText}>
-                <strong>Scanning network...</strong>
-                <span style={{ fontSize: "0.9em", opacity: 0.8, marginLeft: "0.5rem" }}>
-                  {liveProgress ? `Phase: ${liveProgress.phase}` : "Initializing..."}
-                </span>
+          {isLoading && (() => {
+            const phases = [
+              { key: "quick-sweep", label: "Quick Sweep", shortLabel: "Quick" },
+              { key: "standard", label: "Standard Scan", shortLabel: "Standard" },
+              { key: "deep", label: "Deep Scan", shortLabel: "Deep" },
+            ];
+            const currentPhase = liveProgress?.phase || "";
+            const currentPhaseIndex = phases.findIndex(p => currentPhase.includes(p.key));
+            const totalIps = response?.summary?.totalChecked ?? 0;
+            const scanned = liveProgress?.scannedCount ?? 0;
+            const percent = totalIps > 0 ? Math.round((scanned / totalIps) * 100) : 0;
+            
+            return (
+              <div className={styles.progressContainer}>
+                {/* Phase Steps */}
+                <div className={styles.phaseSteps}>
+                  {phases.map((phase, idx) => {
+                    const isActive = idx === currentPhaseIndex;
+                    const isComplete = idx < currentPhaseIndex;
+                    const isPending = idx > currentPhaseIndex;
+                    return (
+                      <div 
+                        key={phase.key}
+                        className={`${styles.phaseStep} ${isActive ? styles.phaseStepActive : ""} ${isComplete ? styles.phaseStepComplete : ""} ${isPending ? styles.phaseStepPending : ""}`}
+                      >
+                        <div className={styles.phaseStepIndicator}>
+                          {isComplete ? "✓" : idx + 1}
+                        </div>
+                        <span className={styles.phaseStepLabel}>
+                          <span className={styles.desktopText}>{phase.label}</span>
+                          <span className={styles.mobileText}>{phase.shortLabel}</span>
+                        </span>
+                        {isActive && <span className={styles.phaseStepPulse} />}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Main Progress Bar */}
+                <div className={styles.progressBarWrapper}>
+                  <div className={styles.progressBarTrack}>
+                    <div 
+                      className={styles.progressBarFill}
+                      style={{ width: `${Math.min(100, percent)}%` }}
+                    />
+                  </div>
+                  <span className={styles.progressPercent}>{percent}%</span>
+                </div>
+                
+                {/* Stats Row */}
+                <div className={styles.progressStats}>
+                  <div className={styles.progressStatMain}>
+                    <span className={styles.progressStatValue}>{scanned}</span>
+                    <span className={styles.progressStatLabel}>/ {totalIps} IPs scanned</span>
+                  </div>
+                  <div className={styles.progressStatsRight}>
+                    <div className={`${styles.progressStat} ${styles.progressStatPanel}`}>
+                      <span className={styles.progressStatIcon}>●</span>
+                      <span className={styles.progressStatValue}>{liveProgress?.panelsFound ?? 0}</span>
+                      <span className={styles.progressStatLabel}>panels</span>
+                    </div>
+                    <div className={`${styles.progressStat} ${styles.progressStatOther}`}>
+                      <span className={styles.progressStatIcon}>○</span>
+                      <span className={styles.progressStatValue}>{liveProgress?.notPanels ?? 0}</span>
+                      <span className={styles.progressStatLabel}>other</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           {!isLoading && discoveredPanelIps.length > 0 && (
             <div className={styles.streamStatus}>
               <span className={isStreamConnected ? styles.statusConnected : styles.statusDisconnected}>

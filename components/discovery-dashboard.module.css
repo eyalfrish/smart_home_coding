@@ -2186,43 +2186,250 @@
   opacity: 0.85;
 }
 
-/* Loading box during discovery */
-.loadingBox {
-  margin-top: 1rem;
-  padding: 0.75rem 1.25rem;
-  background: var(--input-focus-ring);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+/* ============================================
+   Discovery Progress Bar
+   ============================================ */
+.progressContainer {
+  margin-top: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+}
+
+/* Phase Steps - Step Indicator */
+.phaseSteps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  position: relative;
+}
+
+/* Connecting line between steps */
+.phaseSteps::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 32px;
+  right: 32px;
+  height: 2px;
+  background: var(--border-strong);
+  z-index: 0;
+}
+
+.phaseStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.phaseStepIndicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  color: var(--muted);
+  transition: all 0.3s ease;
+}
+
+.phaseStepLabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.phaseStepPulse {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.3;
+  animation: stepPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes stepPulse {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Active phase */
+.phaseStepActive .phaseStepIndicator {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+}
+
+.phaseStepActive .phaseStepLabel {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Completed phase */
+.phaseStepComplete .phaseStepIndicator {
+  background: var(--panel);
+  border-color: var(--panel);
+  color: white;
+}
+
+.phaseStepComplete .phaseStepLabel {
+  color: var(--panel);
+}
+
+/* Pending phase */
+.phaseStepPending .phaseStepIndicator {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--muted-foreground);
+}
+
+.phaseStepPending .phaseStepLabel {
+  color: var(--muted-foreground);
+}
+
+/* Progress Bar - Thicker & Bolder */
+.progressBarWrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.progressBarTrack {
+  flex: 1;
+  height: 20px;
+  background: var(--button-secondary-bg);
+  border-radius: 100px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.progressBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, #3b82f6 60%, var(--panel) 100%);
+  border-radius: 100px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  min-width: 4px;
+}
+
+.progressBarFill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  animation: barShine 2s ease-in-out infinite;
+}
+
+@keyframes barShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.progressPercent {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 3.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stats Row */
+.progressStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+.progressStatMain {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.progressStatMain .progressStatValue {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressStatMain .progressStatLabel {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.progressStatsRight {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.loadingSpinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.loadingText {
-  color: var(--foreground);
+.progressStat {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  font-size: 0.875rem;
 }
 
-.loadingText strong {
-  font-size: 1rem;
+.progressStatIcon {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.progressStatValue {
+  font-weight: 600;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressStatLabel {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.progressStatPanel .progressStatIcon,
+.progressStatPanel .progressStatValue {
+  color: var(--panel);
+}
+
+.progressStatOther .progressStatIcon,
+.progressStatOther .progressStatValue {
+  color: var(--warning);
 }
 
 /* ===========================================
@@ -3205,15 +3412,86 @@
   }
   
   /* ==========================================
-     Loading States - Mobile Friendly
+     Progress Bar - Mobile Friendly
      ========================================== */
-  .loadingBox {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 0.75rem;
-    padding: 1.25rem;
+  .progressContainer {
+    margin-top: 1rem;
+    padding: 1rem;
     border-radius: var(--mobile-radius);
+  }
+  
+  /* Phase Steps Mobile */
+  .phaseSteps {
+    margin-bottom: 1rem;
+  }
+  
+  .phaseSteps::before {
+    left: 24px;
+    right: 24px;
+    top: 14px;
+  }
+  
+  .phaseStepIndicator {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+  
+  .phaseStepLabel {
+    font-size: 0.7rem;
+  }
+  
+  .phaseStepPulse {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .phaseStepActive .phaseStepIndicator {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  }
+  
+  /* Progress Bar Mobile */
+  .progressBarWrapper {
+    gap: 0.75rem;
+    margin-bottom: 0.875rem;
+  }
+  
+  .progressBarTrack {
+    height: 16px;
+  }
+  
+  .progressPercent {
+    font-size: 1.15rem;
+    min-width: 3rem;
+  }
+  
+  /* Stats Mobile */
+  .progressStats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+  }
+  
+  .progressStatMain .progressStatValue {
+    font-size: 1rem;
+  }
+  
+  .progressStatMain .progressStatLabel {
+    font-size: 0.8rem;
+  }
+  
+  .progressStatsRight {
+    gap: 0.75rem;
+  }
+  
+  .progressStat {
+    font-size: 0.8rem;
+    gap: 0.25rem;
+  }
+  
+  .progressStatIcon {
+    font-size: 0.6rem;
   }
   
   .streamStatus {
