@@ -394,7 +394,7 @@
 .selectAllWrapper {
   margin-left: auto;
   padding-right: 0;
-  display: flex;
+  display: none; /* Hidden on desktop - table header has its own select-all */
   align-items: center;
 }
 
@@ -3075,8 +3075,9 @@
     box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
   }
   
-  /* Select all checkbox - aligned with panel checkboxes */
+  /* Select all checkbox - only visible on mobile */
   .selectAllWrapper {
+    display: flex;
     margin-left: auto;
     flex-shrink: 0;
     margin-right: -0.75rem;
