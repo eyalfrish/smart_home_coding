@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import styles from './discovery-dashboard.module.css';
+import type { LivePanelState } from '@/lib/discovery/types';
 
 // =============================================================================
 // Types
@@ -67,6 +68,20 @@ export interface ProfileData {
   smart_switches?: SmartSwitchesData | Record<string, unknown>;
 }
 
+/**
+ * Validation result for switches and flows
+ */
+interface ValidationResult {
+  /** Set of switch IDs that are unreachable (format: "ip:relayIndex") */
+  unreachableSwitchIds: Set<string>;
+  /** Count of total unreachable switches */
+  unreachableCount: number;
+  /** Map of flow names to their invalid step indices */
+  invalidFlowSteps: Map<string, number[]>;
+  /** Count of flows with at least one invalid step */
+  invalidFlowCount: number;
+}
+
 interface FavoritesSectionProps {
   /** Currently selected profile (null if none selected) */
   profile: ProfileData | null;
@@ -74,6 +89,10 @@ interface FavoritesSectionProps {
   discoveredPanelIps: Set<string>;
   /** Whether discovery is currently running */
   isLoading: boolean;
+  /** Whether discovery has completed at least once */
+  discoveryCompleted: boolean;
+  /** Live panel states from WebSocket connections */
+  livePanelStates: Map<string, LivePanelState>;
   /** Callback when favorites are updated (for save logic) */
   onFavoritesUpdate?: (profileId: number, favorites: Record<string, unknown>) => void;
   /** Callback when smart switches are updated (for save logic) */
@@ -192,10 +211,91 @@ function getPlaceholderSmartSwitches(): SmartSwitchesData {
 // FavoritesSection Component
 // =============================================================================
 
+// =============================================================================
+// Validation Helper
+// =============================================================================
+
+/**
+ * Validate all switches and flows against discovered and connected panels.
+ * A switch is considered reachable if its panel IP is discovered AND connected.
+ */
+function validateSwitchesAndFlows(
+  favoritesData: FavoritesData,
+  smartSwitchesData: SmartSwitchesData,
+  discoveredPanelIps: Set<string>,
+  livePanelStates: Map<string, LivePanelState>,
+  discoveryCompleted: boolean,
+): ValidationResult {
+  const unreachableSwitchIds = new Set<string>();
+  const invalidFlowSteps = new Map<string, number[]>();
+  
+  // Don't validate until discovery has completed at least once
+  if (!discoveryCompleted) {
+    return {
+      unreachableSwitchIds,
+      unreachableCount: 0,
+      invalidFlowSteps,
+      invalidFlowCount: 0,
+    };
+  }
+
+  // Helper to check if a panel IP is reachable (discovered AND connected)
+  const isPanelReachable = (ip: string): boolean => {
+    if (!discoveredPanelIps.has(ip)) return false;
+    const state = livePanelStates.get(ip);
+    // Consider reachable if connected OR if we don't have connection status yet
+    // This prevents false positives during initial connection phase
+    return !state || state.connectionStatus === 'connected' || state.connectionStatus === 'connecting';
+  };
+
+  // Validate favorite switches
+  for (const [_zoneName, switches] of Object.entries(favoritesData.zones)) {
+    for (const sw of switches) {
+      const switchId = `${sw.ip}:${sw.relayIndex}`;
+      if (!isPanelReachable(sw.ip)) {
+        unreachableSwitchIds.add(switchId);
+      }
+    }
+  }
+
+  // Validate smart flow steps
+  for (const [_zoneName, flows] of Object.entries(smartSwitchesData.zones)) {
+    for (const flow of flows) {
+      const invalidSteps: number[] = [];
+      flow.steps.forEach((step, idx) => {
+        // switchId format: "ip:relayIndex"
+        const ip = step.switchId.split(':')[0];
+        if (!isPanelReachable(ip)) {
+          invalidSteps.push(idx);
+          unreachableSwitchIds.add(step.switchId);
+        }
+      });
+      if (invalidSteps.length > 0) {
+        // Use zoneName + flowName as key to handle same-named flows in different zones
+        const flowKey = `${flow.name}`;
+        invalidFlowSteps.set(flowKey, invalidSteps);
+      }
+    }
+  }
+
+  return {
+    unreachableSwitchIds,
+    unreachableCount: unreachableSwitchIds.size,
+    invalidFlowSteps,
+    invalidFlowCount: invalidFlowSteps.size,
+  };
+}
+
+// =============================================================================
+// FavoritesSection Component
+// =============================================================================
+
 export default function FavoritesSection({
   profile,
   discoveredPanelIps,
   isLoading,
+  discoveryCompleted,
+  livePanelStates,
   onFavoritesUpdate,
   onSmartSwitchesUpdate,
 }: FavoritesSectionProps) {
@@ -203,6 +303,12 @@ export default function FavoritesSection({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeZone, setActiveZone] = useState<string | null>(null);
+  const [warningDismissed, setWarningDismissed] = useState(false);
+
+  // Reset warning dismissed state when profile changes
+  useEffect(() => {
+    setWarningDismissed(false);
+  }, [profile?.id]);
 
   // Parse favorites from profile (or use placeholder if no profile)
   const favoritesData = useMemo(() => {
@@ -267,18 +373,52 @@ export default function FavoritesSection({
     : [];
 
   // =============================================================================
+  // Validation
+  // =============================================================================
+
+  // Run validation whenever dependencies change
+  const validation = useMemo(() => {
+    return validateSwitchesAndFlows(
+      favoritesData,
+      smartSwitchesData,
+      discoveredPanelIps,
+      livePanelStates,
+      discoveryCompleted
+    );
+  }, [favoritesData, smartSwitchesData, discoveredPanelIps, livePanelStates, discoveryCompleted]);
+
+  // Helper to check if a specific switch is unreachable
+  const isSwitchUnreachable = useCallback((sw: FavoriteSwitch): boolean => {
+    const switchId = `${sw.ip}:${sw.relayIndex}`;
+    return validation.unreachableSwitchIds.has(switchId);
+  }, [validation.unreachableSwitchIds]);
+
+  // Helper to check if a flow has any invalid steps
+  const hasInvalidSteps = useCallback((flow: SmartFlow): boolean => {
+    return validation.invalidFlowSteps.has(flow.name);
+  }, [validation.invalidFlowSteps]);
+
+  // Get invalid step indices for a flow
+  const getInvalidStepIndices = useCallback((flow: SmartFlow): number[] => {
+    return validation.invalidFlowSteps.get(flow.name) ?? [];
+  }, [validation.invalidFlowSteps]);
+
+  // Show warning when there are unreachable switches (and not dismissed)
+  const showValidationWarning = validation.unreachableCount > 0 && !warningDismissed && discoveryCompleted;
+
+  // =============================================================================
   // Handlers
   // =============================================================================
 
-  const handleSwitchClick = useCallback((sw: FavoriteSwitch, isDiscovered: boolean) => {
+  const handleSwitchClick = useCallback((sw: FavoriteSwitch, isReachable: boolean) => {
     console.log('[FavoritesSection] Switch clicked:', {
       switch: sw,
-      isDiscovered,
+      isReachable,
       profileId: profile?.id,
     });
 
-    if (!isDiscovered) {
-      console.log('[FavoritesSection] Switch not available - panel not discovered');
+    if (!isReachable) {
+      console.log('[FavoritesSection] Switch not available - panel not reachable');
       return;
     }
 
@@ -434,6 +574,27 @@ export default function FavoritesSection({
 
       {/* Expandable content */}
       <div className={styles.collapsibleSectionContent}>
+        {/* Validation warning toast */}
+        {showValidationWarning && profile && (
+          <div className={styles.validationWarning}>
+            <span className={styles.validationWarningIcon}>⚠️</span>
+            <span className={styles.validationWarningText}>
+              {validation.unreachableCount} switch{validation.unreachableCount !== 1 ? 'es' : ''} no longer reachable
+              {validation.invalidFlowCount > 0 && (
+                <> · {validation.invalidFlowCount} flow{validation.invalidFlowCount !== 1 ? 's' : ''} affected</>
+              )}
+            </span>
+            <button
+              type="button"
+              className={styles.validationWarningDismiss}
+              onClick={() => setWarningDismissed(true)}
+              title="Dismiss warning"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* No profile message */}
         {!profile && (
           <div className={styles.favoritesEmptyState}>
@@ -521,23 +682,37 @@ export default function FavoritesSection({
                     <div className={styles.favoritesSwitchGrid}>
                       {currentZoneSwitches.map((sw, idx) => {
                         const isDiscovered = discoveredPanelIps.has(sw.ip);
+                        const isUnreachable = isSwitchUnreachable(sw);
+                        // Reachable = discovered AND not marked as unreachable by validation
+                        const isReachable = isDiscovered && !isUnreachable;
+                        // Show invalid styling only after discovery completes
+                        const showInvalidState = discoveryCompleted && isUnreachable;
+                        
                         return (
                           <button
                             key={`${sw.ip}-${sw.relayIndex}-${idx}`}
                             type="button"
-                            className={`${styles.favoriteSwitchButton} ${isDiscovered ? '' : styles.favoriteSwitchButtonDisabled}`}
-                            onClick={() => handleSwitchClick(sw, isDiscovered)}
-                            disabled={isLoading}
-                            title={isDiscovered ? `${sw.name} (${sw.ip} relay ${sw.relayIndex})` : `${sw.name} - Panel not discovered`}
+                            className={`${styles.favoriteSwitchButton} ${!isReachable ? styles.favoriteSwitchButtonDisabled : ''} ${showInvalidState ? styles.favoriteSwitchButtonInvalid : ''}`}
+                            onClick={() => handleSwitchClick(sw, isReachable)}
+                            disabled={isLoading || !isReachable}
+                            title={
+                              showInvalidState 
+                                ? `${sw.name} - Panel unreachable (${sw.ip})`
+                                : isReachable 
+                                  ? `${sw.name} (${sw.ip} relay ${sw.relayIndex})` 
+                                  : `${sw.name} - Panel not discovered`
+                            }
                           >
                             <span className={styles.favoriteSwitchIcon}>
-                              {isDiscovered ? '💡' : '⭘'}
+                              {showInvalidState ? '⚠️' : isReachable ? '💡' : '⭘'}
                             </span>
                             <span className={styles.favoriteSwitchName}>{sw.name}</span>
                             <span className={styles.favoriteSwitchIp}>
                               {sw.ip.split('.').slice(-1)[0]}:{sw.relayIndex}
                             </span>
-                            {!isDiscovered && (
+                            {showInvalidState ? (
+                              <span className={styles.favoriteSwitchUnreachable}>unreachable</span>
+                            ) : !isDiscovered && (
                               <span className={styles.favoriteSwitchOffline}>offline</span>
                             )}
                           </button>
@@ -592,33 +767,66 @@ export default function FavoritesSection({
                   {/* Flows grid */}
                   {currentZoneFlows.length > 0 ? (
                     <div className={styles.smartFlowsGrid}>
-                      {currentZoneFlows.map((flow, idx) => (
-                        <div
-                          key={`flow-${flow.name}-${idx}`}
-                          className={styles.smartFlowCard}
-                        >
-                          <div className={styles.smartFlowCardHeader}>
-                            <span className={styles.smartFlowIcon}>⚡</span>
-                            <span className={styles.smartFlowName}>{flow.name}</span>
-                          </div>
-                          <div className={styles.smartFlowMeta}>
-                            {flow.steps.length} step{flow.steps.length !== 1 ? 's' : ''}
-                            {flow.steps.length > 0 && (
-                              <span className={styles.smartFlowDuration}>
-                                ~{Math.ceil(flow.steps.reduce((acc, s) => acc + s.delayMs, 0) / 1000)}s
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className={styles.smartFlowRunButton}
-                            onClick={() => handleRunFlow(flow, effectiveActiveZone)}
-                            disabled={isLoading}
+                      {currentZoneFlows.map((flow, idx) => {
+                        const flowHasInvalidSteps = hasInvalidSteps(flow);
+                        const invalidStepIndices = getInvalidStepIndices(flow);
+                        const showInvalidState = discoveryCompleted && flowHasInvalidSteps;
+                        
+                        return (
+                          <div
+                            key={`flow-${flow.name}-${idx}`}
+                            className={`${styles.smartFlowCard} ${showInvalidState ? styles.smartFlowCardInvalid : ''}`}
                           >
-                            ▶ Run Flow
-                          </button>
-                        </div>
-                      ))}
+                            <div className={styles.smartFlowCardHeader}>
+                              <span className={styles.smartFlowIcon}>
+                                {showInvalidState ? '⚠️' : '⚡'}
+                              </span>
+                              <span className={styles.smartFlowName}>{flow.name}</span>
+                            </div>
+                            <div className={styles.smartFlowMeta}>
+                              {flow.steps.length} step{flow.steps.length !== 1 ? 's' : ''}
+                              {showInvalidState && (
+                                <span className={styles.smartFlowInvalidCount}>
+                                  {invalidStepIndices.length} unreachable
+                                </span>
+                              )}
+                              {flow.steps.length > 0 && !showInvalidState && (
+                                <span className={styles.smartFlowDuration}>
+                                  ~{Math.ceil(flow.steps.reduce((acc, s) => acc + s.delayMs, 0) / 1000)}s
+                                </span>
+                              )}
+                            </div>
+                            {/* Show invalid steps preview when flow has issues */}
+                            {showInvalidState && (
+                              <div className={styles.smartFlowInvalidSteps}>
+                                {invalidStepIndices.slice(0, 2).map(stepIdx => {
+                                  const step = flow.steps[stepIdx];
+                                  const ip = step.switchId.split(':')[0];
+                                  return (
+                                    <span key={stepIdx} className={styles.smartFlowInvalidStep}>
+                                      Step {stepIdx + 1}: {ip.split('.').slice(-1)[0]}
+                                    </span>
+                                  );
+                                })}
+                                {invalidStepIndices.length > 2 && (
+                                  <span className={styles.smartFlowInvalidStep}>
+                                    +{invalidStepIndices.length - 2} more
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className={`${styles.smartFlowRunButton} ${showInvalidState ? styles.smartFlowRunButtonDisabled : ''}`}
+                              onClick={() => handleRunFlow(flow, effectiveActiveZone)}
+                              disabled={isLoading || showInvalidState}
+                              title={showInvalidState ? `Cannot run: ${invalidStepIndices.length} step(s) reference unreachable panels` : undefined}
+                            >
+                              {showInvalidState ? '⚠️ Cannot Run' : '▶ Run Flow'}
+                            </button>
+                          </div>
+                        );
+                      })}
                       {/* Add flow card in edit mode */}
                       {isEditMode && (
                         <button

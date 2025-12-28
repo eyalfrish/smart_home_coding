@@ -87,6 +87,9 @@ export default function DiscoveryDashboard() {
   // Track if registry has been reset
   const [registryReady, setRegistryReady] = useState(false);
   
+  // Track if discovery has completed at least once (for validation)
+  const [discoveryCompleted, setDiscoveryCompleted] = useState(false);
+  
   // Server session ID for validating panel stream connections
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
   
@@ -396,6 +399,7 @@ export default function DiscoveryDashboard() {
           
           updateResponseFromMap(true); // Force final update
           setIsLoading(false);
+          setDiscoveryCompleted(true); // Mark discovery as completed for validation
         }
       };
 
@@ -1167,9 +1171,12 @@ export default function DiscoveryDashboard() {
               id: selectedProfile.id,
               name: selectedProfile.name,
               favorites: selectedProfile.favorites,
+              smart_switches: selectedProfile.smart_switches,
             } : null}
             discoveredPanelIps={new Set(discoveredPanelIps)}
             isLoading={isLoading}
+            discoveryCompleted={discoveryCompleted}
+            livePanelStates={panelStates}
             onFavoritesUpdate={handleFavoritesUpdate}
           />
         </>
