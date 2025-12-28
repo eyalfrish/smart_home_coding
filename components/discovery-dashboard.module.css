@@ -4487,3 +4487,826 @@
     font-size: 1.5rem;
   }
 }
+
+/* ===========================================
+   Profile Picker Section
+   =========================================== */
+
+.profilePickerSection {
+  border: 2px solid var(--border-strong);
+  border-radius: 14px;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, var(--surface) 0%, var(--card) 100%);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.profilePickerSection:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.profilePickerHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--table-header-bg);
+}
+
+.profilePickerIcon {
+  font-size: 1.1rem;
+}
+
+.profilePickerTitle {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+
+.profilePickerContent {
+  padding: 1rem 1.25rem;
+}
+
+/* Loading state */
+.profilePickerLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.profilePickerSpinner {
+  animation: profileSpin 1.5s linear infinite;
+}
+
+@keyframes profileSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error state */
+.profilePickerError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--badge-warning-bg);
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+.profilePickerRetry {
+  background: var(--warning);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.profilePickerRetry:hover {
+  opacity: 0.85;
+}
+
+/* Select dropdown */
+.profilePickerSelect {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: 2px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+
+.profilePickerSelect:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.profilePickerSelect:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--input-focus-ring);
+}
+
+.profilePickerSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profilePickerSelect option {
+  padding: 0.5rem;
+  background: var(--card);
+  color: var(--foreground);
+}
+
+/* Modal error */
+.profilePickerModalError {
+  padding: 0.65rem 1rem;
+  background: var(--badge-warning-bg);
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+/* ===========================================
+   Profile Picker Mobile Styles
+   =========================================== */
+
+@media (max-width: 768px) {
+  .profilePickerSection {
+    border-radius: var(--mobile-radius);
+    margin-bottom: 1rem;
+  }
+  
+  .profilePickerHeader {
+    padding: 0.65rem 1rem;
+  }
+  
+  .profilePickerIcon {
+    font-size: 1rem;
+  }
+  
+  .profilePickerTitle {
+    font-size: 0.85rem;
+  }
+  
+  .profilePickerContent {
+    padding: 0.875rem 1rem;
+  }
+  
+  .profilePickerSelect {
+    padding: 0.875rem 1rem;
+    font-size: 16px; /* Prevent iOS zoom */
+    min-height: var(--touch-target-min);
+    border-radius: var(--mobile-radius);
+  }
+  
+  .profilePickerLoading {
+    font-size: 0.85rem;
+  }
+  
+  .profilePickerError {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    text-align: center;
+  }
+  
+  .profilePickerRetry {
+    width: 100%;
+    padding: 0.65rem;
+    min-height: var(--touch-target-min);
+  }
+}
+
+/* ===========================================
+   Favorites Section
+   =========================================== */
+
+.favoritesBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  background: var(--badge-accent-bg);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: 0.5rem;
+}
+
+.favoritesButton {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.favoritesButton:hover:not(:disabled) {
+  background: var(--card-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.favoritesButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.favoritesButtonPrimary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.favoritesButtonPrimary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+
+/* Collapsed summary row */
+.favoritesSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.favoritesSummaryZone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.favoritesSummaryZoneName {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.favoritesSummaryZoneCount {
+  color: var(--accent);
+  font-weight: 700;
+  background: var(--badge-accent-bg);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+}
+
+.favoritesSummaryMore {
+  padding: 0.35rem 0.65rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Zone tabs */
+.favoritesZoneTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.favoritesZoneTab {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.favoritesZoneTab:hover {
+  background: var(--card-hover);
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+.favoritesZoneTabActive {
+  background: var(--badge-accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.favoritesZoneTabCount {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--card);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+.favoritesZoneTabActive .favoritesZoneTabCount {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Zone content area */
+.favoritesZoneContent {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Switch grid - responsive */
+.favoritesSwitchGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+/* Individual switch button */
+.favoriteSwitchButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem 0.75rem;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-height: 90px;
+}
+
+.favoriteSwitchButton:hover:not(:disabled) {
+  background: var(--card-hover);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.favoriteSwitchButton:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.favoriteSwitchButtonDisabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.favoriteSwitchButtonDisabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.favoriteSwitchIcon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.favoriteSwitchName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--foreground);
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favoriteSwitchIp {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.favoriteSwitchOffline {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--warning);
+  background: var(--badge-warn-bg);
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Empty state */
+.favoritesEmptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.favoritesEmptyIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.favoritesEmptyState p {
+  margin: 0 0 1rem;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.favoritesCreateZoneButton {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.8rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.favoritesCreateZoneButton:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+/* Empty zone inside tab */
+.favoritesEmptyZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.favoritesEmptyZone p {
+  margin: 0 0 1rem;
+}
+
+.favoritesAddSwitchButton {
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.favoritesAddSwitchButton:hover {
+  background: var(--badge-accent-bg);
+}
+
+/* ===========================================
+   Smart Flows Section
+   =========================================== */
+
+.smartFlowsSection {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px dashed var(--border);
+}
+
+.smartFlowsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.smartFlowsTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #a855f7;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.smartFlowsCreateButton {
+  background: transparent;
+  color: #a855f7;
+  border: 1.5px solid #a855f7;
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.smartFlowsCreateButton:hover {
+  background: rgba(168, 85, 247, 0.1);
+}
+
+.smartFlowsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.85rem;
+}
+
+.smartFlowCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(139, 92, 246, 0.12) 100%);
+  border: 2px solid rgba(168, 85, 247, 0.35);
+  border-radius: 16px;
+  transition: all 0.2s ease;
+  min-height: 120px;
+}
+
+.smartFlowCard:hover {
+  border-color: #a855f7;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.2);
+}
+
+.smartFlowCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.smartFlowIcon {
+  font-size: 1.3rem;
+  filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
+}
+
+.smartFlowName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--foreground);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smartFlowMeta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.smartFlowDuration {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+.smartFlowRunButton {
+  margin-top: auto;
+  background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.smartFlowRunButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
+  transform: scale(1.02);
+  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.35);
+}
+
+.smartFlowRunButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.smartFlowRunButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.smartFlowsEmptyCreate {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.smartFlowsCreateButtonEmpty {
+  background: transparent;
+  color: #a855f7;
+  border: 2px dashed rgba(168, 85, 247, 0.4);
+  border-radius: 14px;
+  padding: 1rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.smartFlowsCreateButtonEmpty:hover {
+  background: rgba(168, 85, 247, 0.08);
+  border-color: #a855f7;
+}
+
+.emptyZoneActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ===========================================
+   Favorites Section - Mobile
+   =========================================== */
+
+@media (max-width: 768px) {
+  .favoritesBadge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+    margin-left: 0.35rem;
+  }
+
+  .favoritesButton {
+    flex: 1;
+    justify-content: center;
+    padding: 0.65rem 0.5rem;
+    font-size: 0.8rem;
+    min-height: var(--touch-target-min);
+  }
+
+  .favoritesSummary {
+    padding: 0.75rem 1rem;
+    gap: 0.4rem;
+  }
+
+  .favoritesSummaryZone {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .favoritesZoneTabs {
+    gap: 0.4rem;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .favoritesZoneTab {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: var(--touch-target-min);
+  }
+
+  .favoritesSwitchGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+  }
+
+  .favoriteSwitchButton {
+    padding: 0.85rem 0.5rem;
+    min-height: 80px;
+    border-radius: var(--mobile-radius);
+  }
+
+  .favoriteSwitchIcon {
+    font-size: 1.25rem;
+  }
+
+  .favoriteSwitchName {
+    font-size: 0.8rem;
+  }
+
+  .favoriteSwitchIp {
+    font-size: 0.65rem;
+  }
+
+  .favoriteSwitchOffline {
+    font-size: 0.55rem;
+    padding: 0.12rem 0.35rem;
+  }
+
+  .favoritesEmptyIcon {
+    font-size: 2.5rem;
+  }
+
+  .favoritesEmptyState p {
+    font-size: 0.9rem;
+  }
+
+  .favoritesCreateZoneButton {
+    padding: 0.7rem 1.25rem;
+    font-size: 0.85rem;
+    min-height: var(--touch-target-min);
+  }
+
+  .favoritesEmptyZone {
+    padding: 1.5rem 1rem;
+    border-radius: var(--mobile-radius);
+  }
+
+  .favoritesAddSwitchButton {
+    min-height: var(--touch-target-min);
+  }
+
+  /* Smart Flows Mobile */
+  .smartFlowsSection {
+    margin-top: 1rem;
+    padding-top: 1rem;
+  }
+
+  .smartFlowsHeader {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .smartFlowsTitle {
+    font-size: 0.85rem;
+  }
+
+  .smartFlowsGrid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .smartFlowCard {
+    min-height: 100px;
+    padding: 1rem;
+    border-radius: var(--mobile-radius);
+  }
+
+  .smartFlowName {
+    font-size: 0.9rem;
+  }
+
+  .smartFlowRunButton {
+    min-height: var(--touch-target-min);
+    padding: 0.75rem 1rem;
+  }
+
+  .smartFlowsCreateButtonEmpty {
+    width: 100%;
+    justify-content: center;
+    min-height: var(--touch-target-min);
+  }
+
+  .emptyZoneActions {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

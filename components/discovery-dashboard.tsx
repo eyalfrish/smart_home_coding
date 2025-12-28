@@ -5,6 +5,8 @@ import DiscoveryForm, { type DiscoveryFormValues, type IpRange, type ThoroughSet
 import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
 import BatchOperationsView from "./batch-operations-view";
+import ProfilePicker, { type FullProfile } from "./profile-picker";
+import FavoritesSection from "./favorites-section";
 import styles from "./discovery-dashboard.module.css";
 import type {
   DiscoveryRequest,
@@ -78,6 +80,9 @@ export default function DiscoveryDashboard() {
   const [isPanelDiscoveryExpanded, setIsPanelDiscoveryExpanded] = useState(false);
   // IP Ranges section expansion state - starts collapsed
   const [isIpRangesExpanded, setIsIpRangesExpanded] = useState(false);
+  
+  // Selected profile (full profile data for favorites section)
+  const [selectedProfile, setSelectedProfile] = useState<FullProfile | null>(null);
   
   // Track if registry has been reset
   const [registryReady, setRegistryReady] = useState(false);
@@ -528,6 +533,27 @@ export default function DiscoveryDashboard() {
     executeDiscovery(requests);
   };
 
+  // Handle profile selection - load IP ranges and trigger discovery
+  const handleProfileSelect = useCallback((profileId: number, ranges: IpRange[], fullProfile: FullProfile) => {
+    setSelectedProfile(fullProfile);
+    setFormValues(prev => ({
+      ...prev,
+      ranges,
+    }));
+    // Collapse IP ranges section after loading profile
+    setIsIpRangesExpanded(false);
+  }, []);
+
+  // Trigger discovery after profile load - receives ranges directly to avoid state timing issues
+  const handleTriggerDiscoveryFromProfile = useCallback((ranges: IpRange[]) => {
+    // Validate the provided ranges
+    const validation = validateFormRanges(ranges);
+    if (validation.canSubmit) {
+      const requests: DiscoveryRequest[] = ranges.map(rangeToRequest);
+      executeDiscovery(requests);
+    }
+  }, [executeDiscovery]);
+
   const handlePanelsSummaryClick = () => {
     if (!response || response.summary.panelsFound === 0) {
       return;
@@ -615,6 +641,32 @@ export default function DiscoveryDashboard() {
     });
   }, []);
 
+  // Handle favorites update - save to profile
+  const handleFavoritesUpdate = useCallback(async (profileId: number, favorites: Record<string, unknown>) => {
+    console.log('[Dashboard] Saving favorites for profile:', profileId, favorites);
+    
+    try {
+      const res = await fetch(`/api/profiles/${profileId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorites }),
+      });
+      
+      if (!res.ok) {
+        console.error('[Dashboard] Failed to save favorites:', res.status);
+        return;
+      }
+      
+      const data = await res.json();
+      console.log('[Dashboard] Favorites saved:', data);
+      
+      // Update local profile state with new favorites
+      setSelectedProfile(prev => prev ? { ...prev, favorites } : null);
+    } catch (err) {
+      console.error('[Dashboard] Error saving favorites:', err);
+    }
+  }, []);
+
   const panelResults = response?.results ?? [];
 
   // Get list of Cubixx panel IPs for selection purposes
@@ -660,6 +712,15 @@ export default function DiscoveryDashboard() {
         />
       ) : (
         <>
+          {/* Profile Picker - at the very top */}
+          <ProfilePicker
+            currentRanges={formValues.ranges}
+            onProfileSelect={handleProfileSelect}
+            onTriggerDiscovery={handleTriggerDiscoveryFromProfile}
+            isLoading={isLoading}
+            disabled={isLoading}
+          />
+
           {/* IP Ranges Form - Collapsible */}
           <DiscoveryForm
             values={formValues}
@@ -1100,19 +1161,17 @@ export default function DiscoveryDashboard() {
             </div>
           </div>
 
-          {/* Placeholder: Favorite Switches Section */}
-          <div className={styles.placeholderSection}>
-            <div className={styles.placeholderSectionHeader}>
-              <h3 className={styles.placeholderSectionTitle}>
-                ⭐ Favorite Switches
-                <span className={styles.placeholderBadge}>Coming Soon</span>
-              </h3>
-            </div>
-            <div className={styles.placeholderContent}>
-              <div className={styles.placeholderIcon}>🏠</div>
-              <p>Create Zones and add your favorite switches for quick access.</p>
-            </div>
-          </div>
+          {/* Favorite Switches Section */}
+          <FavoritesSection
+            profile={selectedProfile ? {
+              id: selectedProfile.id,
+              name: selectedProfile.name,
+              favorites: selectedProfile.favorites,
+            } : null}
+            discoveredPanelIps={new Set(discoveredPanelIps)}
+            isLoading={isLoading}
+            onFavoritesUpdate={handleFavoritesUpdate}
+          />
 
           {/* Placeholder: Smart Switches Section */}
           <div className={styles.placeholderSection}>
