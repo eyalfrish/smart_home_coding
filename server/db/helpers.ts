@@ -29,6 +29,7 @@ const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 function createEmptyDatabase(): ProfilesDatabase {
   return {
     version: CURRENT_SCHEMA_VERSION,
+    defaultProfileId: null,
     profiles: [],
     next_id: 1,
   };
@@ -82,6 +83,20 @@ function migrateDatabase(db: ProfilesDatabase): ProfilesDatabase {
     db.next_id = db.profiles.length > 0 
       ? Math.max(...db.profiles.map(p => p.id)) + 1 
       : 1;
+  }
+  
+  // Ensure defaultProfileId exists (backward compatibility)
+  if (db.defaultProfileId === undefined) {
+    db.defaultProfileId = null;
+  }
+  
+  // Validate defaultProfileId - clear if the profile no longer exists
+  if (db.defaultProfileId !== null) {
+    const defaultExists = db.profiles.some(p => p.id === db.defaultProfileId);
+    if (!defaultExists) {
+      console.log(`[ProfilesDB] Default profile ${db.defaultProfileId} no longer exists, clearing.`);
+      db.defaultProfileId = null;
+    }
   }
   
   // Ensure all profiles have required fields with defaults
@@ -266,6 +281,7 @@ export async function updateProfile(id: number, data: UpdateProfileData): Promis
 
 /**
  * Deletes a profile.
+ * Also clears defaultProfileId if the deleted profile was the default.
  * 
  * @param id The profile ID
  * @returns True if deleted, false if not found
@@ -279,6 +295,13 @@ export async function deleteProfile(id: number): Promise<boolean> {
   }
   
   const deleted = db.profiles.splice(index, 1)[0];
+  
+  // Clear default if this profile was the default
+  if (db.defaultProfileId === id) {
+    db.defaultProfileId = null;
+    console.log(`[ProfilesDB] Cleared default profile (deleted profile was default)`);
+  }
+  
   await saveProfiles(db);
   
   console.log(`[ProfilesDB] Deleted profile: ${deleted.name} (id: ${deleted.id})`);
@@ -371,5 +394,49 @@ export async function getFavorites(
 ): Promise<Record<string, Record<string, boolean>> | null> {
   const profile = await getProfile(profileId);
   return profile?.favorites ?? null;
+}
+
+// =============================================================================
+// Default Profile Operations
+// =============================================================================
+
+/**
+ * Gets the default profile ID.
+ * 
+ * @returns The default profile ID or null if none set
+ */
+export async function getDefaultProfileId(): Promise<number | null> {
+  const db = await loadProfiles();
+  return db.defaultProfileId;
+}
+
+/**
+ * Sets the default profile ID.
+ * 
+ * @param profileId The profile ID to set as default, or null to clear
+ * @returns True if successful, false if profile doesn't exist
+ */
+export async function setDefaultProfileId(profileId: number | null): Promise<boolean> {
+  const db = await loadProfiles();
+  
+  // If setting a profile as default, verify it exists
+  if (profileId !== null) {
+    const profileExists = db.profiles.some(p => p.id === profileId);
+    if (!profileExists) {
+      console.log(`[ProfilesDB] Cannot set default: profile ${profileId} not found`);
+      return false;
+    }
+  }
+  
+  db.defaultProfileId = profileId;
+  await saveProfiles(db);
+  
+  if (profileId !== null) {
+    console.log(`[ProfilesDB] Set default profile to: ${profileId}`);
+  } else {
+    console.log(`[ProfilesDB] Cleared default profile`);
+  }
+  
+  return true;
 }
 

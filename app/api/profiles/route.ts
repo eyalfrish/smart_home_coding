@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getAllProfiles,
   createProfile,
+  getDefaultProfileId,
 } from "@/server/db";
 
 export const runtime = "nodejs";
@@ -13,10 +14,14 @@ export const dynamic = "force-dynamic";
 
 /**
  * Returns a list of all profiles with summary info (id, name, created_at).
+ * Also returns the defaultProfileId.
  */
 export async function GET() {
   try {
-    const profiles = await getAllProfiles();
+    const [profiles, defaultProfileId] = await Promise.all([
+      getAllProfiles(),
+      getDefaultProfileId(),
+    ]);
     
     // Return only summary fields for list view
     const summary = profiles.map((p) => ({
@@ -25,7 +30,10 @@ export async function GET() {
       created_at: p.created_at,
     }));
 
-    return NextResponse.json({ profiles: summary }, { status: 200 });
+    return NextResponse.json({ 
+      profiles: summary,
+      defaultProfileId,
+    }, { status: 200 });
   } catch (error) {
     console.error("[API] GET /api/profiles - Error:", error);
     return NextResponse.json(

@@ -51,6 +51,9 @@ export interface ProfilesDatabase {
   /** Schema version for migrations */
   version: number;
   
+  /** ID of the default profile to auto-load on startup (null if none set) */
+  defaultProfileId: number | null;
+  
   /** Array of user profiles */
   profiles: Profile[];
   

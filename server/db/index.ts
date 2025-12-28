@@ -42,5 +42,9 @@ export {
   removeIpRange,
   setFavorite,
   getFavorites,
+  
+  // Default profile operations
+  getDefaultProfileId,
+  setDefaultProfileId,
 } from './helpers';
 

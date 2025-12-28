@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './discovery-dashboard.module.css';
 import type { IpRange } from './discovery-form';
 
@@ -12,6 +12,11 @@ interface ProfileSummary {
   id: number;
   name: string;
   created_at: string;
+}
+
+interface ProfilesApiResponse {
+  profiles: ProfileSummary[];
+  defaultProfileId: number | null;
 }
 
 export interface FullProfile {
@@ -90,12 +95,17 @@ export default function ProfilePicker({
   // State
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
+  const [defaultProfileId, setDefaultProfileId] = useState<number | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showNewProfileModal, setShowNewProfileModal] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [isSettingDefault, setIsSettingDefault] = useState(false);
+  
+  // Track if we've already auto-loaded the default profile this session
+  const hasAutoLoadedRef = useRef(false);
 
   // =============================================================================
   // Fetch profiles on mount
@@ -112,45 +122,26 @@ export default function ProfilePicker({
         throw new Error(`Failed to fetch profiles: ${res.status}`);
       }
       
-      const data = await res.json();
+      const data: ProfilesApiResponse = await res.json();
       setProfiles(data.profiles || []);
+      setDefaultProfileId(data.defaultProfileId);
+      
+      return data;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load profiles';
       console.error('[ProfilePicker] Fetch error:', message);
       setFetchError(message);
+      return null;
     } finally {
       setIsFetching(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchProfiles();
-  }, [fetchProfiles]);
-
   // =============================================================================
-  // Handle profile selection
+  // Load profile by ID (extracted for reuse)
   // =============================================================================
   
-  const handleSelectChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value;
-    
-    if (value === '') {
-      // Placeholder selected, do nothing
-      return;
-    }
-    
-    if (value === 'new') {
-      // Show new profile modal
-      setShowNewProfileModal(true);
-      setNewProfileName('');
-      setCreateError(null);
-      return;
-    }
-    
-    const profileId = parseInt(value, 10);
-    if (isNaN(profileId)) return;
-    
-    // Fetch full profile to get ip_ranges
+  const loadProfileById = useCallback(async (profileId: number) => {
     try {
       const res = await fetch(`/api/profiles/${profileId}`);
       
@@ -190,12 +181,89 @@ export default function ProfilePicker({
       // Trigger discovery with the parsed ranges directly to avoid timing issues
       onTriggerDiscovery(parsedRanges);
       
+      return true;
     } catch (err) {
       console.error('[ProfilePicker] Load profile error:', err);
-      // Don't update selection on error
+      return false;
+    }
+  }, [onProfileSelect, onTriggerDiscovery]);
+
+  // =============================================================================
+  // Auto-load default profile on mount
+  // =============================================================================
+  
+  useEffect(() => {
+    const initializeAndAutoLoad = async () => {
+      const data = await fetchProfiles();
+      
+      // Auto-load default profile if set and we haven't already done so this session
+      if (data && data.defaultProfileId && !hasAutoLoadedRef.current) {
+        const profileExists = data.profiles.some(p => p.id === data.defaultProfileId);
+        if (profileExists) {
+          console.log(`[ProfilePicker] Auto-loading default profile: ${data.defaultProfileId}`);
+          hasAutoLoadedRef.current = true;
+          await loadProfileById(data.defaultProfileId);
+        }
+      }
+    };
+    
+    initializeAndAutoLoad();
+  }, [fetchProfiles, loadProfileById]);
+
+  // =============================================================================
+  // Handle profile selection
+  // =============================================================================
+  
+  const handleSelectChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    
+    if (value === '') {
+      // Placeholder selected, do nothing
+      return;
+    }
+    
+    if (value === 'new') {
+      // Show new profile modal
+      setShowNewProfileModal(true);
+      setNewProfileName('');
+      setCreateError(null);
+      return;
+    }
+    
+    const profileId = parseInt(value, 10);
+    if (isNaN(profileId)) return;
+    
+    await loadProfileById(profileId);
+  };
+  
+  // =============================================================================
+  // Handle setting default profile
+  // =============================================================================
+  
+  const handleSetDefault = async (profileId: number | null) => {
+    setIsSettingDefault(true);
+    
+    try {
+      const res = await fetch('/api/profiles/default', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || `Failed to set default: ${res.status}`);
+      }
+      
+      setDefaultProfileId(profileId);
+      console.log(`[ProfilePicker] Set default profile to: ${profileId}`);
+    } catch (err) {
+      console.error('[ProfilePicker] Set default error:', err);
+    } finally {
+      setIsSettingDefault(false);
     }
   };
-
+  
   // =============================================================================
   // Handle new profile creation
   // =============================================================================
@@ -299,21 +367,36 @@ export default function ProfilePicker({
               </button>
             </div>
           ) : (
-            <select
-              className={styles.profilePickerSelect}
-              value={selectedProfileId ?? ''}
-              onChange={handleSelectChange}
-              disabled={disabled || isLoading}
-              aria-label="Select profile"
-            >
-              <option value="">Select a profile...</option>
-              {profiles.map(profile => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name}
-                </option>
-              ))}
-              <option value="new">➕ New Profile...</option>
-            </select>
+            <div className={styles.profilePickerSelectWrapper}>
+              <select
+                className={styles.profilePickerSelect}
+                value={selectedProfileId ?? ''}
+                onChange={handleSelectChange}
+                disabled={disabled || isLoading || isSettingDefault}
+                aria-label="Select profile"
+              >
+                <option value="">Select a profile...</option>
+                {profiles.map(profile => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.id === defaultProfileId ? '★ ' : ''}{profile.name}
+                  </option>
+                ))}
+                <option value="new">➕ New Profile...</option>
+              </select>
+              
+              {/* Set as Default button - shown when a profile is selected */}
+              {selectedProfileId !== null && (
+                <button
+                  type="button"
+                  className={`${styles.profileDefaultButton} ${selectedProfileId === defaultProfileId ? styles.profileDefaultButtonActive : ''}`}
+                  onClick={() => handleSetDefault(selectedProfileId === defaultProfileId ? null : selectedProfileId)}
+                  disabled={isSettingDefault || isLoading}
+                  title={selectedProfileId === defaultProfileId ? 'Remove as default' : 'Set as default profile'}
+                >
+                  {isSettingDefault ? '...' : (selectedProfileId === defaultProfileId ? '★' : '☆')}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

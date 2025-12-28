@@ -4534,6 +4534,58 @@
   color: var(--foreground);
 }
 
+/* Select wrapper for select + default button */
+.profilePickerSelectWrapper {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.profilePickerSelectWrapper .profilePickerSelect {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Default profile star button */
+.profileDefaultButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  font-size: 1.25rem;
+  border: 2px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profileDefaultButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: scale(1.05);
+}
+
+.profileDefaultButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profileDefaultButtonActive {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.profileDefaultButtonActive:hover:not(:disabled) {
+  color: #d97706;
+  border-color: #d97706;
+  background: rgba(245, 158, 11, 0.15);
+}
+
 /* Modal error */
 .profilePickerModalError {
   padding: 0.65rem 1rem;
@@ -4575,6 +4627,18 @@
     font-size: 16px; /* Prevent iOS zoom */
     min-height: var(--touch-target-min);
     border-radius: var(--mobile-radius);
+  }
+  
+  .profilePickerSelectWrapper {
+    gap: 0.5rem;
+  }
+  
+  .profileDefaultButton {
+    width: 48px;
+    min-width: 48px;
+    min-height: var(--touch-target-min);
+    border-radius: var(--mobile-radius);
+    font-size: 1.35rem;
   }
   
   .profilePickerLoading {
