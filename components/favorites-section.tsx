@@ -258,6 +258,14 @@ export default function FavoritesSection({
   // Set first zone as active when expanded and no zone is selected
   const effectiveActiveZone = activeZone ?? (allZones.length > 0 ? allZones[0] : null);
 
+  // Get current zone data
+  const currentZoneSwitches = effectiveActiveZone 
+    ? favoritesData.zones[effectiveActiveZone] ?? []
+    : [];
+  const currentZoneFlows = effectiveActiveZone 
+    ? smartSwitchesData.zones[effectiveActiveZone] ?? []
+    : [];
+
   // =============================================================================
   // Handlers
   // =============================================================================
@@ -284,11 +292,20 @@ export default function FavoritesSection({
     console.log('[FavoritesSection] Edit mode:', !isEditMode);
   }, [isEditMode]);
 
-  const handleAddZoneClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleAddZoneClick = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
     console.log('[FavoritesSection] Add Zone clicked - would open zone creation modal');
     // TODO: Implement zone creation modal
   }, []);
+
+  const handleAddSwitchClick = useCallback((zoneName: string) => {
+    console.log('[FavoritesSection] Add Switch clicked:', {
+      zoneName,
+      profileId: profile?.id,
+    });
+    // TODO: Implement switch addition modal
+    console.log('[FavoritesSection] Would open switch addition modal');
+  }, [profile]);
 
   const handleSaveClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -327,8 +344,7 @@ export default function FavoritesSection({
     console.log('[FavoritesSection] Would execute flow sequence');
   }, [profile]);
 
-  const handleCreateFlow = useCallback((zoneName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCreateFlow = useCallback((zoneName: string) => {
     console.log('[FavoritesSection] Create Flow clicked:', {
       zoneName,
       profileId: profile?.id,
@@ -355,9 +371,9 @@ export default function FavoritesSection({
             {isExpanded ? '▼' : '▶'}
           </span>
           <h3 className={styles.collapsibleSectionTitle}>
-            ⭐ Favorite Switches
-            {/* Zone count badge */}
-            {allZones.length > 0 && (
+            ⭐ Favorites &amp; Smart Flows
+            {/* Zone count badge - only show when profile is selected */}
+            {profile && allZones.length > 0 && (
               <span className={styles.favoritesBadge}>
                 {allZones.length} zone{allZones.length !== 1 ? 's' : ''} · {totalSwitches} switch{totalSwitches !== 1 ? 'es' : ''}
                 {totalFlows > 0 && ` · ${totalFlows} flow${totalFlows !== 1 ? 's' : ''}`}
@@ -366,12 +382,14 @@ export default function FavoritesSection({
           </h3>
         </div>
         
+        {/* Header actions - only Edit/Save */}
         <div className={styles.collapsibleSectionActions} onClick={(e) => e.stopPropagation()}>
           {isEditMode ? (
             <button
               type="button"
-              className={`${styles.favoritesButton} ${styles.favoritesButtonPrimary}`}
+              className={styles.favActionButton}
               onClick={handleSaveClick}
+              data-variant="primary"
             >
               <span className={styles.desktopText}>💾 Save</span>
               <span className={styles.mobileText}>💾</span>
@@ -379,7 +397,7 @@ export default function FavoritesSection({
           ) : (
             <button
               type="button"
-              className={styles.favoritesButton}
+              className={styles.favActionButton}
               onClick={handleEditClick}
               disabled={!profile}
               title={!profile ? 'Select a profile first' : 'Edit favorites'}
@@ -388,21 +406,11 @@ export default function FavoritesSection({
               <span className={styles.mobileText}>✏️</span>
             </button>
           )}
-          <button
-            type="button"
-            className={styles.favoritesButton}
-            onClick={handleAddZoneClick}
-            disabled={!profile || !isEditMode}
-            title={!profile ? 'Select a profile first' : !isEditMode ? 'Enable edit mode first' : 'Add a new zone'}
-          >
-            <span className={styles.desktopText}>➕ Add Zone</span>
-            <span className={styles.mobileText}>➕</span>
-          </button>
         </div>
       </div>
 
-      {/* Collapsed summary - show zones preview */}
-      {!isExpanded && allZones.length > 0 && (
+      {/* Collapsed summary - show zones preview (only when profile selected) */}
+      {!isExpanded && profile && allZones.length > 0 && (
         <div className={styles.favoritesSummary}>
           {allZones.slice(0, 4).map((zoneName) => {
             const switchCount = favoritesData.zones[zoneName]?.length ?? 0;
@@ -434,79 +442,157 @@ export default function FavoritesSection({
           </div>
         )}
 
-        {/* Zones tabs */}
-        {profile && allZones.length > 0 && (
+        {/* Main content when profile exists */}
+        {profile && (
           <>
-            <div className={styles.favoritesZoneTabs}>
-              {allZones.map((zoneName) => {
-                const switchCount = favoritesData.zones[zoneName]?.length ?? 0;
-                const flowCount = smartSwitchesData.zones[zoneName]?.length ?? 0;
-                return (
-                  <button
-                    key={zoneName}
-                    type="button"
-                    className={`${styles.favoritesZoneTab} ${effectiveActiveZone === zoneName ? styles.favoritesZoneTabActive : ''}`}
-                    onClick={() => setActiveZone(zoneName)}
-                  >
-                    {zoneName}
-                    <span className={styles.favoritesZoneTabCount}>
-                      {switchCount + flowCount}
-                    </span>
-                  </button>
-                );
-              })}
+            {/* Zone Navigation Row */}
+            <div className={styles.favZoneNavRow}>
+              {allZones.length > 0 && (
+                <div className={styles.favoritesZoneTabs}>
+                  {allZones.map((zoneName) => {
+                    const switchCount = favoritesData.zones[zoneName]?.length ?? 0;
+                    const flowCount = smartSwitchesData.zones[zoneName]?.length ?? 0;
+                    return (
+                      <button
+                        key={zoneName}
+                        type="button"
+                        className={`${styles.favoritesZoneTab} ${effectiveActiveZone === zoneName ? styles.favoritesZoneTabActive : ''}`}
+                        onClick={() => setActiveZone(zoneName)}
+                      >
+                        {zoneName}
+                        <span className={styles.favoritesZoneTabCount}>
+                          {switchCount + flowCount}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Add Zone button - aligned right of zone tabs */}
+              {isEditMode && (
+                <button
+                  type="button"
+                  className={styles.favActionButton}
+                  onClick={handleAddZoneClick}
+                  title="Add a new zone"
+                >
+                  ➕ Add Zone
+                </button>
+              )}
             </div>
 
-            {/* Active zone content */}
-            {effectiveActiveZone && (
-              <div className={styles.favoritesZoneContent}>
-                {/* Regular switches */}
-                {favoritesData.zones[effectiveActiveZone]?.length > 0 && (
-                  <div className={styles.favoritesSwitchGrid}>
-                    {favoritesData.zones[effectiveActiveZone]?.map((sw, idx) => {
-                      const isDiscovered = discoveredPanelIps.has(sw.ip);
-                      return (
-                        <button
-                          key={`${sw.ip}-${sw.relayIndex}-${idx}`}
-                          type="button"
-                          className={`${styles.favoriteSwitchButton} ${isDiscovered ? '' : styles.favoriteSwitchButtonDisabled}`}
-                          onClick={() => handleSwitchClick(sw, isDiscovered)}
-                          disabled={isLoading}
-                          title={isDiscovered ? `${sw.name} (${sw.ip} relay ${sw.relayIndex})` : `${sw.name} - Panel not discovered`}
-                        >
-                          <span className={styles.favoriteSwitchIcon}>
-                            {isDiscovered ? '💡' : '⭘'}
-                          </span>
-                          <span className={styles.favoriteSwitchName}>{sw.name}</span>
-                          <span className={styles.favoriteSwitchIp}>
-                            {sw.ip.split('.').slice(-1)[0]}:{sw.relayIndex}
-                          </span>
-                          {!isDiscovered && (
-                            <span className={styles.favoriteSwitchOffline}>offline</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+            {/* No zones empty state */}
+            {allZones.length === 0 && (
+              <div className={styles.favoritesEmptyState}>
+                <div className={styles.favoritesEmptyIcon}>🏠</div>
+                <p>No zones configured yet. Create zones to organize your favorite switches and flows.</p>
+                <button
+                  type="button"
+                  className={styles.favActionButton}
+                  onClick={handleAddZoneClick}
+                  data-variant="primary"
+                  data-size="large"
+                >
+                  ➕ Create Your First Zone
+                </button>
+              </div>
+            )}
 
-                {/* Smart Flows section - distinctly styled */}
-                {smartSwitchesData.zones[effectiveActiveZone]?.length > 0 && (
-                  <div className={styles.smartFlowsSection}>
-                    <div className={styles.smartFlowsHeader}>
-                      <span className={styles.smartFlowsTitle}>⚡ Smart Flows</span>
+            {/* Active zone content - Two distinct sub-areas */}
+            {effectiveActiveZone && allZones.length > 0 && (
+              <div className={styles.favZoneContentWrapper}>
+                
+                {/* =====================================================
+                    SUB-AREA 1: FAVORITE SWITCHES
+                   ===================================================== */}
+                <div className={styles.favSubSection}>
+                  <div className={styles.favSubSectionHeader}>
+                    <h4 className={styles.favSubSectionTitle}>
+                      <span className={styles.favSubSectionIcon}>💡</span>
+                      Switches
+                      {currentZoneSwitches.length > 0 && (
+                        <span className={styles.favSubSectionCount}>{currentZoneSwitches.length}</span>
+                      )}
+                    </h4>
+                  </div>
+
+                  {/* Switch grid */}
+                  {currentZoneSwitches.length > 0 ? (
+                    <div className={styles.favoritesSwitchGrid}>
+                      {currentZoneSwitches.map((sw, idx) => {
+                        const isDiscovered = discoveredPanelIps.has(sw.ip);
+                        return (
+                          <button
+                            key={`${sw.ip}-${sw.relayIndex}-${idx}`}
+                            type="button"
+                            className={`${styles.favoriteSwitchButton} ${isDiscovered ? '' : styles.favoriteSwitchButtonDisabled}`}
+                            onClick={() => handleSwitchClick(sw, isDiscovered)}
+                            disabled={isLoading}
+                            title={isDiscovered ? `${sw.name} (${sw.ip} relay ${sw.relayIndex})` : `${sw.name} - Panel not discovered`}
+                          >
+                            <span className={styles.favoriteSwitchIcon}>
+                              {isDiscovered ? '💡' : '⭘'}
+                            </span>
+                            <span className={styles.favoriteSwitchName}>{sw.name}</span>
+                            <span className={styles.favoriteSwitchIp}>
+                              {sw.ip.split('.').slice(-1)[0]}:{sw.relayIndex}
+                            </span>
+                            {!isDiscovered && (
+                              <span className={styles.favoriteSwitchOffline}>offline</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {/* Add switch button as last card in edit mode */}
                       {isEditMode && (
                         <button
                           type="button"
-                          className={styles.smartFlowsCreateButton}
-                          onClick={(e) => handleCreateFlow(effectiveActiveZone, e)}
+                          className={styles.favAddItemCard}
+                          onClick={() => handleAddSwitchClick(effectiveActiveZone)}
+                          title="Add a switch to this zone"
                         >
-                          ➕ Create Flow
+                          <span className={styles.favAddItemIcon}>➕</span>
+                          <span className={styles.favAddItemText}>Add Switch</span>
                         </button>
                       )}
                     </div>
+                  ) : (
+                    /* Empty switches state */
+                    <div className={styles.favSubSectionEmpty}>
+                      <p>No switches in this zone yet.</p>
+                      {isEditMode && (
+                        <button
+                          type="button"
+                          className={styles.favActionButton}
+                          onClick={() => handleAddSwitchClick(effectiveActiveZone)}
+                        >
+                          ➕ Add Switch
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* =====================================================
+                    SUB-AREA 2: SMART FLOWS
+                   ===================================================== */}
+                <div className={`${styles.favSubSection} ${styles.favSubSectionFlows}`}>
+                  <div className={styles.favSubSectionHeader}>
+                    <h4 className={styles.favSubSectionTitle}>
+                      <span className={styles.favSubSectionIcon}>⚡</span>
+                      Smart Flows
+                      {currentZoneFlows.length > 0 && (
+                        <span className={`${styles.favSubSectionCount} ${styles.favSubSectionCountPurple}`}>
+                          {currentZoneFlows.length}
+                        </span>
+                      )}
+                    </h4>
+                  </div>
+
+                  {/* Flows grid */}
+                  {currentZoneFlows.length > 0 ? (
                     <div className={styles.smartFlowsGrid}>
-                      {smartSwitchesData.zones[effectiveActiveZone]?.map((flow, idx) => (
+                      {currentZoneFlows.map((flow, idx) => (
                         <div
                           key={`flow-${flow.name}-${idx}`}
                           className={styles.smartFlowCard}
@@ -533,73 +619,42 @@ export default function FavoritesSection({
                           </button>
                         </div>
                       ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Create flow button when no flows exist */}
-                {(!smartSwitchesData.zones[effectiveActiveZone] ||
-                  smartSwitchesData.zones[effectiveActiveZone].length === 0) &&
-                  isEditMode && (
-                    <div className={styles.smartFlowsEmptyCreate}>
-                      <button
-                        type="button"
-                        className={styles.smartFlowsCreateButtonEmpty}
-                        onClick={(e) => handleCreateFlow(effectiveActiveZone, e)}
-                      >
-                        ⚡ Create Smart Flow
-                      </button>
-                    </div>
-                )}
-
-                {/* Empty zone message */}
-                {(!favoritesData.zones[effectiveActiveZone] ||
-                  favoritesData.zones[effectiveActiveZone].length === 0) &&
-                 (!smartSwitchesData.zones[effectiveActiveZone] ||
-                  smartSwitchesData.zones[effectiveActiveZone].length === 0) && (
-                  <div className={styles.favoritesEmptyZone}>
-                    <p>No switches or flows in this zone yet.</p>
-                    {isEditMode && (
-                      <div className={styles.emptyZoneActions}>
+                      {/* Add flow card in edit mode */}
+                      {isEditMode && (
                         <button
                           type="button"
-                          className={styles.favoritesAddSwitchButton}
-                          onClick={() => console.log('[FavoritesSection] Add switch to zone:', effectiveActiveZone)}
+                          className={`${styles.favAddItemCard} ${styles.favAddItemCardPurple}`}
+                          onClick={() => handleCreateFlow(effectiveActiveZone)}
+                          title="Create a new smart flow"
                         >
-                          ➕ Add Switch
+                          <span className={styles.favAddItemIcon}>⚡</span>
+                          <span className={styles.favAddItemText}>Create Flow</span>
                         </button>
+                      )}
+                    </div>
+                  ) : (
+                    /* Empty flows state */
+                    <div className={styles.favSubSectionEmpty}>
+                      <p>No smart flows in this zone yet.</p>
+                      {isEditMode && (
                         <button
                           type="button"
-                          className={styles.smartFlowsCreateButtonEmpty}
-                          onClick={(e) => handleCreateFlow(effectiveActiveZone, e)}
+                          className={styles.favActionButton}
+                          onClick={() => handleCreateFlow(effectiveActiveZone)}
+                          data-variant="purple"
                         >
                           ⚡ Create Flow
                         </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
           </>
-        )}
-
-        {/* No zones message */}
-        {profile && allZones.length === 0 && (
-          <div className={styles.favoritesEmptyState}>
-            <div className={styles.favoritesEmptyIcon}>🏠</div>
-            <p>No zones configured yet. Create zones to organize your favorite switches.</p>
-            <button
-              type="button"
-              className={styles.favoritesCreateZoneButton}
-              onClick={handleAddZoneClick}
-            >
-              ➕ Create Your First Zone
-            </button>
-          </div>
         )}
       </div>
     </div>
   );
 }
-

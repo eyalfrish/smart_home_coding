@@ -1172,20 +1172,6 @@ export default function DiscoveryDashboard() {
             isLoading={isLoading}
             onFavoritesUpdate={handleFavoritesUpdate}
           />
-
-          {/* Placeholder: Smart Switches Section */}
-          <div className={styles.placeholderSection}>
-            <div className={styles.placeholderSectionHeader}>
-              <h3 className={styles.placeholderSectionTitle}>
-                🤖 Smart Switches
-                <span className={styles.placeholderBadge}>Coming Soon</span>
-              </h3>
-            </div>
-            <div className={styles.placeholderContent}>
-              <div className={styles.placeholderIcon}>⚡</div>
-              <p>Program automated sequences with toggles, clicks, and timers.</p>
-            </div>
-          </div>
         </>
       )}
     </div>

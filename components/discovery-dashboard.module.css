@@ -4253,68 +4253,6 @@
   color: var(--foreground);
 }
 
-/* ===========================================
-   Placeholder Section (Favorites, Smart Switches)
-   =========================================== */
-
-.placeholderSection {
-  border: 2px dashed var(--border-strong);
-  border-radius: 14px;
-  padding: 1.25rem;
-  margin-bottom: 1.5rem;
-  background: var(--surface);
-  opacity: 0.7;
-  transition: all 0.15s ease;
-}
-
-.placeholderSection:hover {
-  opacity: 0.85;
-  border-color: var(--accent);
-}
-
-.placeholderSectionHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.placeholderSectionTitle {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.placeholderBadge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
-  background: var(--badge-muted-bg);
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-}
-
-.placeholderContent {
-  margin-top: 1rem;
-  padding: 2rem;
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.placeholderIcon {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.5;
-}
-
 /* Progress container inside collapsible section */
 .collapsibleSectionContent .progressContainer {
   margin-top: 0;
@@ -4459,32 +4397,6 @@
   
   .collapsibleSectionContent .streamStatus {
     margin-bottom: 0.75rem;
-  }
-  
-  /* Placeholder sections mobile */
-  .placeholderSection {
-    padding: 1rem;
-    border-radius: var(--mobile-radius);
-    margin-bottom: 1rem;
-  }
-  
-  .placeholderSectionTitle {
-    font-size: 0.9rem;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-  
-  .placeholderBadge {
-    font-size: 0.6rem;
-  }
-  
-  .placeholderContent {
-    padding: 1.5rem 1rem;
-    font-size: 0.8rem;
-  }
-  
-  .placeholderIcon {
-    font-size: 1.5rem;
   }
 }
 
@@ -4700,42 +4612,79 @@
   margin-left: 0.5rem;
 }
 
-.favoritesButton {
+/* ===========================================
+   Unified Action Button - used across section
+   =========================================== */
+.favActionButton {
   background: var(--surface);
   border: 1.5px solid var(--border);
-  border-radius: 999px;
-  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--foreground);
   cursor: pointer;
   transition: all 0.15s ease;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
+  white-space: nowrap;
 }
 
-.favoritesButton:hover:not(:disabled) {
+.favActionButton:hover:not(:disabled) {
   background: var(--card-hover);
   border-color: var(--accent);
   color: var(--accent);
+  transform: translateY(-1px);
 }
 
-.favoritesButton:disabled {
+.favActionButton:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.favActionButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.favoritesButtonPrimary {
+/* Primary variant (filled) */
+.favActionButton[data-variant="primary"] {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 
-.favoritesButtonPrimary:hover:not(:disabled) {
+.favActionButton[data-variant="primary"]:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
   color: #fff;
+}
+
+/* Purple variant for flows */
+.favActionButton[data-variant="purple"] {
+  background: transparent;
+  border-color: #a855f7;
+  color: #a855f7;
+}
+
+.favActionButton[data-variant="purple"]:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: #9333ea;
+  color: #9333ea;
+}
+
+/* Size variants */
+.favActionButton[data-size="small"] {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: 8px;
+}
+
+.favActionButton[data-size="large"] {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  border-radius: 12px;
 }
 
 /* Collapsed summary row */
@@ -4779,21 +4728,32 @@
   font-style: italic;
 }
 
-/* Zone tabs */
+/* ===========================================
+   Zone Navigation Row
+   =========================================== */
+.favZoneNavRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
 .favoritesZoneTabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border);
+  flex: 1;
+  min-width: 0;
 }
 
 .favoritesZoneTab {
   background: var(--surface);
   border: 1.5px solid var(--border);
-  border-radius: 12px;
-  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--muted);
@@ -4830,8 +4790,13 @@
   color: #fff;
 }
 
-/* Zone content area */
-.favoritesZoneContent {
+/* ===========================================
+   Zone Content Wrapper - Two Sub-Areas
+   =========================================== */
+.favZoneContentWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   animation: fadeIn 0.2s ease;
 }
 
@@ -4840,10 +4805,78 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Sub-section container */
+.favSubSection {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.favSubSectionFlows {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.03) 0%, rgba(139, 92, 246, 0.06) 100%);
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.favSubSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.favSubSectionTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.favSubSectionIcon {
+  font-size: 1.1rem;
+}
+
+.favSubSectionCount {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  margin-left: 0.25rem;
+}
+
+.favSubSectionCountPurple {
+  background: #a855f7;
+}
+
+.favSubSectionEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.favSubSectionEmpty p {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
 /* Switch grid - responsive */
 .favoritesSwitchGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 0.75rem;
 }
 
@@ -4855,13 +4888,13 @@
   justify-content: center;
   gap: 0.35rem;
   padding: 1rem 0.75rem;
-  background: var(--surface);
+  background: var(--card);
   border: 2px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-height: 90px;
+  min-height: 85px;
 }
 
 .favoriteSwitchButton:hover:not(:disabled) {
@@ -4887,12 +4920,12 @@
 }
 
 .favoriteSwitchIcon {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   line-height: 1;
 }
 
 .favoriteSwitchName {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--foreground);
   text-align: center;
@@ -4904,32 +4937,71 @@
 }
 
 .favoriteSwitchIp {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--muted);
   font-family: var(--font-mono, monospace);
 }
 
 .favoriteSwitchOffline {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  font-size: 0.6rem;
+  top: 0.3rem;
+  right: 0.3rem;
+  font-size: 0.55rem;
   font-weight: 600;
   color: var(--warning);
   background: var(--badge-warn-bg);
-  padding: 0.15rem 0.4rem;
+  padding: 0.12rem 0.35rem;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
-/* Empty state */
+/* Add item card (+ button) */
+.favAddItemCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1rem 0.75rem;
+  background: transparent;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 85px;
+  color: var(--muted);
+}
+
+.favAddItemCard:hover {
+  background: var(--badge-accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.favAddItemCardPurple:hover {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: #a855f7;
+  color: #a855f7;
+}
+
+.favAddItemIcon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.favAddItemText {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Empty state - full section */
 .favoritesEmptyState {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
+  padding: 2.5rem 1rem;
   text-align: center;
   color: var(--muted);
 }
@@ -4941,120 +5013,31 @@
 }
 
 .favoritesEmptyState p {
-  margin: 0 0 1rem;
-  max-width: 300px;
+  margin: 0 0 1.25rem;
+  max-width: 320px;
   line-height: 1.5;
 }
 
-.favoritesCreateZoneButton {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 999px;
-  padding: 0.8rem 1.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.favoritesCreateZoneButton:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-}
-
-/* Empty zone inside tab */
-.favoritesEmptyZone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-  text-align: center;
-  color: var(--muted);
-  border: 2px dashed var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-}
-
-.favoritesEmptyZone p {
-  margin: 0 0 1rem;
-}
-
-.favoritesAddSwitchButton {
-  background: transparent;
-  color: var(--accent);
-  border: 1.5px solid var(--accent);
-  border-radius: 999px;
-  padding: 0.6rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.favoritesAddSwitchButton:hover {
-  background: var(--badge-accent-bg);
-}
-
 /* ===========================================
-   Smart Flows Section
+   Smart Flows Grid & Cards
    =========================================== */
-
-.smartFlowsSection {
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px dashed var(--border);
-}
-
-.smartFlowsHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-}
-
-.smartFlowsTitle {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #a855f7;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.smartFlowsCreateButton {
-  background: transparent;
-  color: #a855f7;
-  border: 1.5px solid #a855f7;
-  border-radius: 999px;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.smartFlowsCreateButton:hover {
-  background: rgba(168, 85, 247, 0.1);
-}
 
 .smartFlowsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
 }
 
 .smartFlowCard {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1.25rem;
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(139, 92, 246, 0.12) 100%);
-  border: 2px solid rgba(168, 85, 247, 0.35);
-  border-radius: 16px;
+  padding: 1.1rem;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.06) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 2px solid rgba(168, 85, 247, 0.25);
+  border-radius: 14px;
   transition: all 0.2s ease;
-  min-height: 120px;
+  min-height: 115px;
 }
 
 .smartFlowCard:hover {
@@ -5066,16 +5049,16 @@
 .smartFlowCardHeader {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 .smartFlowIcon {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
 }
 
 .smartFlowName {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--foreground);
   flex: 1;
@@ -5085,7 +5068,7 @@
 }
 
 .smartFlowMeta {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--muted);
   display: flex;
   align-items: center;
@@ -5095,10 +5078,10 @@
 .smartFlowDuration {
   background: rgba(168, 85, 247, 0.15);
   color: #a855f7;
-  padding: 0.15rem 0.4rem;
+  padding: 0.12rem 0.35rem;
   border-radius: 4px;
   font-weight: 600;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
 }
 
 .smartFlowRunButton {
@@ -5107,15 +5090,15 @@
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 0.65rem 1rem;
-  font-size: 0.85rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .smartFlowRunButton:hover:not(:disabled) {
@@ -5133,39 +5116,6 @@
   cursor: not-allowed;
 }
 
-.smartFlowsEmptyCreate {
-  margin-top: 1rem;
-  display: flex;
-  justify-content: center;
-}
-
-.smartFlowsCreateButtonEmpty {
-  background: transparent;
-  color: #a855f7;
-  border: 2px dashed rgba(168, 85, 247, 0.4);
-  border-radius: 14px;
-  padding: 1rem 1.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.smartFlowsCreateButtonEmpty:hover {
-  background: rgba(168, 85, 247, 0.08);
-  border-color: #a855f7;
-}
-
-.emptyZoneActions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
 /* ===========================================
    Favorites Section - Mobile
    =========================================== */
@@ -5177,12 +5127,21 @@
     margin-left: 0.35rem;
   }
 
-  .favoritesButton {
-    flex: 1;
-    justify-content: center;
-    padding: 0.65rem 0.5rem;
+  /* Action button mobile */
+  .favActionButton {
+    padding: 0.6rem 0.85rem;
     font-size: 0.8rem;
     min-height: var(--touch-target-min);
+  }
+
+  .favActionButton[data-size="small"] {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.75rem;
+  }
+
+  .favActionButton[data-size="large"] {
+    padding: 0.7rem 1.25rem;
+    font-size: 0.88rem;
   }
 
   .favoritesSummary {
@@ -5195,13 +5154,21 @@
     font-size: 0.75rem;
   }
 
+  /* Zone nav row mobile */
+  .favZoneNavRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
+
   .favoritesZoneTabs {
     gap: 0.4rem;
     overflow-x: auto;
     flex-wrap: nowrap;
-    padding-bottom: 0.75rem;
-    margin-bottom: 0.75rem;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
   }
 
   .favoritesZoneTab {
@@ -5212,6 +5179,35 @@
     min-height: var(--touch-target-min);
   }
 
+  /* Zone content wrapper */
+  .favZoneContentWrapper {
+    gap: 1rem;
+  }
+
+  /* Sub-sections mobile */
+  .favSubSection {
+    padding: 0.85rem 1rem 1rem;
+    border-radius: var(--mobile-radius);
+  }
+
+  .favSubSectionHeader {
+    margin-bottom: 0.85rem;
+  }
+
+  .favSubSectionTitle {
+    font-size: 0.9rem;
+  }
+
+  .favSubSectionEmpty {
+    padding: 1.25rem 0.75rem;
+    border-radius: 10px;
+  }
+
+  .favSubSectionEmpty p {
+    font-size: 0.85rem;
+  }
+
+  /* Switch grid mobile */
   .favoritesSwitchGrid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.6rem;
@@ -5219,27 +5215,42 @@
 
   .favoriteSwitchButton {
     padding: 0.85rem 0.5rem;
-    min-height: 80px;
-    border-radius: var(--mobile-radius);
+    min-height: 78px;
+    border-radius: 10px;
   }
 
   .favoriteSwitchIcon {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
   }
 
   .favoriteSwitchName {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
   }
 
   .favoriteSwitchIp {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
   }
 
   .favoriteSwitchOffline {
-    font-size: 0.55rem;
-    padding: 0.12rem 0.35rem;
+    font-size: 0.5rem;
+    padding: 0.1rem 0.3rem;
   }
 
+  /* Add item card mobile */
+  .favAddItemCard {
+    min-height: 78px;
+    border-radius: 10px;
+  }
+
+  .favAddItemIcon {
+    font-size: 1.25rem;
+  }
+
+  .favAddItemText {
+    font-size: 0.7rem;
+  }
+
+  /* Empty state mobile */
   .favoritesEmptyIcon {
     font-size: 2.5rem;
   }
@@ -5248,65 +5259,24 @@
     font-size: 0.9rem;
   }
 
-  .favoritesCreateZoneButton {
-    padding: 0.7rem 1.25rem;
-    font-size: 0.85rem;
-    min-height: var(--touch-target-min);
-  }
-
-  .favoritesEmptyZone {
-    padding: 1.5rem 1rem;
-    border-radius: var(--mobile-radius);
-  }
-
-  .favoritesAddSwitchButton {
-    min-height: var(--touch-target-min);
-  }
-
   /* Smart Flows Mobile */
-  .smartFlowsSection {
-    margin-top: 1rem;
-    padding-top: 1rem;
-  }
-
-  .smartFlowsHeader {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .smartFlowsTitle {
-    font-size: 0.85rem;
-  }
-
   .smartFlowsGrid {
     grid-template-columns: 1fr;
-    gap: 0.65rem;
+    gap: 0.6rem;
   }
 
   .smartFlowCard {
-    min-height: 100px;
-    padding: 1rem;
+    min-height: 95px;
+    padding: 0.9rem;
     border-radius: var(--mobile-radius);
   }
 
   .smartFlowName {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
 
   .smartFlowRunButton {
     min-height: var(--touch-target-min);
-    padding: 0.75rem 1rem;
-  }
-
-  .smartFlowsCreateButtonEmpty {
-    width: 100%;
-    justify-content: center;
-    min-height: var(--touch-target-min);
-  }
-
-  .emptyZoneActions {
-    width: 100%;
-    flex-direction: column;
-    gap: 0.5rem;
+    padding: 0.7rem 0.9rem;
   }
 }
