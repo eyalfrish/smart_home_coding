@@ -24,6 +24,11 @@ services:
     ports:
       - "3000:3000"
     
+    # Persistent data storage
+    # Volume mount ensures profiles and settings survive container restarts
+    volumes:
+      - ./data:/app/data
+    
     # Environment variables
     environment:
       - NODE_ENV=production

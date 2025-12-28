@@ -61,3 +61,7 @@ Thumbs.db
 # Logs
 *.log
 
+# Persistent data (profiles, settings, etc.)
+# Keep .gitkeep but ignore actual data files
+/data/*.json
+/data/*.json.tmp

@@ -1,0 +1,7 @@
+# This file ensures the data directory exists in git.
+# The profiles.json file is created automatically on first run.
+# 
+# In Docker deployments, mount this directory as a volume:
+#   volumes:
+#     - ./data:/app/data
+

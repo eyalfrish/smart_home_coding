@@ -55,6 +55,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy server-side code (database helpers, etc.)
+COPY --from=builder --chown=nextjs:nodejs /app/server ./server
+
+# Create data directory for persistent storage (profiles, etc.)
+# This should be volume-mounted in production for data persistence
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+
 # Switch to non-root user
 USER nextjs
 
