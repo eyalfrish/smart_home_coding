@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './discovery-dashboard.module.css';
 import type { IpRange } from './discovery-form';
+import type { FavoritesData, SmartSwitchesData } from './favorites-section';
 
 // =============================================================================
 // Types
@@ -23,8 +24,8 @@ export interface FullProfile {
   id: number;
   name: string;
   ip_ranges: string[];
-  favorites: Record<string, unknown>;
-  smart_switches: Record<string, unknown>;
+  favorites: FavoritesData | Record<string, unknown>;
+  smart_switches: SmartSwitchesData | Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -32,10 +33,18 @@ export interface FullProfile {
 interface ProfilePickerProps {
   /** Current form values ranges */
   currentRanges: IpRange[];
+  /** Current favorites data from the dashboard */
+  currentFavorites: FavoritesData | Record<string, unknown>;
+  /** Current smart switches data from the dashboard */
+  currentSmartSwitches: SmartSwitchesData | Record<string, unknown>;
   /** Called when profile is selected with parsed IP ranges and full profile */
   onProfileSelect: (profileId: number, ranges: IpRange[], fullProfile: FullProfile) => void;
   /** Called after ranges are loaded to trigger discovery - receives the new ranges */
   onTriggerDiscovery: (ranges: IpRange[]) => void;
+  /** Called when profile is deleted or cleared to reset to defaults */
+  onProfileClear: () => void;
+  /** Called to show a toast notification */
+  onShowToast: (message: string, type: 'success' | 'error') => void;
   /** Whether discovery is currently running */
   isLoading: boolean;
   /** Disabled state */
@@ -87,8 +96,12 @@ function ipRangeToString(range: IpRange): string {
 
 export default function ProfilePicker({
   currentRanges,
+  currentFavorites,
+  currentSmartSwitches,
   onProfileSelect,
   onTriggerDiscovery,
+  onProfileClear,
+  onShowToast,
   isLoading,
   disabled = false,
 }: ProfilePickerProps) {
@@ -98,11 +111,18 @@ export default function ProfilePicker({
   const [defaultProfileId, setDefaultProfileId] = useState<number | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  
+  // New profile modal state
   const [showNewProfileModal, setShowNewProfileModal] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  
+  // Save/delete state
+  const [isSaving, setIsSaving] = useState(false);
   const [isSettingDefault, setIsSettingDefault] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Track if we've already auto-loaded the default profile this session
   const hasAutoLoadedRef = useRef(false);
@@ -218,7 +238,10 @@ export default function ProfilePicker({
     const value = event.target.value;
     
     if (value === '') {
-      // Placeholder selected, do nothing
+      // "None" selected - clear profile and reset to defaults
+      setSelectedProfileId(null);
+      setShowDeleteConfirm(false);
+      onProfileClear();
       return;
     }
     
@@ -233,6 +256,7 @@ export default function ProfilePicker({
     const profileId = parseInt(value, 10);
     if (isNaN(profileId)) return;
     
+    setShowDeleteConfirm(false);
     await loadProfileById(profileId);
   };
   
@@ -291,6 +315,8 @@ export default function ProfilePicker({
         body: JSON.stringify({
           name: trimmedName,
           ip_ranges: ipRangesStrings,
+          favorites: currentFavorites,
+          smart_switches: currentSmartSwitches,
         }),
       });
       
@@ -302,19 +328,26 @@ export default function ProfilePicker({
       const data = await res.json();
       const newProfile = data.profile as FullProfile;
       
-      // Add to profiles list
-      setProfiles(prev => [...prev, {
-        id: newProfile.id,
-        name: newProfile.name,
-        created_at: newProfile.created_at,
-      }]);
+      // Refresh profiles list
+      await fetchProfiles();
       
       // Select the new profile
       setSelectedProfileId(newProfile.id);
       
+      // Parse ranges from the new profile and call onProfileSelect so dashboard knows about it
+      const parsedRanges = (newProfile.ip_ranges || [])
+        .map(parseIpRangeString)
+        .filter((r): r is IpRange => r !== null);
+      
+      // Call onProfileSelect so the dashboard's selectedProfile state is updated
+      onProfileSelect(newProfile.id, parsedRanges, newProfile);
+      
       // Close modal
       setShowNewProfileModal(false);
       setNewProfileName('');
+      
+      // Show success toast
+      onShowToast(`Profile "${newProfile.name}" created!`, 'success');
       
       console.log(`[ProfilePicker] Created new profile: ${newProfile.name} (ID: ${newProfile.id})`);
       
@@ -332,6 +365,85 @@ export default function ProfilePicker({
     }
     if (e.key === 'Escape') {
       setShowNewProfileModal(false);
+    }
+  };
+
+  // =============================================================================
+  // Handle save to profile
+  // =============================================================================
+  
+  const handleSaveToProfile = async () => {
+    if (selectedProfileId === null) return;
+    
+    setIsSaving(true);
+    
+    try {
+      // Convert current ranges to string format
+      const ipRangesStrings = currentRanges
+        .filter(r => r.octet1 && r.octet2 && r.octet3 && r.start && r.end)
+        .map(ipRangeToString);
+      
+      const res = await fetch(`/api/profiles/${selectedProfileId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ip_ranges: ipRangesStrings,
+          favorites: currentFavorites,
+          smart_switches: currentSmartSwitches,
+        }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || `Failed to save profile: ${res.status}`);
+      }
+      
+      // Show success toast
+      onShowToast('Profile saved!', 'success');
+      
+      console.log(`[ProfilePicker] Saved profile: ${selectedProfileId}`);
+      
+    } catch (err) {
+      console.error('[ProfilePicker] Save error:', err);
+      onShowToast('Failed to save profile', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // =============================================================================
+  // Handle delete profile
+  // =============================================================================
+  
+  const handleDeleteProfile = async () => {
+    if (selectedProfileId === null) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      const res = await fetch(`/api/profiles/${selectedProfileId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || `Failed to delete profile: ${res.status}`);
+      }
+      
+      // Refresh profiles list
+      await fetchProfiles();
+      
+      // Clear selection and reset to defaults
+      setSelectedProfileId(null);
+      setShowDeleteConfirm(false);
+      onProfileClear();
+      
+      console.log(`[ProfilePicker] Deleted profile: ${selectedProfileId}`);
+      
+    } catch (err) {
+      console.error('[ProfilePicker] Delete error:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -372,10 +484,10 @@ export default function ProfilePicker({
                 className={styles.profilePickerSelect}
                 value={selectedProfileId ?? ''}
                 onChange={handleSelectChange}
-                disabled={disabled || isLoading || isSettingDefault}
+                disabled={disabled || isLoading || isSettingDefault || isSaving || isDeleting}
                 aria-label="Select profile"
               >
-                <option value="">Select a profile...</option>
+                <option value="">No profile selected</option>
                 {profiles.map(profile => (
                   <option key={profile.id} value={profile.id}>
                     {profile.id === defaultProfileId ? '★ ' : ''}{profile.name}
@@ -384,18 +496,67 @@ export default function ProfilePicker({
                 <option value="new">➕ New Profile...</option>
               </select>
               
+              {/* Save button - shown when a profile is selected */}
+              {selectedProfileId !== null && (
+                <button
+                  type="button"
+                  className={styles.profileSaveButton}
+                  onClick={handleSaveToProfile}
+                  disabled={isSaving || isLoading || isDeleting}
+                  title="Save current settings to this profile"
+                >
+                  {isSaving ? '...' : '💾'}
+                </button>
+              )}
+              
               {/* Set as Default button - shown when a profile is selected */}
               {selectedProfileId !== null && (
                 <button
                   type="button"
                   className={`${styles.profileDefaultButton} ${selectedProfileId === defaultProfileId ? styles.profileDefaultButtonActive : ''}`}
                   onClick={() => handleSetDefault(selectedProfileId === defaultProfileId ? null : selectedProfileId)}
-                  disabled={isSettingDefault || isLoading}
+                  disabled={isSettingDefault || isLoading || isSaving || isDeleting}
                   title={selectedProfileId === defaultProfileId ? 'Remove as default' : 'Set as default profile'}
                 >
                   {isSettingDefault ? '...' : (selectedProfileId === defaultProfileId ? '★' : '☆')}
                 </button>
               )}
+              
+              {/* Delete button - shown when a profile is selected */}
+              {selectedProfileId !== null && !showDeleteConfirm && (
+                <button
+                  type="button"
+                  className={styles.profileDeleteButton}
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={isLoading || isSaving || isDeleting}
+                  title="Delete this profile"
+                >
+                  🗑️
+                </button>
+              )}
+            </div>
+          )}
+          
+          {/* Delete confirmation */}
+          {showDeleteConfirm && selectedProfileId !== null && (
+            <div className={styles.profileDeleteConfirm}>
+              <span>Delete this profile?</span>
+              <button
+                type="button"
+                className={styles.profileDeleteConfirmYes}
+                onClick={handleDeleteProfile}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Yes'}
+              </button>
+              <button
+                type="button"
+                className={styles.profileDeleteConfirmNo}
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+              >
+                No
+              </button>
             </div>
           )}
         </div>
@@ -414,8 +575,7 @@ export default function ProfilePicker({
           >
             <h3>Create New Profile</h3>
             <p>
-              This will save your current IP ranges to a new profile. 
-              You can then quickly switch between profiles.
+              This will save your current IP ranges, zones, and switches to a new profile.
             </p>
             
             <div className={styles.modalForm}>
@@ -463,4 +623,3 @@ export default function ProfilePicker({
     </>
   );
 }
-

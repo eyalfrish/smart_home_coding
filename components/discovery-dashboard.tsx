@@ -6,7 +6,7 @@ import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
 import BatchOperationsView from "./batch-operations-view";
 import ProfilePicker, { type FullProfile } from "./profile-picker";
-import FavoritesSection from "./favorites-section";
+import FavoritesSection, { type FavoritesData, type SmartSwitchesData } from "./favorites-section";
 import styles from "./discovery-dashboard.module.css";
 import type {
   DiscoveryRequest,
@@ -102,6 +102,9 @@ export default function DiscoveryDashboard() {
     phase: string;
     partialResults: Array<{ ip: string; status: string; name?: string }>;
   } | null>(null);
+  
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Reset panel registry on mount and check server session
   // This ensures clean slate when page loads or server restarts
@@ -548,6 +551,30 @@ export default function DiscoveryDashboard() {
     setIsIpRangesExpanded(false);
   }, []);
 
+  // Handle profile clear - reset to defaults when no profile selected or profile deleted
+  const handleProfileClear = useCallback(() => {
+    setSelectedProfile(null);
+    setFormValues(INITIAL_FORM_VALUES);
+    // Clear discovery results
+    setResponse(null);
+    setPanelInfoMap({});
+    setSelectedPanelIps(new Set());
+    setDiscoveryCompleted(false);
+  }, []);
+
+  // Handle showing toast notifications
+  const handleShowToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+  }, []);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // Trigger discovery after profile load - receives ranges directly to avoid state timing issues
   const handleTriggerDiscoveryFromProfile = useCallback((ranges: IpRange[]) => {
     // Validate the provided ranges
@@ -645,30 +672,16 @@ export default function DiscoveryDashboard() {
     });
   }, []);
 
-  // Handle favorites update - save to profile
-  const handleFavoritesUpdate = useCallback(async (profileId: number, favorites: Record<string, unknown>) => {
-    console.log('[Dashboard] Saving favorites for profile:', profileId, favorites);
-    
-    try {
-      const res = await fetch(`/api/profiles/${profileId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ favorites }),
-      });
-      
-      if (!res.ok) {
-        console.error('[Dashboard] Failed to save favorites:', res.status);
-        return;
-      }
-      
-      const data = await res.json();
-      console.log('[Dashboard] Favorites saved:', data);
-      
-      // Update local profile state with new favorites
-      setSelectedProfile(prev => prev ? { ...prev, favorites } : null);
-    } catch (err) {
-      console.error('[Dashboard] Error saving favorites:', err);
-    }
+  // Handle favorites update - update local state only (saved via Save button in ProfilePicker)
+  const handleFavoritesUpdate = useCallback((profileId: number, favorites: FavoritesData) => {
+    console.log('[Dashboard] Updating local favorites for profile:', profileId, favorites);
+    setSelectedProfile(prev => prev ? { ...prev, favorites } : null);
+  }, []);
+
+  // Handle smart switches update - update local state only
+  const handleSmartSwitchesUpdate = useCallback((profileId: number, smartSwitches: SmartSwitchesData) => {
+    console.log('[Dashboard] Updating local smart_switches for profile:', profileId, smartSwitches);
+    setSelectedProfile(prev => prev ? { ...prev, smart_switches: smartSwitches } : null);
   }, []);
 
   const panelResults = response?.results ?? [];
@@ -719,8 +732,12 @@ export default function DiscoveryDashboard() {
           {/* Profile Picker - at the very top */}
           <ProfilePicker
             currentRanges={formValues.ranges}
+            currentFavorites={selectedProfile?.favorites || {}}
+            currentSmartSwitches={selectedProfile?.smart_switches || {}}
             onProfileSelect={handleProfileSelect}
             onTriggerDiscovery={handleTriggerDiscoveryFromProfile}
+            onProfileClear={handleProfileClear}
+            onShowToast={handleShowToast}
             isLoading={isLoading}
             disabled={isLoading}
           />
@@ -1177,9 +1194,24 @@ export default function DiscoveryDashboard() {
             isLoading={isLoading}
             discoveryCompleted={discoveryCompleted}
             livePanelStates={panelStates}
+            discoveredPanels={response?.results || []}
             onFavoritesUpdate={handleFavoritesUpdate}
+            onSmartSwitchesUpdate={handleSmartSwitchesUpdate}
           />
         </>
+      )}
+      
+      {/* Toast Notification */}
+      {toast && (
+        <div 
+          className={`${styles.toast} ${toast.type === 'success' ? styles.toastSuccess : styles.toastError}`}
+          onClick={() => setToast(null)}
+        >
+          <span className={styles.toastIcon}>
+            {toast.type === 'success' ? '✓' : '✕'}
+          </span>
+          <span className={styles.toastMessage}>{toast.message}</span>
+        </div>
       )}
     </div>
   );
