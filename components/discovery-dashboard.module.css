@@ -2471,22 +2471,82 @@
 .ipRangesSection {
   border: 2px solid var(--border-strong);
   border-radius: 14px;
-  padding: 1.25rem;
   margin-bottom: 1.5rem;
   background: var(--surface);
   position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
 }
 
 .ipRangesSectionHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border);
 }
 
+.ipRangesSectionCollapsed .ipRangesSectionHeader {
+  border-bottom: none;
+}
+
+.ipRangesSectionHeader:hover {
+  background: var(--card-hover);
+}
+
+.ipRangesSectionHeader:hover .collapsibleSectionToggle {
+  color: var(--accent);
+}
+
+.ipRangesSectionHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Body content area - animated collapse/expand */
+.ipRangesSectionBody {
+  max-height: 1000px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.25s ease;
+  padding: 0.75rem 1.25rem 1.25rem;
+}
+
+.ipRangesSectionCollapsed .ipRangesSectionBody {
+  max-height: 0;
+  opacity: 0;
+  padding: 0 1.25rem;
+}
+
 .ipRangesSectionTitle {
+  margin: 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* IP Range Summary Badge (shown when collapsed) */
+.ipRangesSummaryBadge {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+  background: var(--surface-alt);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-family: monospace;
+}
+
+.ipRangesSectionTitleText {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
@@ -2517,10 +2577,45 @@
   transform: translateY(0);
 }
 
+/* IP Ranges header actions container */
+.ipRangesSectionActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Collapse button for IP ranges */
+.collapseRangeButton {
+  background: var(--surface-alt);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.collapseRangeButton:hover {
+  background: var(--surface);
+  color: var(--foreground);
+  border-color: var(--border-strong);
+}
+
 .addRangeButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+/* Desktop: show header button, hide body button */
+.addRangeButtonDesktop {
+  display: inline-flex;
+}
+
+.addRangeButtonMobile {
+  display: none;
 }
 
 .ipRangesList {
@@ -2764,6 +2859,37 @@
 /* ===========================================
    Thorough Mode Toggle
    =========================================== */
+
+/* Compact thorough mode toggle (in collapsed header) */
+.thoroughModeCompact {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  background: var(--thorough-bg);
+  border: 1px solid var(--thorough-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.thoroughModeCompact:hover {
+  background: color-mix(in srgb, var(--thorough-bg) 80%, var(--accent) 20%);
+  border-color: var(--accent);
+}
+
+.thoroughModeCompactCheckbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.thoroughModeCompactLabel {
+  font-size: 0.9rem;
+  user-select: none;
+}
 
 .thoroughModeSection {
   margin-bottom: 1.25rem;
@@ -3285,15 +3411,60 @@
   }
   
   .ipRangesSectionHeader {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
   }
   
-  .addRangeButton {
+  .ipRangesSectionBody {
+    padding: 0 1rem 1rem;
+  }
+  
+  .ipRangesSectionCollapsed .ipRangesSectionBody {
+    padding: 0 1rem;
+  }
+  
+  .ipRangesSectionHeaderLeft {
+    flex-wrap: wrap;
+  }
+  
+  .ipRangesSummaryBadge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+  
+  .ipRangesSectionActions {
+    display: none; /* Hide header actions on mobile */
+  }
+  
+  /* Mobile: hide header button, show body button */
+  .addRangeButtonDesktop {
+    display: none;
+  }
+  
+  .addRangeButtonMobile {
+    display: flex;
     width: 100%;
+    justify-content: center;
     padding: 0.75rem;
     min-height: var(--touch-target-min);
+    margin-top: 0.75rem;
+  }
+  
+  .collapseRangeButton {
+    min-height: var(--touch-target-min);
+    padding: 0.75rem;
+  }
+  
+  /* Compact thorough mode toggle - mobile */
+  .thoroughModeCompact {
+    padding: 0.5rem;
+  }
+  
+  .thoroughModeCompactCheckbox {
+    width: 18px;
+    height: 18px;
   }
   
   .ipRangeRow {
@@ -3770,5 +3941,549 @@
   .thoroughModeHint {
     flex-basis: 100%;
     margin-left: calc(18px + 0.65rem);
+  }
+}
+
+/* ===========================================
+   Collapsible Section Frame (Panel Discovery, Favorites, etc.)
+   =========================================== */
+
+.collapsibleSection {
+  border: 2px solid var(--border-strong);
+  border-radius: 14px;
+  margin-bottom: 1.5rem;
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.collapsibleSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.collapsibleSectionHeader:hover {
+  background: var(--card-hover);
+}
+
+.collapsibleSectionHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.collapsibleSectionTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.collapsibleSectionToggle {
+  font-size: 0.85rem;
+  color: var(--muted);
+  transition: transform 0.25s ease, color 0.15s ease;
+  width: 1.25rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.collapsibleSectionHeader:hover .collapsibleSectionToggle {
+  color: var(--accent);
+}
+
+.collapsibleSectionExpanded .collapsibleSectionToggle {
+  color: var(--accent);
+}
+
+/* Live status badge in header (visible when collapsed) */
+.collapsibleSectionLiveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  background: var(--badge-panel-bg);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--panel);
+  animation: pulse 2s infinite;
+}
+
+/* Header actions (buttons in collapsed state) */
+.collapsibleSectionActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Content area - hidden when collapsed */
+.collapsibleSectionContent {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.25s ease;
+  padding: 0 1.25rem;
+}
+
+.collapsibleSectionExpanded .collapsibleSectionContent {
+  max-height: 5000px; /* Large enough to show all content */
+  opacity: 1;
+  padding: 0.5rem 1.25rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Adjust summaryGrid when inside collapsible content */
+.collapsibleSectionContent .summaryGrid {
+  margin-top: 0.75rem;
+}
+
+/* Summary stats row - visible when collapsed AND has data */
+.collapsibleSectionSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.collapsibleSectionSummary.hidden {
+  display: none;
+}
+
+/* Mini progress section wrapper for collapsed state during discovery */
+.miniProgressSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+/* Mini phase steps for collapsed state */
+.miniPhaseSteps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.miniPhaseStep {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.4rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.65rem;
+  color: var(--muted);
+  transition: all 0.2s ease;
+}
+
+.miniPhaseStepIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.55rem;
+  font-weight: 700;
+}
+
+.miniPhaseStepLabel {
+  font-weight: 500;
+}
+
+.miniPhaseStepActive {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface) 85%);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.miniPhaseStepActive .miniPhaseStepIndicator {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  animation: miniPulse 1.5s ease-in-out infinite;
+}
+
+.miniPhaseStepComplete {
+  background: color-mix(in srgb, var(--panel) 15%, var(--surface) 85%);
+  border-color: var(--panel);
+  color: var(--panel);
+}
+
+.miniPhaseStepComplete .miniPhaseStepIndicator {
+  background: var(--panel);
+  border-color: var(--panel);
+  color: white;
+}
+
+@keyframes miniPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Mini progress bar for collapsed state during discovery */
+.miniProgressContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.miniProgressBarTrack {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-alt);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.miniProgressBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, #22c55e 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.miniProgressText {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+/* Mini stat boxes for collapsed state */
+.miniStatBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.miniStatBox:hover {
+  border-color: var(--border-strong);
+}
+
+.miniStatIcon {
+  font-size: 0.65rem;
+}
+
+.miniStatValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.miniStatLabel {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.miniStatAccent {
+  color: var(--accent);
+}
+
+.miniStatPanel {
+  color: var(--panel);
+}
+
+.miniStatWarn {
+  color: var(--warning);
+}
+
+.miniStatMuted {
+  color: var(--muted);
+}
+
+/* Clickable stat box */
+.miniStatClickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.miniStatClickable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(51, 195, 107, 0.25);
+}
+
+.miniStatClickable:active {
+  transform: scale(0.98);
+}
+
+/* Divider between summary and expand hint */
+.collapsibleSectionExpandHint {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.collapsibleSectionExpandHint:hover {
+  background: var(--card);
+  color: var(--foreground);
+}
+
+/* ===========================================
+   Placeholder Section (Favorites, Smart Switches)
+   =========================================== */
+
+.placeholderSection {
+  border: 2px dashed var(--border-strong);
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  background: var(--surface);
+  opacity: 0.7;
+  transition: all 0.15s ease;
+}
+
+.placeholderSection:hover {
+  opacity: 0.85;
+  border-color: var(--accent);
+}
+
+.placeholderSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.placeholderSectionTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.placeholderBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  background: var(--badge-muted-bg);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.placeholderContent {
+  margin-top: 1rem;
+  padding: 2rem;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.placeholderIcon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+/* Progress container inside collapsible section */
+.collapsibleSectionContent .progressContainer {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  border: none;
+  box-shadow: none;
+}
+
+/* Stream status inside collapsible section */
+.collapsibleSectionContent .streamStatus {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+/* ===========================================
+   Mobile: Collapsible Sections
+   =========================================== */
+
+@media (max-width: 768px) {
+  .collapsibleSection {
+    border-radius: var(--mobile-radius);
+    margin-bottom: 1rem;
+  }
+  
+  .collapsibleSectionHeader {
+    padding: 0.875rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .collapsibleSectionHeaderLeft {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .collapsibleSectionTitle {
+    font-size: 0.9rem;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  
+  .collapsibleSectionLiveBadge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+  }
+  
+  .collapsibleSectionActions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: stretch;
+  }
+  
+  .collapsibleSectionActions .button,
+  .collapsibleSectionActions .batchButton,
+  .collapsibleSectionActions .exportButton {
+    flex: 1;
+    min-width: 60px;
+    padding: 0.65rem 0.5rem;
+    font-size: 0.8rem;
+    justify-content: center;
+    text-align: center;
+  }
+  
+  /* Make discover button slightly wider */
+  .collapsibleSectionActions .button {
+    flex: 1.2;
+  }
+  
+  .collapsibleSectionContent {
+    padding: 0 1rem;
+  }
+  
+  .collapsibleSectionExpanded .collapsibleSectionContent {
+    padding: 0.5rem 1rem 1rem;
+  }
+  
+  .collapsibleSectionSummary {
+    padding: 0.75rem 1rem;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  
+  .miniStatBox {
+    flex: 1 1 auto;
+    min-width: 55px;
+    justify-content: center;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.7rem;
+  }
+  
+  /* Mini progress section mobile */
+  .miniProgressSection {
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
+  }
+  
+  .miniPhaseSteps {
+    gap: 0.15rem;
+  }
+  
+  .miniPhaseStep {
+    padding: 0.15rem 0.3rem;
+    font-size: 0.6rem;
+    gap: 0.15rem;
+  }
+  
+  .miniPhaseStepIndicator {
+    width: 12px;
+    height: 12px;
+    font-size: 0.5rem;
+  }
+  
+  /* Mini progress bar mobile */
+  .miniProgressContainer {
+    gap: 0.4rem;
+  }
+  
+  .miniProgressBarTrack {
+    height: 8px;
+  }
+  
+  .miniProgressText {
+    font-size: 0.75rem;
+    min-width: 2.5rem;
+  }
+  
+  .collapsibleSectionExpandHint {
+    width: 100%;
+    justify-content: center;
+    padding: 0.5rem;
+    background: var(--card);
+    margin-top: 0.5rem;
+    border-radius: 8px;
+  }
+  
+  /* Progress container mobile in collapsible */
+  .collapsibleSectionContent .progressContainer {
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .collapsibleSectionContent .streamStatus {
+    margin-bottom: 0.75rem;
+  }
+  
+  /* Placeholder sections mobile */
+  .placeholderSection {
+    padding: 1rem;
+    border-radius: var(--mobile-radius);
+    margin-bottom: 1rem;
+  }
+  
+  .placeholderSectionTitle {
+    font-size: 0.9rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .placeholderBadge {
+    font-size: 0.6rem;
+  }
+  
+  .placeholderContent {
+    padding: 1.5rem 1rem;
+    font-size: 0.8rem;
+  }
+  
+  .placeholderIcon {
+    font-size: 1.5rem;
   }
 }

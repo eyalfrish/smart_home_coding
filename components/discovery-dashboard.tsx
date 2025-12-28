@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState, useEffect } from "react";
-import DiscoveryForm, { type DiscoveryFormValues, type IpRange, createDefaultRange } from "./discovery-form";
+import DiscoveryForm, { type DiscoveryFormValues, type IpRange, type ThoroughSettings, createDefaultRange, validateFormRanges, DEFAULT_THOROUGH_SETTINGS } from "./discovery-form";
 import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
 import BatchOperationsView from "./batch-operations-view";
@@ -74,6 +74,10 @@ export default function DiscoveryDashboard() {
   const [showOnlyLightActive, setShowOnlyLightActive] = useState(false);
   // Selection state for batch operations - persists across filters/views
   const [selectedPanelIps, setSelectedPanelIps] = useState<Set<string>>(new Set());
+  // Panel Discovery section expansion state - starts collapsed
+  const [isPanelDiscoveryExpanded, setIsPanelDiscoveryExpanded] = useState(false);
+  // IP Ranges section expansion state - starts collapsed
+  const [isIpRangesExpanded, setIsIpRangesExpanded] = useState(false);
   
   // Track if registry has been reset
   const [registryReady, setRegistryReady] = useState(false);
@@ -519,6 +523,7 @@ export default function DiscoveryDashboard() {
     // Convert form ranges to discovery requests
     const requests: DiscoveryRequest[] = formValues.ranges.map(rangeToRequest);
     
+    // Stay collapsed during discovery - user can expand if they want
     // State clearing is now done inside executeDiscovery to avoid race conditions
     executeDiscovery(requests);
   };
@@ -620,6 +625,19 @@ export default function DiscoveryDashboard() {
       .map((r) => r.ip);
   }, [response]);
 
+  // Compute form validation state for external buttons
+  const formValidation = useMemo(() => validateFormRanges(formValues.ranges), [formValues.ranges]);
+  const canSubmitDiscovery = !isLoading && formValidation.canSubmit;
+  const hasBatchSelection = selectedPanelIps.size > 0;
+  const hasResults = !!response && response.results.length > 0;
+
+  // Determine if we should show the summary stats in collapsed state
+  // Show when: has data AND (discovery complete OR loading with partial results)
+  const showCollapsedSummary = hasResults;
+
+  // Calculate live panel count for collapsed header display
+  const liveConnectedCount = discoveredPanelIps.filter(ip => panelStates.get(ip)?.connectionStatus === "connected").length;
+
   return (
     <div className={styles.card}>
       {view === "panels-grid" ? (
@@ -642,6 +660,7 @@ export default function DiscoveryDashboard() {
         />
       ) : (
         <>
+          {/* IP Ranges Form - Collapsible */}
           <DiscoveryForm
             values={formValues}
             disabled={isLoading}
@@ -650,9 +669,318 @@ export default function DiscoveryDashboard() {
             onSubmit={handleFormSubmit}
             selectedCount={selectedPanelIps.size}
             onBatchOperationsClick={handleBatchOperationsClick}
-            hasResults={!!response && response.results.length > 0}
+            hasResults={hasResults}
             onExportClick={handleExportToExcel}
+            hideActions={true}
+            hideThoroughMode={true}
+            collapsed={!isIpRangesExpanded}
+            onExpand={() => setIsIpRangesExpanded(true)}
+            onCollapse={() => setIsIpRangesExpanded(false)}
           />
+
+          {/* Panel Discovery Section - Collapsible */}
+          <div className={`${styles.collapsibleSection} ${isPanelDiscoveryExpanded ? styles.collapsibleSectionExpanded : ""}`}>
+            {/* Header - always visible, entire header is clickable */}
+            <div 
+              className={styles.collapsibleSectionHeader}
+              onClick={() => setIsPanelDiscoveryExpanded(!isPanelDiscoveryExpanded)}
+              style={{ cursor: "pointer" }}
+            >
+              <div className={styles.collapsibleSectionHeaderLeft}>
+                <span className={styles.collapsibleSectionToggle}>
+                  {isPanelDiscoveryExpanded ? "▼" : "▶"}
+                </span>
+                <h3 className={styles.collapsibleSectionTitle}>
+                  🔍 Panel Discovery
+                  {/* Live badge when connected */}
+                  {!isLoading && isStreamConnected && liveConnectedCount > 0 && (
+                    <span className={styles.collapsibleSectionLiveBadge}>
+                      ● Live: {liveConnectedCount}/{discoveredPanelIps.length}
+                    </span>
+                  )}
+                </h3>
+              </div>
+              <div className={styles.collapsibleSectionActions} onClick={(e) => e.stopPropagation()}>
+                {/* Thorough mode toggle - compact when not expanded */}
+                {!isPanelDiscoveryExpanded && (
+                  <label className={styles.thoroughModeCompact} title="Slower scan for panels recovering from power outages">
+                    <input
+                      type="checkbox"
+                      checked={formValues.thoroughMode ?? false}
+                      onChange={(e) => setFormValues({ 
+                        ...formValues, 
+                        thoroughMode: e.target.checked,
+                        thoroughSettings: e.target.checked ? (formValues.thoroughSettings ?? DEFAULT_THOROUGH_SETTINGS) : undefined,
+                      })}
+                      disabled={isLoading}
+                      className={styles.thoroughModeCompactCheckbox}
+                    />
+                    <span className={styles.thoroughModeCompactLabel}>🔬</span>
+                  </label>
+                )}
+                <button
+                  type="button"
+                  className={styles.button}
+                  disabled={!canSubmitDiscovery}
+                  aria-busy={isLoading}
+                  onClick={handleFormSubmit}
+                  title={
+                    formValidation.hasOverlap
+                      ? "Cannot start discovery: IP ranges overlap"
+                      : !formValidation.allValid
+                      ? "Please fill in all IP range fields with valid values"
+                      : undefined
+                  }
+                >
+                  {isLoading ? (
+                    <>
+                      <span className={styles.desktopText}>⏳ Scanning…</span>
+                      <span className={styles.mobileText}>⏳</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={styles.desktopText}>🔍 Discover</span>
+                      <span className={styles.mobileText}>🔍</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.batchButton} ${hasBatchSelection ? styles.batchButtonActive : ""}`}
+                  disabled={!hasBatchSelection || isLoading}
+                  onClick={handleBatchOperationsClick}
+                >
+                  <span className={styles.desktopText}>
+                    ⚡ Batch{hasBatchSelection ? ` (${selectedPanelIps.size})` : ""}
+                  </span>
+                  <span className={styles.mobileText}>
+                    ⚡{hasBatchSelection ? ` ${selectedPanelIps.size}` : ""}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.exportButton}
+                  disabled={!hasResults || isLoading}
+                  onClick={handleExportToExcel}
+                  title="Export all discovery results to Excel"
+                >
+                  <span className={styles.desktopText}>📊 Export</span>
+                  <span className={styles.mobileText}>📊</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Summary stats row - visible when collapsed AND (has data OR is loading) */}
+            {!isPanelDiscoveryExpanded && (showCollapsedSummary || isLoading) && (
+              <div className={styles.collapsibleSectionSummary}>
+                {/* Mini progress section when loading */}
+                {isLoading && (() => {
+                  const phases = [
+                    { key: "quick-sweep", label: "Quick", shortLabel: "Q" },
+                    { key: "standard", label: "Standard", shortLabel: "S" },
+                    { key: "deep", label: "Deep", shortLabel: "D" },
+                  ];
+                  const currentPhase = liveProgress?.phase || "";
+                  const currentPhaseIndex = phases.findIndex(p => currentPhase.includes(p.key));
+                  const totalIps = response?.summary?.totalChecked ?? 0;
+                  const scanned = liveProgress?.scannedCount ?? 0;
+                  const percent = totalIps > 0 ? Math.round((scanned / totalIps) * 100) : 0;
+                  return (
+                    <div className={styles.miniProgressSection}>
+                      {/* Mini phase steps */}
+                      <div className={styles.miniPhaseSteps}>
+                        {phases.map((phase, idx) => {
+                          const isActive = idx === currentPhaseIndex;
+                          const isComplete = idx < currentPhaseIndex;
+                          return (
+                            <div 
+                              key={phase.key}
+                              className={`${styles.miniPhaseStep} ${isActive ? styles.miniPhaseStepActive : ""} ${isComplete ? styles.miniPhaseStepComplete : ""}`}
+                            >
+                              <span className={styles.miniPhaseStepIndicator}>
+                                {isComplete ? "✓" : idx + 1}
+                              </span>
+                              <span className={styles.miniPhaseStepLabel}>
+                                <span className={styles.desktopText}>{phase.label}</span>
+                                <span className={styles.mobileText}>{phase.shortLabel}</span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Mini progress bar */}
+                      <div className={styles.miniProgressContainer}>
+                        <div className={styles.miniProgressBarTrack}>
+                          <div 
+                            className={styles.miniProgressBarFill}
+                            style={{ width: `${Math.min(100, percent)}%` }}
+                          />
+                        </div>
+                        <span className={styles.miniProgressText}>{percent}%</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div className={`${styles.miniStatBox} ${styles.miniStatAccent}`}>
+                  <span className={styles.miniStatValue}>{isLoading ? (liveProgress?.scannedCount ?? 0) : (response?.summary.totalChecked ?? 0)}</span>
+                  <span className={styles.miniStatLabel}>
+                    <span className={styles.desktopText}>{isLoading ? "Scanned" : "Total"}</span>
+                    <span className={styles.mobileText}>{isLoading ? "S" : "T"}</span>
+                  </span>
+                </div>
+                <div 
+                  className={`${styles.miniStatBox} ${styles.miniStatPanel} ${!isLoading && (response?.summary.panelsFound ?? 0) > 0 ? styles.miniStatClickable : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isLoading && (response?.summary.panelsFound ?? 0) > 0) {
+                      handlePanelsSummaryClick();
+                    }
+                  }}
+                  title={!isLoading && (response?.summary.panelsFound ?? 0) > 0 ? "Click to view all panels" : undefined}
+                >
+                  <span className={styles.miniStatIcon}>●</span>
+                  <span className={styles.miniStatValue}>{isLoading ? (liveProgress?.panelsFound ?? 0) : (response?.summary.panelsFound ?? 0)}</span>
+                  <span className={styles.miniStatLabel}>
+                    <span className={styles.desktopText}>Panels</span>
+                    <span className={styles.mobileText}>P</span>
+                  </span>
+                </div>
+                <div className={`${styles.miniStatBox} ${styles.miniStatMuted}`}>
+                  <span className={styles.miniStatIcon}>○</span>
+                  <span className={styles.miniStatValue}>{isLoading ? (liveProgress?.notPanels ?? 0) : (response?.summary.notPanels ?? 0)}</span>
+                  <span className={styles.miniStatLabel}>
+                    <span className={styles.desktopText}>Other</span>
+                    <span className={styles.mobileText}>O</span>
+                  </span>
+                </div>
+                <div className={`${styles.miniStatBox} ${styles.miniStatWarn}`}>
+                  <span className={styles.miniStatValue}>{isLoading ? (liveProgress?.noResponse ?? 0) : (response?.summary.noResponse ?? 0)}</span>
+                  <span className={styles.miniStatLabel}>
+                    <span className={styles.desktopText}>Offline</span>
+                    <span className={styles.mobileText}>Off</span>
+                  </span>
+                </div>
+                <div className={`${styles.miniStatBox} ${styles.miniStatWarn}`}>
+                  <span className={styles.miniStatValue}>{response?.summary.errors ?? 0}</span>
+                  <span className={styles.miniStatLabel}>
+                    <span className={styles.desktopText}>Errors</span>
+                    <span className={styles.mobileText}>Err</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Expandable content area */}
+            <div className={styles.collapsibleSectionContent}>
+              {/* Thorough Mode Settings - Full version when expanded */}
+              <div className={styles.thoroughModeSection}>
+                <label className={styles.thoroughModeLabel}>
+                  <input
+                    type="checkbox"
+                    checked={formValues.thoroughMode ?? false}
+                    onChange={(e) => setFormValues({ 
+                      ...formValues, 
+                      thoroughMode: e.target.checked,
+                      thoroughSettings: e.target.checked ? (formValues.thoroughSettings ?? DEFAULT_THOROUGH_SETTINGS) : undefined,
+                    })}
+                    disabled={isLoading}
+                    className={styles.thoroughModeCheckbox}
+                  />
+                  <span className={styles.thoroughModeText}>
+                    🔬 Thorough Mode
+                  </span>
+                  <span className={styles.thoroughModeHint}>
+                    (slower scan for panels recovering from power outages)
+                  </span>
+                </label>
+                
+                {/* Thorough Mode Settings */}
+                {formValues.thoroughMode && (
+                  <div className={styles.thoroughSettings}>
+                    <div className={styles.thoroughSettingsHeader}>
+                      <span className={styles.thoroughSettingsTitle}>Thorough Mode Settings</span>
+                    </div>
+                    
+                    <div className={styles.thoroughSettingRow}>
+                      <label className={styles.thoroughSettingLabel} title="Maximum time to wait for each panel response">
+                        ⏱️ Timeout
+                      </label>
+                      <div className={styles.thoroughSettingInputGroup}>
+                        <input
+                          type="number"
+                          min="500"
+                          max="30000"
+                          step="100"
+                          value={formValues.thoroughSettings?.timeout ?? DEFAULT_THOROUGH_SETTINGS.timeout}
+                          onChange={(e) => setFormValues({
+                            ...formValues,
+                            thoroughSettings: {
+                              ...DEFAULT_THOROUGH_SETTINGS,
+                              ...formValues.thoroughSettings,
+                              timeout: parseInt(e.target.value, 10) || DEFAULT_THOROUGH_SETTINGS.timeout,
+                            },
+                          })}
+                          disabled={isLoading}
+                          className={styles.thoroughSettingInput}
+                        />
+                        <span className={styles.thoroughSettingSuffix}>ms</span>
+                      </div>
+                    </div>
+                    
+                    <div className={styles.thoroughSettingRow}>
+                      <label className={styles.thoroughSettingLabel} title="Number of simultaneous panel requests">
+                        🔀 Parallel
+                      </label>
+                      <div className={styles.thoroughSettingInputGroup}>
+                        <input
+                          type="number"
+                          min="1"
+                          max="25"
+                          step="1"
+                          value={formValues.thoroughSettings?.concurrency ?? DEFAULT_THOROUGH_SETTINGS.concurrency}
+                          onChange={(e) => setFormValues({
+                            ...formValues,
+                            thoroughSettings: {
+                              ...DEFAULT_THOROUGH_SETTINGS,
+                              ...formValues.thoroughSettings,
+                              concurrency: Math.max(1, parseInt(e.target.value, 10) || DEFAULT_THOROUGH_SETTINGS.concurrency),
+                            },
+                          })}
+                          disabled={isLoading}
+                          className={styles.thoroughSettingInput}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className={styles.thoroughSettingRow}>
+                      <label className={styles.thoroughSettingLabel} title="Number of retry attempts per panel">
+                        🔄 Retries
+                      </label>
+                      <div className={styles.thoroughSettingInputGroup}>
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          step="1"
+                          value={formValues.thoroughSettings?.retries ?? DEFAULT_THOROUGH_SETTINGS.retries}
+                          onChange={(e) => setFormValues({
+                            ...formValues,
+                            thoroughSettings: {
+                              ...DEFAULT_THOROUGH_SETTINGS,
+                              ...formValues.thoroughSettings,
+                              retries: Math.max(0, parseInt(e.target.value, 10) ?? DEFAULT_THOROUGH_SETTINGS.retries),
+                            },
+                          })}
+                          disabled={isLoading}
+                          className={styles.thoroughSettingInput}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Progress indicator during loading */}
           {isLoading && (() => {
             const phases = [
               { key: "quick-sweep", label: "Quick Sweep", shortLabel: "Quick" },
@@ -724,11 +1052,13 @@ export default function DiscoveryDashboard() {
               </div>
             );
           })()}
+
+              {/* Stream status */}
           {!isLoading && discoveredPanelIps.length > 0 && (
             <div className={styles.streamStatus}>
               <span className={isStreamConnected ? styles.statusConnected : styles.statusDisconnected}>
                 {isStreamConnected
-                  ? `● Live: ${discoveredPanelIps.filter(ip => panelStates.get(ip)?.connectionStatus === "connected").length}/${discoveredPanelIps.length} panels connected`
+                      ? `● Live: ${liveConnectedCount}/${discoveredPanelIps.length} panels connected`
                   : "○ Connecting to panels..."}
               </span>
               {streamError && (
@@ -740,7 +1070,12 @@ export default function DiscoveryDashboard() {
               )}
             </div>
           )}
+
+              {/* Error display */}
           {error && <div className={styles.errorBox}>{error}</div>}
+
+              {/* Full results table and filters - only show when NOT loading */}
+              {!isLoading && (
           <DiscoveryResults
             data={response}
             onPanelsSummaryClick={handlePanelsSummaryClick}
@@ -761,6 +1096,37 @@ export default function DiscoveryDashboard() {
             onDeselectAll={handleDeselectAll}
             cubixxPanelIps={cubixxPanelIps}
           />
+              )}
+            </div>
+          </div>
+
+          {/* Placeholder: Favorite Switches Section */}
+          <div className={styles.placeholderSection}>
+            <div className={styles.placeholderSectionHeader}>
+              <h3 className={styles.placeholderSectionTitle}>
+                ⭐ Favorite Switches
+                <span className={styles.placeholderBadge}>Coming Soon</span>
+              </h3>
+            </div>
+            <div className={styles.placeholderContent}>
+              <div className={styles.placeholderIcon}>🏠</div>
+              <p>Create Zones and add your favorite switches for quick access.</p>
+            </div>
+          </div>
+
+          {/* Placeholder: Smart Switches Section */}
+          <div className={styles.placeholderSection}>
+            <div className={styles.placeholderSectionHeader}>
+              <h3 className={styles.placeholderSectionTitle}>
+                🤖 Smart Switches
+                <span className={styles.placeholderBadge}>Coming Soon</span>
+              </h3>
+            </div>
+            <div className={styles.placeholderContent}>
+              <div className={styles.placeholderIcon}>⚡</div>
+              <p>Program automated sequences with toggles, clicks, and timers.</p>
+            </div>
+          </div>
         </>
       )}
     </div>

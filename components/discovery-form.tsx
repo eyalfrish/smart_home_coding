@@ -58,7 +58,7 @@ function isValidLastOctet(value: string): boolean {
 }
 
 // Check if a single range is valid
-function isRangeValid(range: IpRange): boolean {
+export function isRangeValid(range: IpRange): boolean {
   const validBase =
     isValidOctet(range.octet1) &&
     isValidOctet(range.octet2) &&
@@ -93,8 +93,8 @@ function rangesOverlap(a: IpRange, b: IpRange): boolean {
   return aStart <= bEnd && bStart <= aEnd;
 }
 
-// Check for any overlapping ranges
-function findOverlaps(ranges: IpRange[]): Set<string> {
+// Check for any overlapping ranges - exported for external validation
+export function findOverlaps(ranges: IpRange[]): Set<string> {
   const validRanges = ranges.filter(isRangeValid);
   const overlappingIds = new Set<string>();
   
@@ -108,6 +108,18 @@ function findOverlaps(ranges: IpRange[]): Set<string> {
   }
   
   return overlappingIds;
+}
+
+// Validate all form ranges - exported for external validation
+export function validateFormRanges(ranges: IpRange[]): { allValid: boolean; hasOverlap: boolean; canSubmit: boolean } {
+  const allValid = ranges.every(isRangeValid);
+  const overlaps = findOverlaps(ranges);
+  const hasOverlap = overlaps.size > 0;
+  return {
+    allValid,
+    hasOverlap,
+    canSubmit: allValid && !hasOverlap,
+  };
 }
 
 // Normal mode deep phase settings (for reference and default calculation)
@@ -447,6 +459,16 @@ interface DiscoveryFormProps {
   onBatchOperationsClick?: () => void;
   hasResults?: boolean;
   onExportClick?: () => void;
+  /** If true, hides the action buttons (they'll be rendered externally) */
+  hideActions?: boolean;
+  /** If true, hides the thorough mode section (rendered externally in Panel Discovery) */
+  hideThoroughMode?: boolean;
+  /** If true, render in collapsed/summary mode showing only range summary */
+  collapsed?: boolean;
+  /** Callback when expand is clicked in collapsed mode */
+  onExpand?: () => void;
+  /** Callback when collapse is requested */
+  onCollapse?: () => void;
 }
 
 export default function DiscoveryForm({
@@ -459,6 +481,11 @@ export default function DiscoveryForm({
   onBatchOperationsClick,
   hasResults = false,
   onExportClick,
+  hideActions = false,
+  hideThoroughMode = false,
+  collapsed = false,
+  onExpand,
+  onCollapse,
 }: DiscoveryFormProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -521,100 +548,138 @@ export default function DiscoveryForm({
   const canSubmit = !disabled && allRangesValid && !hasOverlap;
   const hasBatchSelection = selectedCount > 0;
 
+  // Format range for display in collapsed summary
+  const formatRangeDisplay = (range: IpRange) => 
+    `${range.octet1}.${range.octet2}.${range.octet3}.${range.start}-${range.end}`;
+
   return (
     <form onSubmit={handleSubmit}>
-      {/* IP Ranges Section - Framed */}
-      <div className={styles.ipRangesSection}>
-        <div className={styles.ipRangesSectionHeader}>
-          <h3 className={styles.ipRangesSectionTitle}>IP Ranges</h3>
+      {/* IP Ranges Section - Collapsible */}
+      <div className={`${styles.ipRangesSection} ${collapsed ? styles.ipRangesSectionCollapsed : ""}`}>
+        <div 
+          className={styles.ipRangesSectionHeader}
+          onClick={collapsed ? onExpand : onCollapse}
+          style={{ cursor: "pointer" }}
+        >
+          <div className={styles.ipRangesSectionHeaderLeft}>
+            <span className={styles.collapsibleSectionToggle}>{collapsed ? "▶" : "▼"}</span>
+            <h3 className={styles.ipRangesSectionTitle}>
+              🌐 IP Ranges
+              {collapsed && values.ranges.length > 0 && (
+                <span className={styles.ipRangesSummaryBadge}>
+                  {values.ranges.map(formatRangeDisplay).join(", ")}
+                </span>
+              )}
+            </h3>
+          </div>
+          {/* Add Range button - desktop only in header */}
+          {!collapsed && (
+            <div className={styles.ipRangesSectionActions} onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className={`${styles.addRangeButton} ${styles.addRangeButtonDesktop}`}
+                onClick={handleAddRange}
+                disabled={disabled}
+                title="Add another IP range"
+              >
+                + Add Range
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Full IP range editor - animated via CSS */}
+        <div className={styles.ipRangesSectionBody}>
+          <div className={styles.ipRangesList}>
+            {values.ranges.map((range, index) => {
+              const isOverlapping = overlappingIds.has(range.id);
+              const baseIpValid = isValidOctet(range.octet1) && isValidOctet(range.octet2) && isValidOctet(range.octet3);
+              const baseIpPartiallyFilled = !!(range.octet1 || range.octet2 || range.octet3);
+              const baseIpHasError = baseIpPartiallyFilled && !baseIpValid;
+              
+              const startValid = isValidLastOctet(range.start);
+              const endValid = isValidLastOctet(range.end);
+              const startNum = parseInt(range.start, 10);
+              const endNum = parseInt(range.end, 10);
+              const hasInvalidOrder = startValid && endValid && startNum > endNum;
+              const rangePartiallyFilled = !!(range.start || range.end);
+              const rangeHasError = (rangePartiallyFilled && (!startValid || !endValid)) || hasInvalidOrder;
+
+              return (
+                <div
+                  key={range.id}
+                  className={`${styles.ipRangeRow} ${isOverlapping ? styles.ipRangeRowOverlap : ""}`}
+                >
+                  <span className={styles.rangeNumber}>{index + 1}.</span>
+                  
+                  {/* Base IP - compound input */}
+                  <IpBaseInput
+                    octet1={range.octet1}
+                    octet2={range.octet2}
+                    octet3={range.octet3}
+                    onChange={(field, value) => handleRangeFieldChange(range.id, field, value)}
+                    disabled={disabled}
+                    hasError={baseIpHasError}
+                  />
+
+                  <span className={styles.rangeDotConnector}>.</span>
+
+                  {/* Range start-end - compound input */}
+                  <RangeInput
+                    start={range.start}
+                    end={range.end}
+                    onChange={(field, value) => handleRangeFieldChange(range.id, field, value)}
+                    disabled={disabled}
+                    hasError={rangeHasError || isOverlapping}
+                  />
+
+                  {/* Remove button */}
+                  {values.ranges.length > 1 && (
+                    <button
+                      type="button"
+                      className={styles.removeRangeButton}
+                      onClick={() => handleRemoveRange(range.id)}
+                      disabled={disabled}
+                      title="Remove this range"
+                      aria-label="Remove range"
+                    >
+                      ×
+                    </button>
+                  )}
+
+                  {/* Overlap warning */}
+                  {isOverlapping && (
+                    <span className={styles.overlapWarning} title="This range overlaps with another range">
+                      ⚠️
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Add Range button - mobile only at bottom */}
           <button
             type="button"
-            className={styles.addRangeButton}
+            className={`${styles.addRangeButton} ${styles.addRangeButtonMobile}`}
             onClick={handleAddRange}
             disabled={disabled}
             title="Add another IP range"
           >
             + Add Range
           </button>
+
+          {/* Validation messages */}
+          {hasOverlap && (
+            <div className={styles.rangeValidationError}>
+              ⚠️ Some IP ranges overlap. Please adjust the ranges to continue.
+            </div>
+          )}
         </div>
-
-        <div className={styles.ipRangesList}>
-          {values.ranges.map((range, index) => {
-            const isOverlapping = overlappingIds.has(range.id);
-            const baseIpValid = isValidOctet(range.octet1) && isValidOctet(range.octet2) && isValidOctet(range.octet3);
-            const baseIpPartiallyFilled = !!(range.octet1 || range.octet2 || range.octet3);
-            const baseIpHasError = baseIpPartiallyFilled && !baseIpValid;
-            
-            const startValid = isValidLastOctet(range.start);
-            const endValid = isValidLastOctet(range.end);
-            const startNum = parseInt(range.start, 10);
-            const endNum = parseInt(range.end, 10);
-            const hasInvalidOrder = startValid && endValid && startNum > endNum;
-            const rangePartiallyFilled = !!(range.start || range.end);
-            const rangeHasError = (rangePartiallyFilled && (!startValid || !endValid)) || hasInvalidOrder;
-
-            return (
-              <div
-                key={range.id}
-                className={`${styles.ipRangeRow} ${isOverlapping ? styles.ipRangeRowOverlap : ""}`}
-              >
-                <span className={styles.rangeNumber}>{index + 1}.</span>
-                
-                {/* Base IP - compound input */}
-                <IpBaseInput
-                  octet1={range.octet1}
-                  octet2={range.octet2}
-                  octet3={range.octet3}
-                  onChange={(field, value) => handleRangeFieldChange(range.id, field, value)}
-                  disabled={disabled}
-                  hasError={baseIpHasError}
-                />
-
-                <span className={styles.rangeDotConnector}>.</span>
-
-                {/* Range start-end - compound input */}
-                <RangeInput
-                  start={range.start}
-                  end={range.end}
-                  onChange={(field, value) => handleRangeFieldChange(range.id, field, value)}
-                  disabled={disabled}
-                  hasError={rangeHasError || isOverlapping}
-                />
-
-                {/* Remove button */}
-                {values.ranges.length > 1 && (
-                  <button
-                    type="button"
-                    className={styles.removeRangeButton}
-                    onClick={() => handleRemoveRange(range.id)}
-                    disabled={disabled}
-                    title="Remove this range"
-                    aria-label="Remove range"
-                  >
-                    ×
-                  </button>
-                )}
-
-                {/* Overlap warning */}
-                {isOverlapping && (
-                  <span className={styles.overlapWarning} title="This range overlaps with another range">
-                    ⚠️
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Validation messages */}
-        {hasOverlap && (
-          <div className={styles.rangeValidationError}>
-            ⚠️ Some IP ranges overlap. Please adjust the ranges to continue.
-          </div>
-        )}
       </div>
 
-      {/* Thorough Mode Toggle */}
+      {/* Thorough Mode Toggle - can be hidden when rendered externally */}
+      {!hideThoroughMode && (
       <div className={styles.thoroughModeSection}>
         <label className={styles.thoroughModeLabel}>
           <input
@@ -742,58 +807,61 @@ export default function DiscoveryForm({
           </div>
         )}
       </div>
+      )}
 
-      {/* Actions */}
-      <div className={styles.actions}>
-        <button
-          type="submit"
-          className={styles.button}
-          disabled={!canSubmit}
-          aria-busy={isLoading}
-          title={
-            hasOverlap
-              ? "Cannot start discovery: IP ranges overlap"
-              : !allRangesValid
-              ? "Please fill in all IP range fields with valid values"
-              : undefined
-          }
-        >
-          {isLoading ? (
-            <>
-              <span className={styles.desktopText}>⏳ Scanning…</span>
-              <span className={styles.mobileText}>⏳</span>
-            </>
-          ) : (
-            <>
-              <span className={styles.desktopText}>🔍 Discover</span>
-              <span className={styles.mobileText}>🔍 Scan</span>
-            </>
-          )}
-        </button>
-        <button
-          type="button"
-          className={`${styles.batchButton} ${hasBatchSelection ? styles.batchButtonActive : ""}`}
-          disabled={!hasBatchSelection || isLoading}
-          onClick={onBatchOperationsClick}
-        >
-          <span className={styles.desktopText}>
-            ⚡ Batch Operations{hasBatchSelection ? ` (${selectedCount})` : ""}
-          </span>
-          <span className={styles.mobileText}>
-            ⚡ Batch{hasBatchSelection ? ` (${selectedCount})` : ""}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={styles.exportButton}
-          disabled={!hasResults || isLoading}
-          onClick={onExportClick}
-          title="Export all discovery results to Excel"
-        >
-          <span className={styles.desktopText}>📊 Export</span>
-          <span className={styles.mobileText}>📊</span>
-        </button>
-      </div>
+      {/* Actions - can be hidden when rendered externally */}
+      {!hideActions && (
+        <div className={styles.actions}>
+          <button
+            type="submit"
+            className={styles.button}
+            disabled={!canSubmit}
+            aria-busy={isLoading}
+            title={
+              hasOverlap
+                ? "Cannot start discovery: IP ranges overlap"
+                : !allRangesValid
+                ? "Please fill in all IP range fields with valid values"
+                : undefined
+            }
+          >
+            {isLoading ? (
+              <>
+                <span className={styles.desktopText}>⏳ Scanning…</span>
+                <span className={styles.mobileText}>⏳</span>
+              </>
+            ) : (
+              <>
+                <span className={styles.desktopText}>🔍 Discover</span>
+                <span className={styles.mobileText}>🔍 Scan</span>
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`${styles.batchButton} ${hasBatchSelection ? styles.batchButtonActive : ""}`}
+            disabled={!hasBatchSelection || isLoading}
+            onClick={onBatchOperationsClick}
+          >
+            <span className={styles.desktopText}>
+              ⚡ Batch Operations{hasBatchSelection ? ` (${selectedCount})` : ""}
+            </span>
+            <span className={styles.mobileText}>
+              ⚡ Batch{hasBatchSelection ? ` (${selectedCount})` : ""}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={styles.exportButton}
+            disabled={!hasResults || isLoading}
+            onClick={onExportClick}
+            title="Export all discovery results to Excel"
+          >
+            <span className={styles.desktopText}>📊 Export</span>
+            <span className={styles.mobileText}>📊</span>
+          </button>
+        </div>
+      )}
     </form>
   );
 }
