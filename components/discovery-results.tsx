@@ -144,6 +144,8 @@ export default function DiscoveryResults({
 
   // Selection helpers
   const handleCheckboxChange = useCallback((ip: string, checked: boolean) => {
+    // If this checkbox was already toggled during a swipe gesture, skip the onChange
+    if (swipeProcessedIps.current.has(ip)) return;
     onPanelSelectionChange?.(ip, checked);
   }, [onPanelSelectionChange]);
 
@@ -172,7 +174,11 @@ export default function DiscoveryResults({
 
   const handleSwipeEnd = useCallback(() => {
     setIsSwipeSelecting(false);
-    swipeProcessedIps.current.clear();
+    // Delay clearing processed IPs to allow onChange to check if it should skip
+    // (click/onChange fires after mouseup, so we need a small delay)
+    setTimeout(() => {
+      swipeProcessedIps.current.clear();
+    }, 50);
   }, []);
 
   // Touch move handler for swipe selection (detects which checkbox is under finger)
