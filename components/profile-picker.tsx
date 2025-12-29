@@ -8,6 +8,9 @@ import type { FavoritesData, SmartSwitchesData } from './favorites-section';
 /** Valid section identifiers for the dashboard */
 export type DashboardSection = 'profile' | 'ip-ranges' | 'discovery' | 'favorites';
 
+/** Sections that can be shown in fullscreen mode */
+export type FullscreenSection = 'discovery' | 'favorites' | null;
+
 /** Default section order */
 export const DEFAULT_SECTION_ORDER: DashboardSection[] = ['profile', 'ip-ranges', 'discovery', 'favorites'];
 
@@ -33,6 +36,7 @@ export interface FullProfile {
   favorites: FavoritesData | Record<string, unknown>;
   smart_switches: SmartSwitchesData | Record<string, unknown>;
   section_order: DashboardSection[];
+  fullscreen_section: FullscreenSection;
   created_at: string;
   updated_at: string;
 }
@@ -46,6 +50,8 @@ interface ProfilePickerProps {
   currentSmartSwitches: SmartSwitchesData | Record<string, unknown>;
   /** Current section order from the dashboard */
   currentSectionOrder: DashboardSection[];
+  /** Current fullscreen section from the dashboard */
+  currentFullscreenSection: FullscreenSection;
   /** Called when profile is selected with parsed IP ranges and full profile */
   onProfileSelect: (profileId: number, ranges: IpRange[], fullProfile: FullProfile) => void;
   /** Called after ranges are loaded to trigger discovery - receives the new ranges */
@@ -111,6 +117,7 @@ export default function ProfilePicker({
   currentFavorites,
   currentSmartSwitches,
   currentSectionOrder,
+  currentFullscreenSection,
   onProfileSelect,
   onTriggerDiscovery,
   onProfileClear,
@@ -362,6 +369,7 @@ export default function ProfilePicker({
           favorites: currentFavorites,
           smart_switches: currentSmartSwitches,
           section_order: currentSectionOrder,
+          fullscreen_section: currentFullscreenSection,
         }),
       });
       
@@ -436,6 +444,7 @@ export default function ProfilePicker({
           favorites: currentFavorites,
           smart_switches: currentSmartSwitches,
           section_order: currentSectionOrder,
+          fullscreen_section: currentFullscreenSection,
         }),
       });
       

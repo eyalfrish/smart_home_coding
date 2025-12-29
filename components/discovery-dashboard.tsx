@@ -5,7 +5,7 @@ import DiscoveryForm, { type DiscoveryFormValues, type IpRange, type ThoroughSet
 import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
 import BatchOperationsView from "./batch-operations-view";
-import ProfilePicker, { type FullProfile, type DashboardSection, DEFAULT_SECTION_ORDER } from "./profile-picker";
+import ProfilePicker, { type FullProfile, type DashboardSection, type FullscreenSection, DEFAULT_SECTION_ORDER } from "./profile-picker";
 import FavoritesSection, { type FavoritesData, type SmartSwitchesData } from "./favorites-section";
 import styles from "./discovery-dashboard.module.css";
 import type {
@@ -86,6 +86,9 @@ export default function DiscoveryDashboard() {
   
   // Section order for drag-and-drop reordering
   const [sectionOrder, setSectionOrder] = useState<DashboardSection[]>([...DEFAULT_SECTION_ORDER]);
+  
+  // Fullscreen section state - when set, only profile and this section are visible
+  const [fullscreenSection, setFullscreenSection] = useState<FullscreenSection>(null);
   
   // Drag state
   const [draggedSection, setDraggedSection] = useState<DashboardSection | null>(null);
@@ -558,6 +561,8 @@ export default function DiscoveryDashboard() {
     if (fullProfile.section_order && fullProfile.section_order.length === DEFAULT_SECTION_ORDER.length) {
       setSectionOrder(fullProfile.section_order);
     }
+    // Load fullscreen section from profile
+    setFullscreenSection(fullProfile.fullscreen_section ?? null);
     // Collapse IP ranges section after loading profile
     setIsIpRangesExpanded(false);
   }, []);
@@ -573,6 +578,8 @@ export default function DiscoveryDashboard() {
     setDiscoveryCompleted(false);
     // Reset section order to default
     setSectionOrder([...DEFAULT_SECTION_ORDER]);
+    // Reset fullscreen mode
+    setFullscreenSection(null);
   }, []);
 
   // Handle showing toast notifications
@@ -840,31 +847,48 @@ export default function DiscoveryDashboard() {
         <>
           {/* Render sections in the configured order */}
           {sectionOrder.map((section) => {
+            // In fullscreen mode, only show 'profile' and the fullscreen section
+            if (fullscreenSection !== null) {
+              if (section !== 'profile' && section !== fullscreenSection) {
+                return null;
+              }
+            }
+            
             const isDragging = draggedSection === section;
             const showDropBefore = dropIndicator?.section === section && dropIndicator?.position === 'before' && draggedSection !== section;
             const showDropAfter = dropIndicator?.section === section && dropIndicator?.position === 'after' && draggedSection !== section;
             
+            // Check if this section is in fullscreen mode
+            const isThisSectionFullscreen = fullscreenSection === section;
+            
             // Draggable wrapper for each section
-            const wrapSection = (content: React.ReactNode, sectionId: DashboardSection) => (
-              <div
-                key={sectionId}
-                className={`${styles.draggableSection} ${isDragging ? styles.dragging : ''} ${showDropBefore ? styles.draggableSectionDropBefore : ''} ${showDropAfter ? styles.draggableSectionDropAfter : ''}`}
-                draggable={!isLoading}
-                onDragStart={(e) => handleDragStart(e, sectionId)}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => handleDragOver(e, sectionId)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, sectionId)}
-              >
-                {/* Drag handle */}
-                <div className={styles.dragHandle} title="Drag to reorder sections">
-                  <span className={styles.dragHandleIcon}>⋮⋮</span>
+            const wrapSection = (content: React.ReactNode, sectionId: DashboardSection) => {
+              // Hide drag handle when in fullscreen mode (for all visible sections)
+              const hideDragHandle = fullscreenSection !== null;
+              
+              return (
+                <div
+                  key={sectionId}
+                  className={`${styles.draggableSection} ${isDragging ? styles.dragging : ''} ${showDropBefore ? styles.draggableSectionDropBefore : ''} ${showDropAfter ? styles.draggableSectionDropAfter : ''} ${isThisSectionFullscreen ? styles.draggableSectionFullscreen : ''}`}
+                  draggable={!isLoading && !fullscreenSection}
+                  onDragStart={(e) => handleDragStart(e, sectionId)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, sectionId)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, sectionId)}
+                >
+                  {/* Drag handle - hide in fullscreen mode */}
+                  {!hideDragHandle && (
+                    <div className={styles.dragHandle} title="Drag to reorder sections">
+                      <span className={styles.dragHandleIcon}>⋮⋮</span>
+                    </div>
+                  )}
+                  <div className={styles.draggableSectionContent}>
+                    {content}
+                  </div>
                 </div>
-                <div className={styles.draggableSectionContent}>
-                  {content}
-                </div>
-              </div>
-            );
+              );
+            };
             
             switch (section) {
               case 'profile':
@@ -874,6 +898,7 @@ export default function DiscoveryDashboard() {
                     currentFavorites={selectedProfile?.favorites || {}}
                     currentSmartSwitches={selectedProfile?.smart_switches || {}}
                     currentSectionOrder={sectionOrder}
+                    currentFullscreenSection={fullscreenSection}
                     onProfileSelect={handleProfileSelect}
                     onTriggerDiscovery={handleTriggerDiscoveryFromProfile}
                     onProfileClear={handleProfileClear}
@@ -906,8 +931,11 @@ export default function DiscoveryDashboard() {
                 );
 
               case 'discovery':
+                // Auto-expand when in fullscreen mode
+                const isDiscoveryFullscreen = fullscreenSection === 'discovery';
+                const isDiscoveryExpanded = isDiscoveryFullscreen || isPanelDiscoveryExpanded;
                 return wrapSection(
-                  <div className={`${styles.collapsibleSection} ${isPanelDiscoveryExpanded ? styles.collapsibleSectionExpanded : ""}`}>
+                  <div className={`${styles.collapsibleSection} ${isDiscoveryExpanded ? styles.collapsibleSectionExpanded : ""} ${isDiscoveryFullscreen ? styles.collapsibleSectionFullscreen : ""}`}>
             {/* Header - always visible, entire header is clickable */}
             <div 
               className={styles.collapsibleSectionHeader}
@@ -916,7 +944,7 @@ export default function DiscoveryDashboard() {
             >
               <div className={styles.collapsibleSectionHeaderLeft}>
                 <span className={styles.collapsibleSectionToggle}>
-                  {isPanelDiscoveryExpanded ? "▼" : "▶"}
+                  {isDiscoveryExpanded ? "▼" : "▶"}
                 </span>
                 <h3 className={styles.collapsibleSectionTitle}>
                   🔍 Panel Discovery
@@ -930,7 +958,7 @@ export default function DiscoveryDashboard() {
               </div>
               <div className={styles.collapsibleSectionActions} onClick={(e) => e.stopPropagation()}>
                 {/* Thorough mode toggle - compact when not expanded */}
-                {!isPanelDiscoveryExpanded && (
+                {!isDiscoveryExpanded && (
                   <label className={styles.thoroughModeCompact} title="Slower scan for panels recovering from power outages">
                     <input
                       type="checkbox"
@@ -995,11 +1023,19 @@ export default function DiscoveryDashboard() {
                   <span className={styles.desktopText}>📊 Export</span>
                   <span className={styles.mobileText}>📊</span>
                 </button>
+                <button
+                  type="button"
+                  className={`${styles.fullscreenToggleButton} ${fullscreenSection === 'discovery' ? styles.fullscreenToggleButtonActive : ''}`}
+                  onClick={() => setFullscreenSection(fullscreenSection === 'discovery' ? null : 'discovery')}
+                  title={fullscreenSection === 'discovery' ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
+                >
+                  {fullscreenSection === 'discovery' ? '⊠' : '⊡'}
+                </button>
               </div>
             </div>
 
             {/* Summary stats row - visible when collapsed AND (has data OR is loading) */}
-            {!isPanelDiscoveryExpanded && (showCollapsedSummary || isLoading) && (
+            {!isDiscoveryExpanded && (showCollapsedSummary || isLoading) && (
               <div className={styles.collapsibleSectionSummary}>
                 {/* Mini progress section when loading */}
                 {isLoading && (() => {
@@ -1346,6 +1382,8 @@ export default function DiscoveryDashboard() {
                     discoveredPanels={response?.results || []}
                     onFavoritesUpdate={handleFavoritesUpdate}
                     onSmartSwitchesUpdate={handleSmartSwitchesUpdate}
+                    isFullscreen={fullscreenSection === 'favorites'}
+                    onFullscreenToggle={() => setFullscreenSection(fullscreenSection === 'favorites' ? null : 'favorites')}
                   />,
                   section
                 );

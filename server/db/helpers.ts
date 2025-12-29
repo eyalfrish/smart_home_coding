@@ -103,6 +103,7 @@ function migrateDatabase(db: ProfilesDatabase): ProfilesDatabase {
     favorites: profile.favorites ?? {},
     smart_switches: profile.smart_switches ?? {},
     section_order: profile.section_order ?? [...DEFAULT_SECTION_ORDER],
+    fullscreen_section: profile.fullscreen_section ?? null,
     created_at: profile.created_at ?? new Date().toISOString(),
     updated_at: profile.updated_at ?? new Date().toISOString(),
   }));
@@ -236,6 +237,7 @@ export async function createProfile(data: CreateProfileData): Promise<Profile> {
     favorites: data.favorites ?? {},
     smart_switches: data.smart_switches ?? {},
     section_order: data.section_order ?? [...DEFAULT_SECTION_ORDER],
+    fullscreen_section: data.fullscreen_section ?? null,
     created_at: now,
     updated_at: now,
   };

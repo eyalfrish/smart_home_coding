@@ -19,6 +19,12 @@ export const CURRENT_SCHEMA_VERSION = 2;
 export type DashboardSection = 'profile' | 'ip-ranges' | 'discovery' | 'favorites';
 
 /**
+ * Sections that can be shown in fullscreen mode.
+ * When set, only the profile picker and the specified section are visible.
+ */
+export type FullscreenSection = 'discovery' | 'favorites' | null;
+
+/**
  * Default section order for new profiles.
  */
 export const DEFAULT_SECTION_ORDER: DashboardSection[] = ['profile', 'ip-ranges', 'discovery', 'favorites'];
@@ -55,6 +61,13 @@ export interface Profile {
    */
   section_order: DashboardSection[];
   
+  /**
+   * Section to show in fullscreen mode when profile loads.
+   * When set, only the profile picker and this section are visible.
+   * null = normal view (all sections visible)
+   */
+  fullscreen_section: FullscreenSection;
+  
   /** ISO timestamp when profile was created */
   created_at: string;
   
@@ -87,6 +100,7 @@ export type CreateProfileData = Pick<Profile, 'name'> & {
   favorites?: Record<string, Record<string, boolean>>;
   smart_switches?: Record<string, unknown>;
   section_order?: DashboardSection[];
+  fullscreen_section?: FullscreenSection;
 };
 
 /**

@@ -4,6 +4,9 @@
   padding: 2rem;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 4rem); /* Account for page padding */
 }
 
 /* Mobile card - full width, no border radius at edges */
@@ -16,6 +19,11 @@
     border-right: none;
     min-height: 100vh;
     min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  }
+  
+  /* Fullscreen mode on mobile - use full height */
+  .collapsibleSectionFullscreen {
+    min-height: calc(100dvh - 180px);
   }
 }
 
@@ -444,6 +452,45 @@
   cursor: not-allowed;
   background: var(--button-secondary-bg);
   color: var(--muted);
+}
+
+/* ===========================================
+   Fullscreen Toggle Button
+   =========================================== */
+
+.fullscreenToggleButton {
+  background: var(--button-secondary-bg);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  min-height: 42px;
+}
+
+.fullscreenToggleButton:hover {
+  background: var(--button-secondary-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fullscreenToggleButtonActive {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.fullscreenToggleButtonActive:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  color: #fff;
 }
 
 .searchLabel {
@@ -4044,6 +4091,43 @@
   border-top: 1px solid var(--border);
 }
 
+/* ===========================================
+   Fullscreen Mode Styles
+   =========================================== */
+
+.collapsibleSectionFullscreen {
+  flex: 1;
+  min-height: calc(100vh - 200px); /* Leave room for profile section */
+  display: flex;
+  flex-direction: column;
+}
+
+.collapsibleSectionFullscreen .collapsibleSectionContent {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.collapsibleSectionFullscreen .collapsibleSectionHeader {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-hover) 100%);
+  border-bottom: 2px solid var(--accent);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.draggableSectionFullscreen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.draggableSectionFullscreen .draggableSectionContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Adjust summaryGrid when inside collapsible content */
 .collapsibleSectionContent .summaryGrid {
   margin-top: 0.75rem;
@@ -4320,6 +4404,14 @@
   /* Make discover button slightly wider */
   .collapsibleSectionActions .button {
     flex: 1.2;
+  }
+  
+  /* Fullscreen toggle button - compact on mobile */
+  .collapsibleSectionActions .fullscreenToggleButton {
+    flex: 0 0 auto;
+    min-width: 40px;
+    padding: 0.5rem;
+    font-size: 1rem;
   }
   
   .collapsibleSectionContent {

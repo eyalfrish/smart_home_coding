@@ -6,7 +6,7 @@ import {
   getAllProfiles,
   DEFAULT_SECTION_ORDER,
 } from "@/server/db";
-import type { UpdateProfileData, DashboardSection } from "@/server/db";
+import type { UpdateProfileData, DashboardSection, FullscreenSection } from "@/server/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,6 +76,7 @@ interface UpdateProfileBody {
   favorites?: Record<string, Record<string, boolean>>;
   smart_switches?: Record<string, unknown>;
   section_order?: DashboardSection[];
+  fullscreen_section?: FullscreenSection;
 }
 
 /**
@@ -115,17 +116,18 @@ export async function PUT(
     }
 
     // Validate that at least one field is being updated
-    const { name, ip_ranges, favorites, smart_switches, section_order } = body;
+    const { name, ip_ranges, favorites, smart_switches, section_order, fullscreen_section } = body;
     
     if (
       name === undefined &&
       ip_ranges === undefined &&
       favorites === undefined &&
       smart_switches === undefined &&
-      section_order === undefined
+      section_order === undefined &&
+      fullscreen_section === undefined
     ) {
       return NextResponse.json(
-        { error: "No fields to update. Provide at least one of: name, ip_ranges, favorites, smart_switches, section_order" },
+        { error: "No fields to update. Provide at least one of: name, ip_ranges, favorites, smart_switches, section_order, fullscreen_section" },
         { status: 400 }
       );
     }
@@ -239,6 +241,18 @@ export async function PUT(
       }
 
       updateData.section_order = section_order;
+    }
+
+    // Add fullscreen_section if provided
+    if (fullscreen_section !== undefined) {
+      // Validate that it's null or a valid section
+      if (fullscreen_section !== null && fullscreen_section !== 'discovery' && fullscreen_section !== 'favorites') {
+        return NextResponse.json(
+          { error: `Invalid fullscreen_section: ${fullscreen_section}. Valid values: discovery, favorites, null` },
+          { status: 400 }
+        );
+      }
+      updateData.fullscreen_section = fullscreen_section;
     }
 
     // Perform update

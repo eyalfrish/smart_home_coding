@@ -5,7 +5,7 @@ import {
   getDefaultProfileId,
   DEFAULT_SECTION_ORDER,
 } from "@/server/db";
-import type { DashboardSection } from "@/server/db";
+import type { DashboardSection, FullscreenSection } from "@/server/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +55,7 @@ interface CreateProfileBody {
   favorites?: Record<string, Record<string, boolean>>;
   smart_switches?: Record<string, unknown>;
   section_order?: DashboardSection[];
+  fullscreen_section?: FullscreenSection;
 }
 
 /**
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, ip_ranges, favorites, smart_switches, section_order } = body;
+    const { name, ip_ranges, favorites, smart_switches, section_order, fullscreen_section } = body;
 
     // Validate name is provided and not empty
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -151,6 +152,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Validate fullscreen_section if provided
+    if (fullscreen_section !== undefined && fullscreen_section !== null) {
+      if (fullscreen_section !== 'discovery' && fullscreen_section !== 'favorites') {
+        return NextResponse.json(
+          { error: `Invalid fullscreen_section: ${fullscreen_section}. Valid values: discovery, favorites, null` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create the profile
     const profile = await createProfile({
       name: trimmedName,
@@ -158,6 +169,7 @@ export async function POST(request: NextRequest) {
       favorites: favorites ?? {},
       smart_switches: smart_switches ?? {},
       section_order: section_order ?? [...DEFAULT_SECTION_ORDER],
+      fullscreen_section: fullscreen_section ?? null,
     });
 
     console.log(`[API] POST /api/profiles - Created profile: ${profile.name} (id: ${profile.id})`);

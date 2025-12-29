@@ -21,6 +21,7 @@ export type {
   CreateProfileData,
   UpdateProfileData,
   DashboardSection,
+  FullscreenSection,
 } from './types';
 
 export { CURRENT_SCHEMA_VERSION, DEFAULT_SECTION_ORDER } from './types';

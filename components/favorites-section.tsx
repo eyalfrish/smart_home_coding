@@ -171,6 +171,10 @@ interface FavoritesSectionProps {
   onFavoritesUpdate?: (profileId: number, favorites: FavoritesData) => void;
   /** Callback when smart switches are updated */
   onSmartSwitchesUpdate?: (profileId: number, smartSwitches: SmartSwitchesData) => void;
+  /** Whether this section is in fullscreen mode */
+  isFullscreen?: boolean;
+  /** Callback to toggle fullscreen mode */
+  onFullscreenToggle?: () => void;
 }
 
 // =============================================================================
@@ -369,6 +373,8 @@ export default function FavoritesSection({
   discoveredPanels = [],
   onFavoritesUpdate,
   onSmartSwitchesUpdate,
+  isFullscreen = false,
+  onFullscreenToggle,
 }: FavoritesSectionProps) {
   // State
   const [isExpanded, setIsExpanded] = useState(false);
@@ -1512,8 +1518,11 @@ export default function FavoritesSection({
   // Render
   // =============================================================================
 
+  // Auto-expand when in fullscreen mode
+  const effectivelyExpanded = isFullscreen || isExpanded;
+
   return (
-    <div className={`${styles.collapsibleSection} ${isExpanded ? styles.collapsibleSectionExpanded : ''}`}>
+    <div className={`${styles.collapsibleSection} ${effectivelyExpanded ? styles.collapsibleSectionExpanded : ''} ${isFullscreen ? styles.collapsibleSectionFullscreen : ''}`}>
       {/* Header */}
       <div
         className={styles.collapsibleSectionHeader}
@@ -1522,7 +1531,7 @@ export default function FavoritesSection({
       >
         <div className={styles.collapsibleSectionHeaderLeft}>
           <span className={styles.collapsibleSectionToggle}>
-            {isExpanded ? '▼' : '▶'}
+            {effectivelyExpanded ? '▼' : '▶'}
           </span>
           <h3 className={styles.collapsibleSectionTitle}>
             ⭐ Favorites &amp; Smart Flows
@@ -1534,10 +1543,22 @@ export default function FavoritesSection({
             )}
           </h3>
         </div>
+        <div className={styles.collapsibleSectionActions} onClick={(e) => e.stopPropagation()}>
+          {onFullscreenToggle && (
+            <button
+              type="button"
+              className={`${styles.fullscreenToggleButton} ${isFullscreen ? styles.fullscreenToggleButtonActive : ''}`}
+              onClick={onFullscreenToggle}
+              title={isFullscreen ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
+            >
+              {isFullscreen ? '⊠' : '⊡'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Collapsed summary - clickable buttons grouped by zone */}
-      {!isExpanded && profile && allZones.length > 0 && (
+      {!effectivelyExpanded && profile && allZones.length > 0 && (
         <div className={styles.favoritesCollapsedView}>
           {allZones.map((zoneName) => {
             const zoneSwitches = (favoritesData.zones || {})[zoneName] || [];
