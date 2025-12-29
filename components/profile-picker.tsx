@@ -26,7 +26,6 @@ interface ProfileSummary {
 
 interface ProfilesApiResponse {
   profiles: ProfileSummary[];
-  defaultProfileId: number | null;
 }
 
 export interface FullProfile {
@@ -142,7 +141,6 @@ export default function ProfilePicker({
   
   // Save/delete state
   const [isSaving, setIsSaving] = useState(false);
-  const [isSettingDefault, setIsSettingDefault] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -166,16 +164,27 @@ export default function ProfilePicker({
       
       const data: ProfilesApiResponse = await res.json();
       setProfiles(data.profiles || []);
-      setDefaultProfileId(data.defaultProfileId);
       
-      // Update localStorage cache
-      if (data.defaultProfileId) {
-        localStorage.setItem(STORAGE_KEY_DEFAULT_PROFILE, String(data.defaultProfileId));
+      // Load default profile ID from localStorage (client-side per-browser storage)
+      const storedDefault = localStorage.getItem(STORAGE_KEY_DEFAULT_PROFILE);
+      const localDefaultId = storedDefault ? parseInt(storedDefault, 10) : null;
+      
+      // Validate that the stored default profile still exists
+      if (localDefaultId !== null) {
+        const profileExists = (data.profiles || []).some(p => p.id === localDefaultId);
+        if (profileExists) {
+          setDefaultProfileId(localDefaultId);
+        } else {
+          // Default profile was deleted, clear localStorage
+          localStorage.removeItem(STORAGE_KEY_DEFAULT_PROFILE);
+          setDefaultProfileId(null);
+          console.log(`[ProfilePicker] Cleared stale default profile ID: ${localDefaultId}`);
+        }
       } else {
-        localStorage.removeItem(STORAGE_KEY_DEFAULT_PROFILE);
+        setDefaultProfileId(null);
       }
       
-      return data;
+      return { profiles: data.profiles || [], defaultProfileId: localDefaultId };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load profiles';
       console.error('[ProfilePicker] Fetch error:', message);
@@ -256,15 +265,15 @@ export default function ProfilePicker({
     if (!hasMounted) return;
     
     const initializeAndAutoLoad = async () => {
-      const data = await fetchProfiles();
+      const result = await fetchProfiles();
       
-      // Auto-load default profile if set and we haven't already done so this session
-      if (data && data.defaultProfileId && !hasAutoLoadedRef.current) {
-        const profileExists = data.profiles.some(p => p.id === data.defaultProfileId);
+      // Auto-load default profile from localStorage if set and we haven't already done so this session
+      if (result && result.defaultProfileId && !hasAutoLoadedRef.current) {
+        const profileExists = result.profiles.some(p => p.id === result.defaultProfileId);
         if (profileExists) {
-          console.log(`[ProfilePicker] Auto-loading default profile: ${data.defaultProfileId}`);
+          console.log(`[ProfilePicker] Auto-loading default profile from localStorage: ${result.defaultProfileId}`);
           hasAutoLoadedRef.current = true;
-          await loadProfileById(data.defaultProfileId);
+          await loadProfileById(result.defaultProfileId);
         }
       }
       
@@ -309,34 +318,16 @@ export default function ProfilePicker({
   // Handle setting default profile
   // =============================================================================
   
-  const handleSetDefault = async (profileId: number | null) => {
-    setIsSettingDefault(true);
-    
-    try {
-      const res = await fetch('/api/profiles/default', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId }),
-      });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || `Failed to set default: ${res.status}`);
-      }
-      
-      setDefaultProfileId(profileId);
-      // Cache in localStorage for faster initial load
-      if (profileId) {
-        localStorage.setItem(STORAGE_KEY_DEFAULT_PROFILE, String(profileId));
-      } else {
-        localStorage.removeItem(STORAGE_KEY_DEFAULT_PROFILE);
-      }
-      console.log(`[ProfilePicker] Set default profile to: ${profileId}`);
-    } catch (err) {
-      console.error('[ProfilePicker] Set default error:', err);
-    } finally {
-      setIsSettingDefault(false);
+  const handleSetDefault = (profileId: number | null) => {
+    // Store default profile in localStorage (per-browser/client setting)
+    if (profileId) {
+      localStorage.setItem(STORAGE_KEY_DEFAULT_PROFILE, String(profileId));
+    } else {
+      localStorage.removeItem(STORAGE_KEY_DEFAULT_PROFILE);
     }
+    
+    setDefaultProfileId(profileId);
+    console.log(`[ProfilePicker] Set default profile to: ${profileId} (stored in browser localStorage)`);
   };
   
   // =============================================================================
@@ -541,7 +532,7 @@ export default function ProfilePicker({
                 className={styles.profilePickerSelect}
                 value={selectedProfileId ?? ''}
                 onChange={handleSelectChange}
-                disabled={disabled || isLoading || isSettingDefault || isSaving || isDeleting}
+                disabled={disabled || isLoading || isSaving || isDeleting}
                 aria-label="Select profile"
               >
                 <option value="">No profile selected</option>
@@ -572,10 +563,10 @@ export default function ProfilePicker({
                   type="button"
                   className={`${styles.profileDefaultButton} ${selectedProfileId === defaultProfileId ? styles.profileDefaultButtonActive : ''}`}
                   onClick={() => handleSetDefault(selectedProfileId === defaultProfileId ? null : selectedProfileId)}
-                  disabled={isSettingDefault || isLoading || isSaving || isDeleting}
-                  title={selectedProfileId === defaultProfileId ? 'Remove as default' : 'Set as default profile'}
+                  disabled={isLoading || isSaving || isDeleting}
+                  title={selectedProfileId === defaultProfileId ? 'Remove as default (browser)' : 'Set as default profile (browser)'}
                 >
-                  {isSettingDefault ? '...' : (selectedProfileId === defaultProfileId ? '★' : '☆')}
+                  {selectedProfileId === defaultProfileId ? '★' : '☆'}
                 </button>
               )}
               

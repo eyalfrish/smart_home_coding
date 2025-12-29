@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getAllProfiles,
   createProfile,
-  getDefaultProfileId,
   DEFAULT_SECTION_ORDER,
 } from "@/server/db";
 import type { DashboardSection, FullscreenSection } from "@/server/db";
@@ -16,14 +15,11 @@ export const dynamic = "force-dynamic";
 
 /**
  * Returns a list of all profiles with summary info (id, name, created_at).
- * Also returns the defaultProfileId.
+ * Note: Default profile is now stored client-side in browser localStorage.
  */
 export async function GET() {
   try {
-    const [profiles, defaultProfileId] = await Promise.all([
-      getAllProfiles(),
-      getDefaultProfileId(),
-    ]);
+    const profiles = await getAllProfiles();
     
     // Return only summary fields for list view
     const summary = profiles.map((p) => ({
@@ -34,7 +30,6 @@ export async function GET() {
 
     return NextResponse.json({ 
       profiles: summary,
-      defaultProfileId,
     }, { status: 200 });
   } catch (error) {
     console.error("[API] GET /api/profiles - Error:", error);

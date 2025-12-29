@@ -45,8 +45,7 @@ export {
   setFavorite,
   getFavorites,
   
-  // Default profile operations
-  getDefaultProfileId,
-  setDefaultProfileId,
+  // Note: Default profile is now stored client-side in browser localStorage.
+  // See profile-picker.tsx for implementation.
 } from './helpers';
 
