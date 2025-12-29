@@ -407,6 +407,19 @@ export default function FavoritesSection({
   // Flow builder state
   const [editingFlow, setEditingFlow] = useState<{ zoneName: string; flowIndex: number } | null>(null);
   const [editingFlowData, setEditingFlowData] = useState<SmartFlow | null>(null);
+  const [isEditingFlowName, setIsEditingFlowName] = useState(false);
+  const [editingFlowNameValue, setEditingFlowNameValue] = useState('');
+  
+  // Flow context menu (right-click on flow cards)
+  const [flowContextMenu, setFlowContextMenu] = useState<{
+    x: number;
+    y: number;
+    zoneName: string;
+    flowIndex: number;
+    flowName: string;
+  } | null>(null);
+  const [flowRenameValue, setFlowRenameValue] = useState('');
+  const flowContextMenuRef = useRef<HTMLDivElement>(null);
   
   // Flow execution state
   const [executingFlow, setExecutingFlow] = useState<SmartFlow | null>(null);
@@ -417,6 +430,7 @@ export default function FavoritesSection({
   });
   const executionAbortRef = useRef<boolean>(false);
   const executionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentStageActionsRef = useRef<FlowAction[]>([]); // Track current stage's actions for stop
 
   // Close context menu on click outside
   useEffect(() => {
@@ -431,6 +445,19 @@ export default function FavoritesSection({
     }
   }, [contextMenu]);
   
+  // Close flow context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (flowContextMenuRef.current && !flowContextMenuRef.current.contains(e.target as Node)) {
+        setFlowContextMenu(null);
+      }
+    };
+    if (flowContextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [flowContextMenu]);
+  
   // ESC key handler for all modals/popups
   useEffect(() => {
     const handleEscKey = (e: KeyboardEvent) => {
@@ -438,9 +465,12 @@ export default function FavoritesSection({
         // Close modals in order of priority (most recent/top-level first)
         if (deleteConfirm) {
           setDeleteConfirm(null);
+        } else if (flowContextMenu) {
+          setFlowContextMenu(null);
         } else if (editingFlow) {
           setEditingFlow(null);
           setEditingFlowData(null);
+          setIsEditingFlowName(false);
         } else if (contextMenu) {
           setContextMenu(null);
         } else if (showSwitchPicker) {
@@ -458,7 +488,7 @@ export default function FavoritesSection({
     
     document.addEventListener('keydown', handleEscKey);
     return () => document.removeEventListener('keydown', handleEscKey);
-  }, [deleteConfirm, editingFlow, contextMenu, showSwitchPicker, showFlowCreator, showNewZoneInput]);
+  }, [deleteConfirm, flowContextMenu, editingFlow, contextMenu, showSwitchPicker, showFlowCreator, showNewZoneInput]);
 
   // Reset warning dismissed state when profile changes
   useEffect(() => {
@@ -903,7 +933,109 @@ export default function FavoritesSection({
   const handleCancelEditFlow = useCallback(() => {
     setEditingFlow(null);
     setEditingFlowData(null);
+    setIsEditingFlowName(false);
   }, []);
+  
+  // Start editing flow name
+  const handleStartRenameFlow = useCallback(() => {
+    if (editingFlowData) {
+      setEditingFlowNameValue(editingFlowData.name);
+      setIsEditingFlowName(true);
+    }
+  }, [editingFlowData]);
+  
+  // Save flow name
+  const handleSaveFlowName = useCallback(() => {
+    if (!editingFlowData || !editingFlowNameValue.trim()) return;
+    
+    setEditingFlowData({
+      ...editingFlowData,
+      name: editingFlowNameValue.trim(),
+    });
+    setIsEditingFlowName(false);
+  }, [editingFlowData, editingFlowNameValue]);
+  
+  // Cancel flow name editing
+  const handleCancelRenameFlow = useCallback(() => {
+    setIsEditingFlowName(false);
+    setEditingFlowNameValue('');
+  }, []);
+  
+  // Flow context menu handler (right-click on flow card) - directly starts renaming
+  const handleFlowContextMenu = useCallback((e: React.MouseEvent, zoneName: string, flowIndex: number, flowName: string) => {
+    e.preventDefault();
+    setFlowContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      zoneName,
+      flowIndex,
+      flowName,
+    });
+    setFlowRenameValue(flowName);
+  }, []);
+  
+  // Rename flow directly from context menu (save)
+  const handleSaveFlowRenameFromContext = useCallback(() => {
+    if (!flowContextMenu || !profile || !flowRenameValue.trim()) return;
+    
+    const { zoneName, flowIndex } = flowContextMenu;
+    const newName = flowRenameValue.trim();
+    
+    // Check if name changed
+    if (newName === flowContextMenu.flowName) {
+      setFlowContextMenu(null);
+      return;
+    }
+    
+    const currentFlows = (smartSwitchesData.zones || {})[zoneName] || [];
+    const updatedFlows = [...currentFlows];
+    
+    if (updatedFlows[flowIndex]) {
+      updatedFlows[flowIndex] = {
+        ...updatedFlows[flowIndex],
+        name: newName,
+      };
+      
+      onSmartSwitchesUpdate?.(profile.id, {
+        ...smartSwitchesData,
+        zones: {
+          ...(smartSwitchesData.zones || {}),
+          [zoneName]: updatedFlows,
+        },
+      });
+    }
+    
+    setFlowContextMenu(null);
+    setFlowRenameValue('');
+  }, [flowContextMenu, profile, flowRenameValue, smartSwitchesData, onSmartSwitchesUpdate]);
+  
+  // Delete flow from context menu
+  const handleDeleteFlowFromContext = useCallback(() => {
+    if (!flowContextMenu) return;
+    
+    const { zoneName, flowIndex, flowName } = flowContextMenu;
+    
+    setDeleteConfirm({
+      type: 'flow',
+      name: flowName,
+      onConfirm: () => {
+        if (!profile) return;
+        const currentFlows = (smartSwitchesData.zones || {})[zoneName] || [];
+        const newFlows = currentFlows.filter((_, i) => i !== flowIndex);
+        
+        const newSmartSwitches: SmartSwitchesData = {
+          zones: {
+            ...(smartSwitchesData.zones || {}),
+            [zoneName]: newFlows,
+          }
+        };
+        
+        onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
+      },
+    });
+    
+    setFlowContextMenu(null);
+  }, [flowContextMenu, profile, smartSwitchesData.zones, onSmartSwitchesUpdate]);
   
   // Save edited flow
   const handleSaveEditFlow = useCallback(() => {
@@ -1112,6 +1244,9 @@ export default function FavoritesSection({
         console.log(`[FavoritesSection] Executing stage ${stageIdx + 1}/${flow.stages.length}:`, 
           stage.actions.map(a => `${a.switchId} → ${a.action}`).join(', '));
         
+        // Track current stage actions for stop functionality
+        currentStageActionsRef.current = stage.actions;
+        
         setExecutionProgress(prev => ({
           ...prev,
           currentStage: stageIdx,
@@ -1120,6 +1255,12 @@ export default function FavoritesSection({
         
         // Execute all actions in this stage concurrently
         await Promise.all(stage.actions.map(action => executeFlowAction(action)));
+        
+        // Check for abort after executing actions
+        if (executionAbortRef.current) {
+          console.log('[FavoritesSection] Flow aborted after stage execution');
+          break;
+        }
         
         // Wait for scheduling if not the last stage
         if (stageIdx < flow.stages.length - 1 && flow.scheduling[stageIdx]) {
@@ -1238,18 +1379,48 @@ export default function FavoritesSection({
     }, 2000);
   }, [executingFlow, executeFlowAction, areCurtainsStillMoving]);
   
-  // Stop the running flow
-  const handleStopFlow = useCallback(() => {
-    console.log('[FavoritesSection] Stopping flow...');
+  // Stop the running flow - also stops any shades in progress
+  const handleStopFlow = useCallback(async () => {
+    console.log('[FavoritesSection] Stopping flow immediately...');
     executionAbortRef.current = true;
+    
+    // Clear any pending timeout
     if (executionTimeoutRef.current) {
       clearTimeout(executionTimeoutRef.current);
       executionTimeoutRef.current = null;
     }
+    
+    // Stop all shades/curtains from the current stage
+    const currentActions = currentStageActionsRef.current;
+    if (currentActions.length > 0) {
+      console.log('[FavoritesSection] Stopping all shades from current stage...');
+      const stopPromises: Promise<boolean>[] = [];
+      
+      for (const action of currentActions) {
+        const [ip, type, indexStr] = action.switchId.split(':');
+        if (type === 'shade' || type === 'venetian') {
+          const index = parseInt(indexStr, 10);
+          console.log(`[FavoritesSection] Sending stop to ${action.switchId}`);
+          stopPromises.push(sendPanelCommand(ip, 'curtain', { index, action: 'stop' }));
+        }
+      }
+      
+      // Wait for stop commands to be sent (don't wait too long)
+      if (stopPromises.length > 0) {
+        await Promise.race([
+          Promise.all(stopPromises),
+          new Promise(r => setTimeout(r, 2000)) // Max 2 seconds
+        ]);
+      }
+    }
+    
     setExecutionProgress(prev => ({
       ...prev,
       state: 'stopped',
     }));
+    
+    // Clear current actions
+    currentStageActionsRef.current = [];
   }, []);
 
   // =============================================================================
@@ -1365,18 +1536,27 @@ export default function FavoritesSection({
                     const flowHasInvalidSteps = hasInvalidSteps(flow);
                     // Only show invalid state AFTER discovery completes (not during loading)
                     const showInvalidState = !isLoading && discoveryCompleted && flowHasInvalidSteps;
+                    // Check if this specific flow is running
+                    const isThisFlowRunning = executingFlow?.name === flow.name && 
+                      executionProgress.state === 'running';
                     
                     return (
                       <button
                         key={`flow-${flow.name}-${idx}`}
                         type="button"
-                        className={`${styles.favoritesCollapsedButton} ${styles.favoritesCollapsedButtonFlow} ${showInvalidState ? styles.favoritesCollapsedButtonInvalid : ''}`}
-                        onClick={() => !showInvalidState && handleRunFlow(flow)}
-                        disabled={isLoading || showInvalidState}
-                        title={flow.name}
+                        className={`${styles.favoritesCollapsedButton} ${styles.favoritesCollapsedButtonFlow} ${showInvalidState ? styles.favoritesCollapsedButtonInvalid : ''} ${isThisFlowRunning ? styles.favoritesCollapsedButtonRunning : ''}`}
+                        onClick={() => {
+                          if (isThisFlowRunning) {
+                            handleStopFlow();
+                          } else if (!showInvalidState && !executingFlow) {
+                            handleRunFlow(flow);
+                          }
+                        }}
+                        disabled={isLoading || showInvalidState || (!!executingFlow && !isThisFlowRunning)}
+                        title={isThisFlowRunning ? 'Stop flow' : flow.name}
                       >
                         <span className={styles.favoritesCollapsedIcon}>
-                          {showInvalidState ? '⚠️' : '⚡'}
+                          {showInvalidState ? '⚠️' : isThisFlowRunning ? '⏹️' : '▶'}
                         </span>
                         <span className={styles.favoritesCollapsedLabel}>{flow.name}</span>
                       </button>
@@ -1770,6 +1950,7 @@ export default function FavoritesSection({
                         <div
                           key={`flow-${flow.name}-${idx}`}
                           className={`${styles.smartFlowCard} ${showInvalidState ? styles.smartFlowCardInvalid : ''} ${isThisFlowExecuting ? styles.smartFlowCardExecuting : ''} ${isThisFlowCompleted ? styles.smartFlowCardCompleted : ''} ${isThisFlowStopped ? styles.smartFlowCardStopped : ''}`}
+                          onContextMenu={(e) => !isThisFlowExecuting && handleFlowContextMenu(e, effectiveActiveZone!, idx, flow.name)}
                         >
                           <div className={styles.smartFlowCardHeader}>
                             <span className={styles.smartFlowIcon}>
@@ -1786,6 +1967,7 @@ export default function FavoritesSection({
                                 >
                                   ✏️
                                 </button>
+                                {/* Desktop: delete button. Mobile: more menu button */}
                                 <button
                                   type="button"
                                   className={styles.smartFlowDelete}
@@ -1796,7 +1978,27 @@ export default function FavoritesSection({
                                   })}
                                   title="Delete flow"
                                 >
-                                  ✕
+                                  <span className={styles.desktopOnly}>✕</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.smartFlowMore}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Position context menu near the button on mobile
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setFlowContextMenu({
+                                      x: rect.left,
+                                      y: rect.bottom + 4,
+                                      zoneName: effectiveActiveZone!,
+                                      flowIndex: idx,
+                                      flowName: flow.name,
+                                    });
+                                    setFlowRenameValue(flow.name);
+                                  }}
+                                  title="More options"
+                                >
+                                  ⋮
                                 </button>
                               </>
                             )}
@@ -1840,7 +2042,7 @@ export default function FavoritesSection({
                               )}
                               {(flow.stages?.length || 0) > 0 && !showInvalidState && totalDurationMs > 0 && (
                                 <span className={styles.smartFlowDuration}>
-                                  ~{Math.ceil(totalDurationMs / 1000)}s
+                                  &gt; {Math.ceil(totalDurationMs / 1000)}s
                                 </span>
                               )}
                             </div>
@@ -1931,7 +2133,7 @@ export default function FavoritesSection({
         )}
       </div>
 
-      {/* Context Menu for Renaming */}
+      {/* Context Menu for Renaming Switches */}
       {contextMenu && (
         <div
           ref={contextMenuRef}
@@ -1953,6 +2155,32 @@ export default function FavoritesSection({
           <div className={styles.contextMenuButtons}>
             <button onClick={handleRename} disabled={!renameValue.trim()}>Save</button>
             <button onClick={() => setContextMenu(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      
+      {/* Flow Context Menu (right-click on flow cards) - direct rename */}
+      {flowContextMenu && (
+        <div
+          ref={flowContextMenuRef}
+          className={styles.contextMenu}
+          style={{ left: flowContextMenu.x, top: flowContextMenu.y }}
+        >
+          <div className={styles.contextMenuTitle}>Rename Flow</div>
+          <input
+            type="text"
+            value={flowRenameValue}
+            onChange={(e) => setFlowRenameValue(e.target.value)}
+            className={styles.contextMenuInput}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSaveFlowRenameFromContext();
+              if (e.key === 'Escape') setFlowContextMenu(null);
+            }}
+          />
+          <div className={styles.contextMenuButtons}>
+            <button onClick={handleSaveFlowRenameFromContext} disabled={!flowRenameValue.trim()}>Save</button>
+            <button onClick={() => setFlowContextMenu(null)}>Cancel</button>
           </div>
         </div>
       )}
@@ -2000,10 +2228,53 @@ export default function FavoritesSection({
           <div className={styles.flowBuilderModal} onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className={styles.flowBuilderHeader}>
-              <h3 className={styles.flowBuilderTitle}>
-                <span className={styles.flowBuilderTitleIcon}>⚡</span>
-                Edit Flow: {editingFlowData.name}
-              </h3>
+              {isEditingFlowName ? (
+                <div className={styles.flowBuilderTitleEdit}>
+                  <span className={styles.flowBuilderTitleIcon}>⚡</span>
+                  <input
+                    type="text"
+                    value={editingFlowNameValue}
+                    onChange={(e) => setEditingFlowNameValue(e.target.value)}
+                    className={styles.flowBuilderNameInput}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && editingFlowNameValue.trim()) handleSaveFlowName();
+                      if (e.key === 'Escape') handleCancelRenameFlow();
+                    }}
+                    onBlur={() => {
+                      if (editingFlowNameValue.trim()) handleSaveFlowName();
+                      else handleCancelRenameFlow();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className={styles.flowBuilderNameSave}
+                    onClick={handleSaveFlowName}
+                    disabled={!editingFlowNameValue.trim()}
+                    title="Save name"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.flowBuilderNameCancel}
+                    onClick={handleCancelRenameFlow}
+                    title="Cancel"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <h3 
+                  className={styles.flowBuilderTitle}
+                  onClick={handleStartRenameFlow}
+                  title="Click to rename"
+                >
+                  <span className={styles.flowBuilderTitleIcon}>⚡</span>
+                  <span className={styles.flowBuilderTitleText}>{editingFlowData.name}</span>
+                  <span className={styles.flowBuilderTitleEditHint}>✏️</span>
+                </h3>
+              )}
               <button
                 type="button"
                 className={styles.flowBuilderClose}

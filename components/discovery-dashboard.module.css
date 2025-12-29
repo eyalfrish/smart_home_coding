@@ -5066,6 +5066,17 @@
   border-color: #a855f7;
 }
 
+.favoritesCollapsedButtonRunning {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.6);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.favoritesCollapsedButtonRunning:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.7);
+}
+
 .favoritesCollapsedButtonInvalid {
   background: rgba(239, 68, 68, 0.1) !important;
   border-color: rgba(239, 68, 68, 0.4) !important;
@@ -5737,7 +5748,7 @@
   margin-left: auto;
   background: transparent;
   border: none;
-  color: var(--accent);
+  color: var(--muted);
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -5746,6 +5757,47 @@
 
 .smartFlowDelete:hover {
   color: var(--warning);
+}
+
+/* More options button (mobile only) */
+.smartFlowMore {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.smartFlowMore:hover {
+  color: var(--foreground);
+}
+
+/* Desktop-only elements */
+.desktopOnly {
+  display: inline;
+}
+
+@media (max-width: 768px) {
+  /* Show more button on mobile, hide delete button */
+  .smartFlowMore {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+  }
+  
+  .smartFlowDelete {
+    display: none;
+  }
+  
+  .desktopOnly {
+    display: none;
+  }
 }
 
 /* Flow Creator Card */
@@ -6664,6 +6716,162 @@
   color: var(--foreground);
 }
 
+/* Flow Builder Title Editing */
+.flowBuilderTitleEdit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.flowBuilderTitleText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowBuilderTitleEditHint {
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.flowBuilderTitle:hover .flowBuilderTitleEditHint {
+  opacity: 0.6;
+}
+
+.flowBuilderTitle {
+  cursor: pointer;
+}
+
+.flowBuilderTitle:hover {
+  color: #a855f7;
+}
+
+.flowBuilderNameInput {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #a855f7;
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 1.1rem;
+  font-weight: 700;
+  min-width: 100px;
+}
+
+.flowBuilderNameInput:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+}
+
+.flowBuilderNameSave,
+.flowBuilderNameCancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.flowBuilderNameSave {
+  background: #a855f7;
+  color: #fff;
+}
+
+.flowBuilderNameSave:hover:not(:disabled) {
+  background: #9333ea;
+}
+
+.flowBuilderNameSave:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.flowBuilderNameCancel {
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.flowBuilderNameCancel:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* Flow Context Menu */
+.flowContextMenu {
+  position: fixed;
+  z-index: 1100;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  min-width: 160px;
+  overflow: hidden;
+  animation: contextMenuFadeIn 0.15s ease;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.flowContextMenuTitle {
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowContextMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.flowContextMenuItem:hover {
+  background: var(--surface);
+}
+
+.flowContextMenuItemDanger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.flowContextMenuIcon {
+  font-size: 1rem;
+  width: 1.2rem;
+  text-align: center;
+}
+
 .flowBuilderContent {
   flex: 1;
   overflow-y: auto;
@@ -7094,6 +7302,69 @@
   .flowBuilderSave {
     flex: 1;
     padding: 0.75rem 1rem;
+  }
+
+  /* Flow name editing mobile */
+  .flowBuilderTitleEdit {
+    gap: 0.35rem;
+  }
+
+  .flowBuilderNameInput {
+    font-size: 1rem;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .flowBuilderNameSave,
+  .flowBuilderNameCancel {
+    width: 36px;
+    height: 36px;
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+  }
+
+  .flowBuilderTitleEditHint {
+    display: none;
+  }
+
+  /* Flow context menu mobile - position from bottom like action sheet */
+  .flowContextMenu {
+    position: fixed;
+    left: 50% !important;
+    top: auto !important;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    animation: contextMenuSlideUp 0.2s ease;
+  }
+
+  @keyframes contextMenuSlideUp {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  .flowContextMenuTitle {
+    padding: 1rem;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .flowContextMenuItem {
+    padding: 1rem;
+    font-size: 1rem;
+    justify-content: center;
+    min-height: var(--touch-target-min);
+  }
+
+  .flowContextMenuIcon {
+    font-size: 1.2rem;
   }
 
   /* Execution progress mobile */
