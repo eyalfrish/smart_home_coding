@@ -278,6 +278,10 @@ export default function FavoritesSection({
     name: string;
     onConfirm: () => void;
   } | null>(null);
+  
+  // Drag and drop state
+  const [draggedSwitch, setDraggedSwitch] = useState<{ index: number; switch: FavoriteSwitch } | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -440,6 +444,89 @@ export default function FavoritesSection({
     console.log('[FavoritesSection] Toggle light:', sw.alias);
     await sendPanelCommand(sw.ip, 'toggle_relay', { index: sw.index });
   }, []);
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, index: number, sw: FavoriteSwitch) => {
+    setDraggedSwitch({ index, switch: sw });
+    e.dataTransfer.effectAllowed = 'move';
+    // Add some visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  }, []);
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggedSwitch(null);
+    setDropIndicator(null);
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    if (!draggedSwitch) return;
+    
+    // Determine if dropping before or after based on mouse position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const position: 'before' | 'after' = e.clientX < midX ? 'before' : 'after';
+    
+    setDropIndicator({ index, position });
+  }, [draggedSwitch]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if leaving the container entirely
+    const relatedTarget = e.relatedTarget as HTMLElement | null;
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+      // Don't clear immediately - let the next dragOver set it
+    }
+  }, []);
+
+  const handleGridDragLeave = useCallback(() => {
+    setDropIndicator(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (!draggedSwitch || !profile || !effectiveActiveZone || !dropIndicator) return;
+    
+    const { index: dragIndex } = draggedSwitch;
+    let targetIndex = dropIndicator.index;
+    
+    // Adjust target index based on position
+    if (dropIndicator.position === 'after') {
+      targetIndex += 1;
+    }
+    
+    // Adjust for the removal of the dragged item
+    if (dragIndex < targetIndex) {
+      targetIndex -= 1;
+    }
+    
+    if (dragIndex === targetIndex) {
+      setDraggedSwitch(null);
+      setDropIndicator(null);
+      return;
+    }
+    
+    const currentSwitches = [...((favoritesData.zones || {})[effectiveActiveZone] || [])];
+    const [removed] = currentSwitches.splice(dragIndex, 1);
+    currentSwitches.splice(targetIndex, 0, removed);
+    
+    const newFavorites: FavoritesData = {
+      zones: {
+        ...(favoritesData.zones || {}),
+        [effectiveActiveZone]: currentSwitches,
+      }
+    };
+    
+    onFavoritesUpdate?.(profile.id, newFavorites);
+    setDraggedSwitch(null);
+    setDropIndicator(null);
+  }, [draggedSwitch, dropIndicator, profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
 
   const handleShadeAction = useCallback(async (sw: FavoriteSwitch, action: 'open' | 'close' | 'stop') => {
     if (sw.type !== 'shade' && sw.type !== 'venetian') return;
@@ -889,7 +976,7 @@ export default function FavoritesSection({
                     </h4>
                   </div>
 
-                  <div className={styles.favoritesSwitchGrid}>
+                  <div className={styles.favoritesSwitchGrid} onDragLeave={handleGridDragLeave}>
                     {currentZoneSwitches.map((sw, idx) => {
                       const isDiscovered = discoveredPanelIps.has(sw.ip);
                       const isUnreachable = isSwitchUnreachable(sw);
@@ -901,10 +988,19 @@ export default function FavoritesSection({
                       // Render based on type
                       if (sw.type === 'light') {
                         // Light switch - single toggle button
+                        const showDropBefore = dropIndicator?.index === idx && dropIndicator?.position === 'before' && draggedSwitch?.index !== idx;
+                        const showDropAfter = dropIndicator?.index === idx && dropIndicator?.position === 'after' && draggedSwitch?.index !== idx;
+                        
                         return (
                           <div
                             key={`${sw.ip}-${sw.type}-${sw.index}-${idx}`}
-                            className={`${styles.favoriteSwitchCard} ${!isReachable ? styles.favoriteSwitchCardDisabled : ''} ${showInvalidState ? styles.favoriteSwitchCardInvalid : ''}`}
+                            className={`${styles.favoriteSwitchCard} ${!isReachable ? styles.favoriteSwitchCardDisabled : ''} ${showInvalidState ? styles.favoriteSwitchCardInvalid : ''} ${showDropBefore ? styles.favoriteSwitchCardDropBefore : ''} ${showDropAfter ? styles.favoriteSwitchCardDropAfter : ''}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, idx, sw)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleDragOver(e, idx)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
                             onContextMenu={(e) => handleContextMenu(e, sw)}
                           >
                             <button
@@ -936,11 +1032,19 @@ export default function FavoritesSection({
                       } else {
                         // Shade/Venetian - show up/down normally, stop when in motion
                         const isInMotion = switchState.curtainState === 'opening' || switchState.curtainState === 'closing';
+                        const showDropBefore = dropIndicator?.index === idx && dropIndicator?.position === 'before' && draggedSwitch?.index !== idx;
+                        const showDropAfter = dropIndicator?.index === idx && dropIndicator?.position === 'after' && draggedSwitch?.index !== idx;
                         
                         return (
                           <div
                             key={`${sw.ip}-${sw.type}-${sw.index}-${idx}`}
-                            className={`${styles.favoriteShadeCard} ${!isReachable ? styles.favoriteShadeCardDisabled : ''} ${showInvalidState ? styles.favoriteShadeCardInvalid : ''}`}
+                            className={`${styles.favoriteShadeCard} ${!isReachable ? styles.favoriteShadeCardDisabled : ''} ${showInvalidState ? styles.favoriteShadeCardInvalid : ''} ${showDropBefore ? styles.favoriteShadeCardDropBefore : ''} ${showDropAfter ? styles.favoriteShadeCardDropAfter : ''}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, idx, sw)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleDragOver(e, idx)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
                             onContextMenu={(e) => handleContextMenu(e, sw)}
                           >
                             <div className={styles.favoriteShadeHeader}>

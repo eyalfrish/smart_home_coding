@@ -90,6 +90,9 @@ function ipRangeToString(range: IpRange): string {
   return `${range.octet1}.${range.octet2}.${range.octet3}.${range.start}-${range.end}`;
 }
 
+// Local storage key for caching default profile
+const STORAGE_KEY_DEFAULT_PROFILE = 'cubixx_default_profile_id';
+
 // =============================================================================
 // ProfilePicker Component
 // =============================================================================
@@ -105,12 +108,14 @@ export default function ProfilePicker({
   isLoading,
   disabled = false,
 }: ProfilePickerProps) {
-  // State
+  // State - initialize without localStorage to avoid hydration mismatch
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const [defaultProfileId, setDefaultProfileId] = useState<number | null>(null);
   const [isFetching, setIsFetching] = useState(true);
+  const [isAutoLoading, setIsAutoLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [hasMounted, setHasMounted] = useState(false);
   
   // New profile modal state
   const [showNewProfileModal, setShowNewProfileModal] = useState(false);
@@ -145,6 +150,13 @@ export default function ProfilePicker({
       const data: ProfilesApiResponse = await res.json();
       setProfiles(data.profiles || []);
       setDefaultProfileId(data.defaultProfileId);
+      
+      // Update localStorage cache
+      if (data.defaultProfileId) {
+        localStorage.setItem(STORAGE_KEY_DEFAULT_PROFILE, String(data.defaultProfileId));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_DEFAULT_PROFILE);
+      }
       
       return data;
     } catch (err) {
@@ -212,7 +224,20 @@ export default function ProfilePicker({
   // Auto-load default profile on mount
   // =============================================================================
   
+  // Mark as mounted to enable client-side features
   useEffect(() => {
+    setHasMounted(true);
+    
+    // Check localStorage for cached default profile ID
+    const cached = localStorage.getItem(STORAGE_KEY_DEFAULT_PROFILE);
+    if (cached) {
+      setIsAutoLoading(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasMounted) return;
+    
     const initializeAndAutoLoad = async () => {
       const data = await fetchProfiles();
       
@@ -225,10 +250,13 @@ export default function ProfilePicker({
           await loadProfileById(data.defaultProfileId);
         }
       }
+      
+      // Done auto-loading
+      setIsAutoLoading(false);
     };
     
     initializeAndAutoLoad();
-  }, [fetchProfiles, loadProfileById]);
+  }, [hasMounted, fetchProfiles, loadProfileById]);
 
   // =============================================================================
   // Handle profile selection
@@ -280,6 +308,12 @@ export default function ProfilePicker({
       }
       
       setDefaultProfileId(profileId);
+      // Cache in localStorage for faster initial load
+      if (profileId) {
+        localStorage.setItem(STORAGE_KEY_DEFAULT_PROFILE, String(profileId));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_DEFAULT_PROFILE);
+      }
       console.log(`[ProfilePicker] Set default profile to: ${profileId}`);
     } catch (err) {
       console.error('[ProfilePicker] Set default error:', err);
@@ -461,10 +495,12 @@ export default function ProfilePicker({
         </div>
         
         <div className={styles.profilePickerContent}>
-          {isFetching ? (
+          {!hasMounted || isFetching || isAutoLoading ? (
             <div className={styles.profilePickerLoading}>
               <span className={styles.profilePickerSpinner}>⏳</span>
-              <span className={styles.desktopText}>Loading profiles...</span>
+              <span className={styles.desktopText}>
+                {hasMounted && isAutoLoading ? 'Loading default profile...' : 'Loading profiles...'}
+              </span>
               <span className={styles.mobileText}>Loading...</span>
             </div>
           ) : fetchError ? (

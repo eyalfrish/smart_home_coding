@@ -5006,6 +5006,10 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
 }
 
 .favoritesCollapsedZoneName {
@@ -5013,8 +5017,11 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--muted);
-  padding-left: 0.25rem;
+  color: var(--accent);
+  padding-left: 0.1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.15rem;
 }
 
 .favoritesCollapsedItems {
@@ -5515,6 +5522,59 @@
 
 .favoriteRemoveButton:hover {
   color: var(--warning);
+}
+
+/* Drag and drop states */
+.favoriteSwitchCard[draggable="true"],
+.favoriteShadeCard[draggable="true"] {
+  cursor: grab;
+  position: relative;
+}
+
+.favoriteSwitchCard[draggable="true"]:active,
+.favoriteShadeCard[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Drop indicator line - before */
+.favoriteSwitchCardDropBefore::before,
+.favoriteShadeCardDropBefore::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: dropIndicatorPulse 0.6s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* Drop indicator line - after */
+.favoriteSwitchCardDropAfter::after,
+.favoriteShadeCardDropAfter::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: dropIndicatorPulse 0.6s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+@keyframes dropIndicatorPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scaleY(0.95);
+  }
 }
 
 /* Card state variants */
@@ -6415,41 +6475,49 @@
     gap: 0.6rem;
   }
 
+  .favoritesCollapsedZone {
+    padding: 0.6rem 0.65rem;
+    border-radius: 8px;
+  }
+
   .favoritesCollapsedZoneName {
     font-size: 0.65rem;
+    padding-bottom: 0.35rem;
   }
 
   .favoritesCollapsedItems {
-    gap: 0.3rem;
+    gap: 0.35rem;
   }
 
   .favoritesCollapsedButton {
-    padding: 0.35rem 0.5rem;
-    gap: 0.25rem;
+    padding: 0.5rem 0.65rem;
+    gap: 0.35rem;
+    min-height: 38px;
   }
 
   .favoritesCollapsedIcon {
-    font-size: 0.8rem;
+    font-size: 1rem;
   }
 
   .favoritesCollapsedLabel {
-    font-size: 0.7rem;
-    max-width: 60px;
+    font-size: 0.8rem;
+    max-width: 70px;
   }
 
   .favoritesCollapsedShade {
-    padding: 0.25rem 0.4rem;
-    gap: 0.25rem;
+    padding: 0.4rem 0.5rem;
+    gap: 0.35rem;
+    min-height: 38px;
   }
 
   .favoritesCollapsedShadeButtons button {
-    width: 20px;
-    height: 20px;
-    font-size: 0.6rem;
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
   }
 
   .favoritesCollapsedShadeStop {
-    width: 40px !important;
+    width: 56px !important;
   }
 
   /* Zone nav row mobile */
