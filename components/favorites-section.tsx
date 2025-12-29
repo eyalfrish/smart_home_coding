@@ -39,7 +39,7 @@ export interface FavoritesData {
 }
 
 /**
- * A single step in a smart flow sequence.
+ * A single step in a smart flow sequence (legacy format - for backward compatibility)
  */
 export interface FlowStep {
   /** ID of the switch to control (format: "ip:type:index") */
@@ -51,13 +51,79 @@ export interface FlowStep {
 }
 
 /**
- * A smart flow - a user-programmed sequence with timers.
+ * Action type for a switch in a flow
+ */
+export type FlowActionType = 'on' | 'off' | 'toggle' | 'open' | 'close' | 'stop';
+
+/**
+ * A single switch action within a flow stage
+ */
+export interface FlowAction {
+  /** ID of the switch to control (format: "ip:type:index") */
+  switchId: string;
+  /** Action to perform */
+  action: FlowActionType;
+}
+
+/**
+ * A stage in the flow - one or more actions executed simultaneously
+ */
+export interface FlowStage {
+  /** Actions to execute in this stage (all run in parallel) */
+  actions: FlowAction[];
+}
+
+/**
+ * Scheduling type between stages
+ */
+export type SchedulingType = 'delay' | 'waitForCurtains';
+
+/**
+ * Scheduling configuration between flow stages
+ */
+export interface FlowScheduling {
+  /** Type of scheduling: fixed delay or wait for curtains to finish */
+  type: SchedulingType;
+  /** Delay in milliseconds (only used when type is 'delay') */
+  delayMs?: number;
+}
+
+/**
+ * A smart flow - a user-programmed sequence with stages and scheduling.
+ * New format: stages[] with scheduling[] between them
  */
 export interface SmartFlow {
   /** Display name for this flow */
   name: string;
-  /** Sequence of steps to execute */
-  steps: FlowStep[];
+  /** Flow stages - each contains 1+ switch actions executed together */
+  stages: FlowStage[];
+  /** Scheduling between stages - scheduling[i] is between stages[i] and stages[i+1] */
+  scheduling: FlowScheduling[];
+  /** Legacy steps format (for backward compatibility) - deprecated */
+  steps?: FlowStep[];
+}
+
+/**
+ * Flow execution state
+ */
+export type FlowExecutionState = 'idle' | 'running' | 'paused' | 'stopped' | 'completed';
+
+/**
+ * Current flow execution progress
+ */
+export interface FlowExecutionProgress {
+  /** Current execution state */
+  state: FlowExecutionState;
+  /** Currently executing stage index (-1 if not started) */
+  currentStage: number;
+  /** Whether waiting for scheduling (delay/curtains) */
+  isWaiting: boolean;
+  /** Remaining delay time in ms (if waiting on delay) */
+  remainingDelayMs?: number;
+  /** Started at timestamp */
+  startedAt?: number;
+  /** Error message if any */
+  error?: string;
 }
 
 /**
@@ -153,7 +219,58 @@ function parseSmartSwitches(smartSwitches: unknown): SmartSwitchesData {
   }
   const ssObj = smartSwitches as Record<string, unknown>;
   if (ssObj.zones && typeof ssObj.zones === 'object') {
-    return smartSwitches as SmartSwitchesData;
+    // Migrate old format (steps-based) to new format (stages-based)
+    const zones = ssObj.zones as Record<string, unknown[]>;
+    const migratedZones: Record<string, SmartFlow[]> = {};
+    
+    for (const [zoneName, flows] of Object.entries(zones)) {
+      migratedZones[zoneName] = (flows || []).map((flow: unknown) => {
+        const flowObj = flow as Record<string, unknown>;
+        
+        // Check if already in new format (has stages array)
+        if (Array.isArray(flowObj.stages)) {
+          return {
+            name: flowObj.name as string,
+            stages: flowObj.stages as FlowStage[],
+            scheduling: (flowObj.scheduling as FlowScheduling[]) || [],
+          };
+        }
+        
+        // Migrate from old format (steps) to new format (stages)
+        const oldSteps = (flowObj.steps as FlowStep[]) || [];
+        const stages: FlowStage[] = [];
+        const scheduling: FlowScheduling[] = [];
+        
+        // Each old step becomes a single-action stage
+        for (let i = 0; i < oldSteps.length; i++) {
+          const step = oldSteps[i];
+          stages.push({
+            actions: [{
+              switchId: step.switchId,
+              action: step.action,
+            }],
+          });
+          
+          // Add delay scheduling between stages (except after last)
+          if (i < oldSteps.length - 1 && step.delayMs > 0) {
+            scheduling.push({
+              type: 'delay',
+              delayMs: step.delayMs,
+            });
+          } else if (i < oldSteps.length - 1) {
+            scheduling.push({ type: 'delay', delayMs: 0 });
+          }
+        }
+        
+        return {
+          name: flowObj.name as string,
+          stages,
+          scheduling,
+        };
+      });
+    }
+    
+    return { zones: migratedZones };
   }
   return { zones: {} };
 }
@@ -189,16 +306,19 @@ function validateSwitchesAndFlows(
 
   for (const [_zoneName, flows] of Object.entries(smartSwitchesData.zones || {})) {
     for (const flow of flows) {
-      const invalidSteps: number[] = [];
-      flow.steps.forEach((step, idx) => {
-        const ip = step.switchId.split(':')[0];
-        if (!isPanelReachable(ip)) {
-          invalidSteps.push(idx);
-          unreachableSwitchIds.add(step.switchId);
+      const invalidStageIndices: number[] = [];
+      // Check each stage's actions for unreachable switches
+      (flow.stages || []).forEach((stage, stageIdx) => {
+        for (const action of stage.actions) {
+          const ip = action.switchId.split(':')[0];
+          if (!isPanelReachable(ip)) {
+            invalidStageIndices.push(stageIdx);
+            unreachableSwitchIds.add(action.switchId);
+          }
         }
       });
-      if (invalidSteps.length > 0) {
-        invalidFlowSteps.set(flow.name, invalidSteps);
+      if (invalidStageIndices.length > 0) {
+        invalidFlowSteps.set(flow.name, [...new Set(invalidStageIndices)]);
       }
     }
   }
@@ -283,6 +403,20 @@ export default function FavoritesSection({
   // Drag and drop state
   const [draggedSwitch, setDraggedSwitch] = useState<{ index: number; switch: FavoriteSwitch } | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
+  
+  // Flow builder state
+  const [editingFlow, setEditingFlow] = useState<{ zoneName: string; flowIndex: number } | null>(null);
+  const [editingFlowData, setEditingFlowData] = useState<SmartFlow | null>(null);
+  
+  // Flow execution state
+  const [executingFlow, setExecutingFlow] = useState<SmartFlow | null>(null);
+  const [executionProgress, setExecutionProgress] = useState<FlowExecutionProgress>({
+    state: 'idle',
+    currentStage: -1,
+    isWaiting: false,
+  });
+  const executionAbortRef = useRef<boolean>(false);
+  const executionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -296,6 +430,35 @@ export default function FavoritesSection({
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [contextMenu]);
+  
+  // ESC key handler for all modals/popups
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close modals in order of priority (most recent/top-level first)
+        if (deleteConfirm) {
+          setDeleteConfirm(null);
+        } else if (editingFlow) {
+          setEditingFlow(null);
+          setEditingFlowData(null);
+        } else if (contextMenu) {
+          setContextMenu(null);
+        } else if (showSwitchPicker) {
+          setShowSwitchPicker(false);
+          setSwitchPickerSearch('');
+        } else if (showFlowCreator) {
+          setShowFlowCreator(false);
+          setNewFlowName('');
+        } else if (showNewZoneInput) {
+          setShowNewZoneInput(false);
+          setNewZoneName('');
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [deleteConfirm, editingFlow, contextMenu, showSwitchPicker, showFlowCreator, showNewZoneInput]);
 
   // Reset warning dismissed state when profile changes
   useEffect(() => {
@@ -366,9 +529,9 @@ export default function FavoritesSection({
   // Only show validation warning AFTER discovery completes (not during loading)
   const showValidationWarning = !isLoading && validation.unreachableCount > 0 && !warningDismissed && discoveryCompleted;
 
-  // Get available devices from discovered panels - ONLY direct switches (not hidden)
+  // Get available switches from discovered panels - ONLY direct switches (not hidden)
   const availableDevices = useMemo(() => {
-    const devices: Array<{
+    const switches: Array<{
       id: string;
       ip: string;
       index: number;
@@ -393,7 +556,7 @@ export default function FavoritesSection({
         // Filter out any relay with "Link" suffix (linked relays) - uses same pattern as dashboard
         const isLinkedRelay = relay.name && /[-_\s]?link$/i.test(relay.name.trim().toLowerCase());
         if (deviceType === 'light' && relay.name && !isLinkedRelay) {
-          devices.push({
+          switches.push({
             id: `${panel.ip}:light:${relay.index}`,
             ip: panel.ip,
             index: relay.index,
@@ -408,10 +571,10 @@ export default function FavoritesSection({
       // Add curtains (shades/venetians) - only direct, not linked
       for (const curtain of curtains) {
         const deviceType = getCurtainDeviceType(curtain.index, curtain.name, relayPairs);
-        // Filter out any curtain with "Link" suffix (linked devices)
+        // Filter out any curtain with "Link" suffix (linked switches)
         const isLinkedCurtain = curtain.name && /[-_\s]?link$/i.test(curtain.name.trim());
         if ((deviceType === 'curtain' || deviceType === 'venetian') && curtain.name && !isLinkedCurtain) {
-          devices.push({
+          switches.push({
             id: `${panel.ip}:${deviceType === 'venetian' ? 'venetian' : 'shade'}:${curtain.index}`,
             ip: panel.ip,
             index: curtain.index,
@@ -423,11 +586,11 @@ export default function FavoritesSection({
         }
       }
     }
-    return devices;
+    return switches;
   }, [discoveredPanels, livePanelStates]);
 
-  // Filter available devices based on search - smart multi-term search
-  const filteredAvailableDevices = useMemo(() => {
+  // Filter available switches based on search - smart multi-term search
+  const filteredAvailableSwitches = useMemo(() => {
     if (!switchPickerSearch.trim()) return availableDevices;
     
     // Split search into terms and normalize
@@ -438,9 +601,9 @@ export default function FavoritesSection({
     
     if (searchTerms.length === 0) return availableDevices;
     
-    return availableDevices.filter(device => {
-      // Combine panel name and device name for searching
-      const searchableText = `${device.panelName} ${device.name}`.toLowerCase();
+    return availableDevices.filter(sw => {
+      // Combine panel name and switch name for searching
+      const searchableText = `${sw.panelName} ${sw.name}`.toLowerCase();
       
       // All terms must match somewhere in the searchable text
       return searchTerms.every(term => searchableText.includes(term));
@@ -633,21 +796,21 @@ export default function FavoritesSection({
     }
   }, [profile, favoritesData.zones, smartSwitchesData.zones, activeZone, allZones, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
-  const handleAddDevice = useCallback((device: typeof availableDevices[0]) => {
+  const handleAddSwitch = useCallback((sw: typeof availableDevices[0]) => {
     if (!profile || !effectiveActiveZone) return;
     
     const newSwitch: FavoriteSwitch = {
-      ip: device.ip,
-      index: device.index,
-      type: device.type,
-      originalName: device.name,
-      alias: device.name,
+      ip: sw.ip,
+      index: sw.index,
+      type: sw.type,
+      originalName: sw.name,
+      alias: sw.name,
     };
     
     const currentSwitches = (favoritesData.zones || {})[effectiveActiveZone] || [];
     
     // Check if already exists
-    if (currentSwitches.some(s => s.ip === device.ip && s.index === device.index && s.type === device.type)) {
+    if (currentSwitches.some(s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type)) {
       return;
     }
     
@@ -684,7 +847,8 @@ export default function FavoritesSection({
     
     const newFlow: SmartFlow = {
       name: newFlowName.trim(),
-      steps: [],
+      stages: [{ actions: [] }], // Start with one empty stage
+      scheduling: [],
     };
     
     const currentFlows = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
@@ -697,6 +861,12 @@ export default function FavoritesSection({
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
+    
+    // Auto-open the flow editor for the newly created flow
+    const newFlowIndex = currentFlows.length;
+    setEditingFlow({ zoneName: effectiveActiveZone, flowIndex: newFlowIndex });
+    setEditingFlowData(JSON.parse(JSON.stringify(newFlow)));
+    
     setNewFlowName('');
     setShowFlowCreator(false);
   }, [newFlowName, profile, effectiveActiveZone, smartSwitchesData.zones, onSmartSwitchesUpdate]);
@@ -716,13 +886,370 @@ export default function FavoritesSection({
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
   }, [profile, effectiveActiveZone, smartSwitchesData.zones, onSmartSwitchesUpdate]);
-
-  const handleRunFlow = useCallback((flow: SmartFlow) => {
-    // TODO: Implement actual flow execution
-    console.log('[FavoritesSection] Would execute flow:', flow.name);
-    flow.steps.forEach((step, idx) => {
-      console.log(`  Step ${idx + 1}: ${step.switchId} → ${step.action} (delay: ${step.delayMs}ms)`);
+  
+  // Open flow editor
+  const handleEditFlow = useCallback((flowIndex: number) => {
+    if (!effectiveActiveZone) return;
+    
+    const flow = currentZoneFlows[flowIndex];
+    if (!flow) return;
+    
+    setEditingFlow({ zoneName: effectiveActiveZone, flowIndex });
+    // Deep copy the flow data
+    setEditingFlowData(JSON.parse(JSON.stringify(flow)));
+  }, [effectiveActiveZone, currentZoneFlows]);
+  
+  // Close flow editor without saving
+  const handleCancelEditFlow = useCallback(() => {
+    setEditingFlow(null);
+    setEditingFlowData(null);
+  }, []);
+  
+  // Save edited flow
+  const handleSaveEditFlow = useCallback(() => {
+    if (!profile || !editingFlow || !editingFlowData) return;
+    
+    const currentFlows = (smartSwitchesData.zones || {})[editingFlow.zoneName] || [];
+    const newFlows = [...currentFlows];
+    newFlows[editingFlow.flowIndex] = editingFlowData;
+    
+    const newSmartSwitches: SmartSwitchesData = {
+      zones: {
+        ...(smartSwitchesData.zones || {}),
+        [editingFlow.zoneName]: newFlows,
+      }
+    };
+    
+    onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
+    setEditingFlow(null);
+    setEditingFlowData(null);
+  }, [profile, editingFlow, editingFlowData, smartSwitchesData.zones, onSmartSwitchesUpdate]);
+  
+  // Add a new stage to the flow
+  const handleAddStage = useCallback(() => {
+    if (!editingFlowData) return;
+    
+    const newStages = [...editingFlowData.stages, { actions: [] }];
+    const newScheduling = [...editingFlowData.scheduling];
+    
+    // Add scheduling between previous stage and new stage (if not first)
+    if (newStages.length > 1) {
+      newScheduling.push({ type: 'delay', delayMs: 1000 });
+    }
+    
+    setEditingFlowData({
+      ...editingFlowData,
+      stages: newStages,
+      scheduling: newScheduling,
     });
+  }, [editingFlowData]);
+  
+  // Remove a stage
+  const handleRemoveStage = useCallback((stageIndex: number) => {
+    if (!editingFlowData) return;
+    
+    const newStages = editingFlowData.stages.filter((_, i) => i !== stageIndex);
+    const newScheduling = [...editingFlowData.scheduling];
+    
+    // Remove scheduling at the correct index
+    if (stageIndex > 0 && newScheduling.length >= stageIndex) {
+      newScheduling.splice(stageIndex - 1, 1);
+    } else if (stageIndex === 0 && newScheduling.length > 0) {
+      newScheduling.splice(0, 1);
+    }
+    
+    setEditingFlowData({
+      ...editingFlowData,
+      stages: newStages,
+      scheduling: newScheduling,
+    });
+  }, [editingFlowData]);
+  
+  // Add a switch to a stage
+  const handleAddActionToStage = useCallback((stageIndex: number, sw: typeof availableDevices[0]) => {
+    if (!editingFlowData) return;
+    
+    const newStages = [...editingFlowData.stages];
+    const defaultAction: FlowActionType = sw.type === 'light' ? 'toggle' : 'open';
+    
+    // Check if switch already exists in stage
+    const existsInStage = newStages[stageIndex].actions.some(a => a.switchId === sw.id);
+    if (existsInStage) return;
+    
+    newStages[stageIndex] = {
+      actions: [
+        ...newStages[stageIndex].actions,
+        { switchId: sw.id, action: defaultAction },
+      ],
+    };
+    
+    setEditingFlowData({
+      ...editingFlowData,
+      stages: newStages,
+    });
+  }, [editingFlowData]);
+  
+  // Remove an action from a stage
+  const handleRemoveActionFromStage = useCallback((stageIndex: number, actionIndex: number) => {
+    if (!editingFlowData) return;
+    
+    const newStages = [...editingFlowData.stages];
+    newStages[stageIndex] = {
+      actions: newStages[stageIndex].actions.filter((_, i) => i !== actionIndex),
+    };
+    
+    setEditingFlowData({
+      ...editingFlowData,
+      stages: newStages,
+    });
+  }, [editingFlowData]);
+  
+  // Update action type
+  const handleUpdateActionType = useCallback((stageIndex: number, actionIndex: number, newAction: FlowActionType) => {
+    if (!editingFlowData) return;
+    
+    const newStages = [...editingFlowData.stages];
+    const actions = [...newStages[stageIndex].actions];
+    actions[actionIndex] = { ...actions[actionIndex], action: newAction };
+    newStages[stageIndex] = { actions };
+    
+    setEditingFlowData({
+      ...editingFlowData,
+      stages: newStages,
+    });
+  }, [editingFlowData]);
+  
+  // Update scheduling between stages
+  const handleUpdateScheduling = useCallback((schedIndex: number, updates: Partial<FlowScheduling>) => {
+    if (!editingFlowData) return;
+    
+    const newScheduling = [...editingFlowData.scheduling];
+    newScheduling[schedIndex] = { ...newScheduling[schedIndex], ...updates };
+    
+    setEditingFlowData({
+      ...editingFlowData,
+      scheduling: newScheduling,
+    });
+  }, [editingFlowData]);
+  
+  // Get switch name from switchId
+  const getSwitchNameFromId = useCallback((switchId: string): string => {
+    const sw = availableDevices.find(d => d.id === switchId);
+    return sw?.name || switchId.split(':').pop() || 'Unknown';
+  }, [availableDevices]);
+  
+  // Get switch type icon
+  const getSwitchTypeIcon = useCallback((switchId: string): string => {
+    const [, type] = switchId.split(':');
+    if (type === 'light') return '💡';
+    if (type === 'venetian') return '🪟';
+    return '🪞';
+  }, []);
+
+  // Execute a single action (send command to panel)
+  const executeFlowAction = useCallback(async (action: FlowAction): Promise<boolean> => {
+    const [ip, type, indexStr] = action.switchId.split(':');
+    const index = parseInt(indexStr, 10);
+    
+    if (type === 'light') {
+      // Light actions: on, off, toggle
+      if (action.action === 'toggle') {
+        return sendPanelCommand(ip, 'toggle_relay', { index });
+      } else {
+        return sendPanelCommand(ip, 'set_relay', { index, state: action.action === 'on' });
+      }
+    } else {
+      // Shade/Venetian actions: open, close, stop
+      const curtainAction = action.action as 'open' | 'close' | 'stop';
+      return sendPanelCommand(ip, 'curtain', { index, action: curtainAction });
+    }
+  }, []);
+  
+  // Check if any curtain in the given actions is still moving
+  const areCurtainsStillMoving = useCallback((actions: FlowAction[]): boolean => {
+    for (const action of actions) {
+      const [ip, type, indexStr] = action.switchId.split(':');
+      if (type === 'shade' || type === 'venetian') {
+        const index = parseInt(indexStr, 10);
+        const liveState = livePanelStates.get(ip);
+        const curtain = liveState?.fullState?.curtains.find(c => c.index === index);
+        if (curtain?.state === 'opening' || curtain?.state === 'closing') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [livePanelStates]);
+  
+  // Run a flow
+  const handleRunFlow = useCallback(async (flow: SmartFlow) => {
+    if (executingFlow) {
+      console.log('[FavoritesSection] Flow already running');
+      return;
+    }
+    
+    console.log('[FavoritesSection] Starting flow:', flow.name);
+    setExecutingFlow(flow);
+    executionAbortRef.current = false;
+    
+    setExecutionProgress({
+      state: 'running',
+      currentStage: 0,
+      isWaiting: false,
+      startedAt: Date.now(),
+    });
+    
+    try {
+      for (let stageIdx = 0; stageIdx < flow.stages.length; stageIdx++) {
+        // Check for abort
+        if (executionAbortRef.current) {
+          console.log('[FavoritesSection] Flow aborted at stage', stageIdx);
+          setExecutionProgress(prev => ({ ...prev, state: 'stopped' }));
+          break;
+        }
+        
+        const stage = flow.stages[stageIdx];
+        console.log(`[FavoritesSection] Executing stage ${stageIdx + 1}/${flow.stages.length}:`, 
+          stage.actions.map(a => `${a.switchId} → ${a.action}`).join(', '));
+        
+        setExecutionProgress(prev => ({
+          ...prev,
+          currentStage: stageIdx,
+          isWaiting: false,
+        }));
+        
+        // Execute all actions in this stage concurrently
+        await Promise.all(stage.actions.map(action => executeFlowAction(action)));
+        
+        // Wait for scheduling if not the last stage
+        if (stageIdx < flow.stages.length - 1 && flow.scheduling[stageIdx]) {
+          const sched = flow.scheduling[stageIdx];
+          
+          if (sched.type === 'delay' && sched.delayMs && sched.delayMs > 0) {
+            // Delay scheduling
+            console.log(`[FavoritesSection] Waiting ${sched.delayMs}ms...`);
+            setExecutionProgress(prev => ({
+              ...prev,
+              isWaiting: true,
+              remainingDelayMs: sched.delayMs,
+            }));
+            
+            // Count down delay with updates
+            const delayMs = sched.delayMs;
+            const startTime = Date.now();
+            const updateInterval = 100; // Update every 100ms
+            
+            await new Promise<void>((resolve) => {
+              const checkDelay = () => {
+                if (executionAbortRef.current) {
+                  resolve();
+                  return;
+                }
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(0, delayMs - elapsed);
+                
+                setExecutionProgress(prev => ({
+                  ...prev,
+                  remainingDelayMs: remaining,
+                }));
+                
+                if (remaining <= 0) {
+                  resolve();
+                } else {
+                  executionTimeoutRef.current = setTimeout(checkDelay, updateInterval);
+                }
+              };
+              executionTimeoutRef.current = setTimeout(checkDelay, updateInterval);
+            });
+          } else if (sched.type === 'waitForCurtains') {
+            // Wait for curtains/shades to finish their operation
+            console.log('[FavoritesSection] Waiting for continuous operations to complete...');
+            setExecutionProgress(prev => ({
+              ...prev,
+              isWaiting: true,
+              remainingDelayMs: undefined,
+            }));
+            
+            // Poll until curtains stop moving (max 5 minutes for slow curtains)
+            const maxWait = 300000; // 5 minutes
+            const startTime = Date.now();
+            const pollInterval = 500; // Check every 500ms
+            
+            // Small initial delay to let the curtain state update
+            await new Promise(r => setTimeout(r, 1000));
+            
+            await new Promise<void>((resolve) => {
+              const checkCurtains = () => {
+                if (executionAbortRef.current) {
+                  console.log('[FavoritesSection] Aborted while waiting for curtains');
+                  resolve();
+                  return;
+                }
+                
+                const elapsed = Date.now() - startTime;
+                const stillMoving = areCurtainsStillMoving(stage.actions);
+                
+                console.log(`[FavoritesSection] Checking curtains: stillMoving=${stillMoving}, elapsed=${elapsed}ms`);
+                
+                if (elapsed >= maxWait) {
+                  console.log('[FavoritesSection] Max wait time reached, continuing flow');
+                  resolve();
+                } else if (!stillMoving) {
+                  console.log('[FavoritesSection] Curtains stopped, continuing flow');
+                  resolve();
+                } else {
+                  executionTimeoutRef.current = setTimeout(checkCurtains, pollInterval);
+                }
+              };
+              // Start checking
+              checkCurtains();
+            });
+          }
+        }
+      }
+      
+      // Completed
+      if (!executionAbortRef.current) {
+        console.log('[FavoritesSection] Flow completed:', flow.name);
+        setExecutionProgress(prev => ({
+          ...prev,
+          state: 'completed',
+          currentStage: flow.stages.length,
+          isWaiting: false,
+        }));
+      }
+    } catch (error) {
+      console.error('[FavoritesSection] Flow error:', error);
+      setExecutionProgress(prev => ({
+        ...prev,
+        state: 'stopped',
+        error: (error as Error).message,
+      }));
+    }
+    
+    // Clear executing flow after a delay to show completion state
+    setTimeout(() => {
+      setExecutingFlow(null);
+      setExecutionProgress({
+        state: 'idle',
+        currentStage: -1,
+        isWaiting: false,
+      });
+    }, 2000);
+  }, [executingFlow, executeFlowAction, areCurtainsStillMoving]);
+  
+  // Stop the running flow
+  const handleStopFlow = useCallback(() => {
+    console.log('[FavoritesSection] Stopping flow...');
+    executionAbortRef.current = true;
+    if (executionTimeoutRef.current) {
+      clearTimeout(executionTimeoutRef.current);
+      executionTimeoutRef.current = null;
+    }
+    setExecutionProgress(prev => ({
+      ...prev,
+      state: 'stopped',
+    }));
   }, []);
 
   // =============================================================================
@@ -1163,28 +1690,28 @@ export default function FavoritesSection({
                             <div className={styles.switchPickerEmpty}>
                               Run discovery to find panels
                             </div>
-                          ) : filteredAvailableDevices.length === 0 ? (
+                          ) : filteredAvailableSwitches.length === 0 ? (
                             <div className={styles.switchPickerEmpty}>
                               No matches for &quot;{switchPickerSearch}&quot;
                             </div>
                           ) : (
-                            filteredAvailableDevices.map(device => {
+                            filteredAvailableSwitches.map(sw => {
                               const alreadyAdded = currentZoneSwitches.some(
-                                s => s.ip === device.ip && s.index === device.index && s.type === device.type
+                                s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type
                               );
                               return (
                                 <button
-                                  key={device.id}
+                                  key={sw.id}
                                   type="button"
                                   className={`${styles.switchPickerItem} ${alreadyAdded ? styles.switchPickerItemAdded : ''}`}
-                                  onClick={() => !alreadyAdded && handleAddDevice(device)}
+                                  onClick={() => !alreadyAdded && handleAddSwitch(sw)}
                                   disabled={alreadyAdded}
                                 >
                                   <span className={styles.switchPickerItemIcon}>
-                                    {device.type === 'light' ? '💡' : device.type === 'venetian' ? '🪟' : '🪞'}
+                                    {sw.type === 'light' ? '💡' : sw.type === 'venetian' ? '🪟' : '🪞'}
                                   </span>
-                                  <span className={styles.switchPickerItemName}>{device.name}</span>
-                                  <span className={styles.switchPickerItemPanel}>{device.panelName}</span>
+                                  <span className={styles.switchPickerItemName}>{sw.name}</span>
+                                  <span className={styles.switchPickerItemPanel}>{sw.panelName}</span>
                                   {alreadyAdded && <span className={styles.switchPickerItemCheck}>✓</span>}
                                 </button>
                               );
@@ -1227,62 +1754,144 @@ export default function FavoritesSection({
                       // Only show invalid state AFTER discovery completes (not during loading)
                       const showInvalidState = !isLoading && discoveryCompleted && flowHasInvalidSteps;
                       
+                      // Check if this flow is currently executing
+                      const isThisFlowExecuting = executingFlow?.name === flow.name && 
+                        executionProgress.state === 'running';
+                      const isThisFlowCompleted = executingFlow?.name === flow.name && 
+                        executionProgress.state === 'completed';
+                      const isThisFlowStopped = executingFlow?.name === flow.name && 
+                        executionProgress.state === 'stopped';
+                      
+                      // Calculate total duration
+                      const totalDurationMs = flow.scheduling?.reduce((acc, s) => 
+                        acc + (s.type === 'delay' ? (s.delayMs || 0) : 2000), 0) || 0;
+                      
                       return (
                         <div
                           key={`flow-${flow.name}-${idx}`}
-                          className={`${styles.smartFlowCard} ${showInvalidState ? styles.smartFlowCardInvalid : ''}`}
+                          className={`${styles.smartFlowCard} ${showInvalidState ? styles.smartFlowCardInvalid : ''} ${isThisFlowExecuting ? styles.smartFlowCardExecuting : ''} ${isThisFlowCompleted ? styles.smartFlowCardCompleted : ''} ${isThisFlowStopped ? styles.smartFlowCardStopped : ''}`}
                         >
                           <div className={styles.smartFlowCardHeader}>
                             <span className={styles.smartFlowIcon}>
-                              {showInvalidState ? '⚠️' : '⚡'}
+                              {isThisFlowExecuting ? '⏳' : isThisFlowCompleted ? '✅' : isThisFlowStopped ? '⏹️' : showInvalidState ? '⚠️' : '⚡'}
                             </span>
                             <span className={styles.smartFlowName}>{flow.name}</span>
+                            {!isThisFlowExecuting && (
+                              <>
+                                <button
+                                  type="button"
+                                  className={styles.smartFlowEdit}
+                                  onClick={() => handleEditFlow(idx)}
+                                  title="Edit flow"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.smartFlowDelete}
+                                  onClick={() => setDeleteConfirm({
+                                    type: 'flow',
+                                    name: flow.name,
+                                    onConfirm: () => handleDeleteFlow(idx),
+                                  })}
+                                  title="Delete flow"
+                                >
+                                  ✕
+                                </button>
+                              </>
+                            )}
+                          </div>
+                          
+                          {/* Execution Progress */}
+                          {isThisFlowExecuting && (
+                            <div className={styles.smartFlowProgress}>
+                              <div className={styles.smartFlowProgressBar}>
+                                <div 
+                                  className={styles.smartFlowProgressFill}
+                                  style={{ 
+                                    width: `${((executionProgress.currentStage + 1) / flow.stages.length) * 100}%` 
+                                  }}
+                                />
+                              </div>
+                              <div className={styles.smartFlowProgressText}>
+                                Stage {executionProgress.currentStage + 1}/{flow.stages.length}
+                                {executionProgress.isWaiting && executionProgress.remainingDelayMs !== undefined && (
+                                  <span className={styles.smartFlowWaiting}>
+                                    ⏱️ {(executionProgress.remainingDelayMs / 1000).toFixed(1)}s
+                                  </span>
+                                )}
+                                {executionProgress.isWaiting && executionProgress.remainingDelayMs === undefined && (
+                                  <span className={styles.smartFlowWaiting}>
+                                    🔄 Waiting until done...
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Normal meta info */}
+                          {!isThisFlowExecuting && (
+                            <div className={styles.smartFlowMeta}>
+                              {flow.stages?.length || 0} stage{(flow.stages?.length || 0) !== 1 ? 's' : ''}
+                              {showInvalidState && (
+                                <span className={styles.smartFlowInvalidCount}>
+                                  {invalidStepIndices.length} unreachable
+                                </span>
+                              )}
+                              {(flow.stages?.length || 0) > 0 && !showInvalidState && totalDurationMs > 0 && (
+                                <span className={styles.smartFlowDuration}>
+                                  ~{Math.ceil(totalDurationMs / 1000)}s
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Action buttons */}
+                          {isThisFlowExecuting ? (
                             <button
                               type="button"
-                              className={styles.smartFlowDelete}
-                              onClick={() => setDeleteConfirm({
-                                type: 'flow',
-                                name: flow.name,
-                                onConfirm: () => handleDeleteFlow(idx),
-                              })}
-                              title="Delete flow"
+                              className={styles.smartFlowStopButton}
+                              onClick={handleStopFlow}
                             >
-                              ✕
+                              ⏹️ Stop
                             </button>
-                          </div>
-                          <div className={styles.smartFlowMeta}>
-                            {flow.steps.length} step{flow.steps.length !== 1 ? 's' : ''}
-                            {showInvalidState && (
-                              <span className={styles.smartFlowInvalidCount}>
-                                {invalidStepIndices.length} unreachable
-                              </span>
-                            )}
-                            {flow.steps.length > 0 && !showInvalidState && (
-                              <span className={styles.smartFlowDuration}>
-                                ~{Math.ceil(flow.steps.reduce((acc, s) => acc + s.delayMs, 0) / 1000)}s
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className={`${styles.smartFlowRunButton} ${showInvalidState ? styles.smartFlowRunButtonDisabled : ''}`}
-                            onClick={() => handleRunFlow(flow)}
-                            disabled={isLoading || showInvalidState}
-                          >
-                            {showInvalidState ? '⚠️ Cannot Run' : '▶ Run'}
-                          </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className={`${styles.smartFlowRunButton} ${showInvalidState ? styles.smartFlowRunButtonDisabled : ''}`}
+                              onClick={() => handleRunFlow(flow)}
+                              disabled={isLoading || showInvalidState || !!executingFlow}
+                            >
+                              {isThisFlowCompleted ? '✅ Done!' : isThisFlowStopped ? '⏹️ Stopped' : showInvalidState ? '⚠️ Cannot Run' : '▶ Run'}
+                            </button>
+                          )}
                         </div>
                       );
                     })}
                     
                     {/* Create Flow */}
                     {showFlowCreator ? (
-                      <div className={styles.flowCreatorInline}>
+                      <div className={styles.flowCreatorCard}>
+                        <div className={styles.flowCreatorHeader}>
+                          <span className={styles.flowCreatorIcon}>⚡</span>
+                          <span className={styles.flowCreatorTitle}>New Flow</span>
+                          <button
+                            type="button"
+                            className={styles.flowCreatorClose}
+                            onClick={() => {
+                              setShowFlowCreator(false);
+                              setNewFlowName('');
+                            }}
+                            title="Cancel (Esc)"
+                          >
+                            ✕
+                          </button>
+                        </div>
                         <input
                           type="text"
                           value={newFlowName}
                           onChange={(e) => setNewFlowName(e.target.value)}
-                          placeholder="Flow name..."
+                          placeholder="Enter flow name..."
                           className={styles.flowCreatorInput}
                           autoFocus
                           onKeyDown={(e) => {
@@ -1293,26 +1902,14 @@ export default function FavoritesSection({
                             }
                           }}
                         />
-                        <div className={styles.flowCreatorButtons}>
-                          <button
-                            type="button"
-                            className={styles.flowCreatorConfirm}
-                            onClick={handleCreateFlow}
-                            disabled={!newFlowName.trim()}
-                          >
-                            Create
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.flowCreatorCancel}
-                            onClick={() => {
-                              setShowFlowCreator(false);
-                              setNewFlowName('');
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className={styles.flowCreatorSubmit}
+                          onClick={handleCreateFlow}
+                          disabled={!newFlowName.trim()}
+                        >
+                          ✨ Create &amp; Edit
+                        </button>
                       </div>
                     ) : (
                       <button
@@ -1391,6 +1988,215 @@ export default function FavoritesSection({
                 }}
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Flow Builder Modal */}
+      {editingFlow && editingFlowData && (
+        <div className={styles.flowBuilderOverlay} onClick={handleCancelEditFlow}>
+          <div className={styles.flowBuilderModal} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className={styles.flowBuilderHeader}>
+              <h3 className={styles.flowBuilderTitle}>
+                <span className={styles.flowBuilderTitleIcon}>⚡</span>
+                Edit Flow: {editingFlowData.name}
+              </h3>
+              <button
+                type="button"
+                className={styles.flowBuilderClose}
+                onClick={handleCancelEditFlow}
+              >
+                ✕
+              </button>
+            </div>
+            
+            {/* Flow Timeline */}
+            <div className={styles.flowBuilderContent}>
+              <div className={styles.flowTimeline}>
+                {editingFlowData.stages.map((stage, stageIdx) => (
+                  <div key={`stage-${stageIdx}`} className={styles.flowTimelineSection}>
+                    {/* Stage Card */}
+                    <div className={styles.flowStageCard}>
+                      <div className={styles.flowStageHeader}>
+                        <span className={styles.flowStageNumber}>Stage {stageIdx + 1}</span>
+                        {editingFlowData.stages.length > 1 && (
+                          <button
+                            type="button"
+                            className={styles.flowStageRemove}
+                            onClick={() => handleRemoveStage(stageIdx)}
+                            title="Remove stage"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Actions in this stage */}
+                      <div className={styles.flowStageActions}>
+                        {stage.actions.length === 0 && (
+                          <div className={styles.flowStageEmpty}>
+                            No switches selected
+                          </div>
+                        )}
+                        {stage.actions.map((action, actionIdx) => {
+                          const [, type] = action.switchId.split(':');
+                          const isLight = type === 'light';
+                          
+                          return (
+                            <div key={`action-${actionIdx}`} className={styles.flowActionItem}>
+                              <span className={styles.flowActionIcon}>
+                                {getSwitchTypeIcon(action.switchId)}
+                              </span>
+                              <span className={styles.flowActionName}>
+                                {getSwitchNameFromId(action.switchId)}
+                              </span>
+                              <select
+                                value={action.action}
+                                onChange={(e) => handleUpdateActionType(stageIdx, actionIdx, e.target.value as FlowActionType)}
+                                className={styles.flowActionSelect}
+                              >
+                                {isLight ? (
+                                  <>
+                                    <option value="on">Turn On</option>
+                                    <option value="off">Turn Off</option>
+                                    <option value="toggle">Toggle</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="open">Open</option>
+                                    <option value="close">Close</option>
+                                    <option value="stop">Stop</option>
+                                  </>
+                                )}
+                              </select>
+                              <button
+                                type="button"
+                                className={styles.flowActionRemove}
+                                onClick={() => handleRemoveActionFromStage(stageIdx, actionIdx)}
+                                title="Remove"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Add Switch Dropdown */}
+                      <div className={styles.flowAddSwitch}>
+                        <select
+                          className={styles.flowAddSwitchSelect}
+                          value=""
+                          onChange={(e) => {
+                            const sw = availableDevices.find(d => d.id === e.target.value);
+                            if (sw) handleAddActionToStage(stageIdx, sw);
+                          }}
+                        >
+                          <option value="">
+                            {availableDevices.length === 0 
+                              ? '⚠️ Run discovery first...' 
+                              : `+ Add switch... (${availableDevices.filter(d => !stage.actions.some(a => a.switchId === d.id)).length} available)`}
+                          </option>
+                          {availableDevices
+                            .filter(d => !stage.actions.some(a => a.switchId === d.id))
+                            .map(sw => (
+                              <option key={sw.id} value={sw.id}>
+                                {sw.type === 'light' ? '💡' : sw.type === 'venetian' ? '🪟' : '🪞'} {sw.name} ({sw.panelName})
+                              </option>
+                            ))
+                          }
+                        </select>
+                      </div>
+                    </div>
+                    
+                    {/* Scheduling between stages */}
+                    {stageIdx < editingFlowData.stages.length - 1 && editingFlowData.scheduling[stageIdx] && (
+                      <div className={styles.flowSchedulingCard}>
+                        <div className={styles.flowSchedulingIcon}>⏱️</div>
+                        <div className={styles.flowSchedulingContent}>
+                          <select
+                            value={editingFlowData.scheduling[stageIdx].type}
+                            onChange={(e) => handleUpdateScheduling(stageIdx, { 
+                              type: e.target.value as SchedulingType,
+                              delayMs: e.target.value === 'delay' ? 1000 : undefined,
+                            })}
+                            className={styles.flowSchedulingTypeSelect}
+                          >
+                            <option value="delay">⏱️ Fixed delay</option>
+                            <option value="waitForCurtains">🔄 Wait until done</option>
+                          </select>
+                          
+                          {editingFlowData.scheduling[stageIdx].type === 'delay' && (
+                            <div className={styles.flowSchedulingDelay}>
+                              <input
+                                type="number"
+                                min="0"
+                                max="300000"
+                                step="100"
+                                value={editingFlowData.scheduling[stageIdx].delayMs || 0}
+                                onChange={(e) => handleUpdateScheduling(stageIdx, { 
+                                  delayMs: parseInt(e.target.value, 10) || 0 
+                                })}
+                                className={styles.flowSchedulingInput}
+                              />
+                              <span className={styles.flowSchedulingUnit}>ms</span>
+                              <div className={styles.flowSchedulingPresets}>
+                                {[500, 1000, 2000, 5000].map(ms => (
+                                  <button
+                                    key={ms}
+                                    type="button"
+                                    className={`${styles.flowSchedulingPreset} ${editingFlowData.scheduling[stageIdx].delayMs === ms ? styles.flowSchedulingPresetActive : ''}`}
+                                    onClick={() => handleUpdateScheduling(stageIdx, { delayMs: ms })}
+                                  >
+                                    {ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {editingFlowData.scheduling[stageIdx].type === 'waitForCurtains' && (
+                            <div className={styles.flowSchedulingInfo}>
+                              Waits for shades/curtains to stop moving before continuing
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                {/* Add Stage Button */}
+                <button
+                  type="button"
+                  className={styles.flowAddStage}
+                  onClick={handleAddStage}
+                >
+                  <span className={styles.flowAddStageIcon}>➕</span>
+                  <span className={styles.flowAddStageText}>Add Stage</span>
+                </button>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className={styles.flowBuilderFooter}>
+              <button
+                type="button"
+                className={styles.flowBuilderCancel}
+                onClick={handleCancelEditFlow}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.flowBuilderSave}
+                onClick={handleSaveEditFlow}
+                disabled={editingFlowData.stages.length === 0 || editingFlowData.stages.every(s => s.actions.length === 0)}
+              >
+                💾 Save Flow
               </button>
             </div>
           </div>
