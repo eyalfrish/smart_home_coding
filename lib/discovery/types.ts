@@ -17,7 +17,7 @@ export interface DiscoveryRequest {
 // ============================================================================
 
 /** Pair mode for a relay pair (from settings page) */
-export type RelayPairMode = "normal" | "curtain" | "venetian";
+export type RelayPairMode = "normal" | "curtain" | "venetian" | "linked";
 
 /** Individual relay mode when pair is in Normal mode */
 export type RelayMode = "switch" | "momentary" | "disabled";
@@ -256,13 +256,16 @@ export function getRelayDeviceType(
     return getRelayDeviceTypeLegacy(relayName);
   }
   
-  // For Curtain/Venetian modes, relays are used together - they shouldn't appear as individual relays
-  // The WebSocket will report them as curtains instead
+  // For Curtain/Venetian/Linked modes, relays are used together - they shouldn't appear as individual relays
+  // The WebSocket will report them as curtains instead (for curtain/venetian)
   if (pairConfig.pairMode === "curtain") {
     return "hidden"; // Individual relay hidden; shown as curtain entity
   }
   if (pairConfig.pairMode === "venetian") {
     return "hidden"; // Individual relay hidden; shown as venetian entity
+  }
+  if (pairConfig.pairMode === "linked") {
+    return "hidden"; // Linked relays operate as a pair; hide from individual selection
   }
   
   // Normal mode - check individual relay mode
@@ -276,10 +279,12 @@ export function getRelayDeviceType(
     return "momentary";
   }
   
-  // Switch mode - but still hide if generic name
+  // Switch mode - but still hide if generic name or linked relay
   if (relayMode === "switch") {
     if (!relayName || relayName.trim() === "") return "hidden";
     if (/^Relay\s+\d+$/i.test(relayName.trim())) return "hidden";
+    // Hide linked relays (names ending with "-Link", "_Link", etc.)
+    if (/[-_–—]Link$/i.test(relayName.trim())) return "hidden";
     return "light";
   }
   
@@ -330,6 +335,8 @@ export function getCurtainDeviceType(
 function getRelayDeviceTypeLegacy(relayName: string | undefined): DeviceType {
   if (!relayName || relayName.trim() === "") return "hidden";
   if (/^Relay\s+\d+$/i.test(relayName.trim())) return "hidden";
+  // Hide linked relays (names ending with "-Link", "_Link", etc.)
+  if (/[-_–—]Link$/i.test(relayName.trim())) return "hidden";
   
   // Check for door lock indicators
   const name = relayName.toLowerCase();

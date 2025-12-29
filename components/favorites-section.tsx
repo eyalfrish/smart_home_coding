@@ -259,6 +259,7 @@ export default function FavoritesSection({
   const [showNewZoneInput, setShowNewZoneInput] = useState(false);
   const [newZoneName, setNewZoneName] = useState('');
   const [showSwitchPicker, setShowSwitchPicker] = useState(false);
+  const [switchPickerSearch, setSwitchPickerSearch] = useState('');
   const [showFlowCreator, setShowFlowCreator] = useState(false);
   const [newFlowName, setNewFlowName] = useState('');
   
@@ -385,11 +386,13 @@ export default function FavoritesSection({
       const curtains = liveState?.fullState?.curtains || [];
       const relayPairs = panel.settings?.relayPairs;
       
-      // Add relays (lights) - only direct switches, not hidden
+      // Add relays (lights) - only direct switches, not hidden or linked
       for (const relay of relays) {
         const deviceType = getRelayDeviceType(relay.index, relay.name, relayPairs);
         // Only show 'light' type relays (direct switches with proper names)
-        if (deviceType === 'light') {
+        // Filter out any relay with "Link" suffix (linked relays) - uses same pattern as dashboard
+        const isLinkedRelay = relay.name && /[-_\s]?link$/i.test(relay.name.trim().toLowerCase());
+        if (deviceType === 'light' && relay.name && !isLinkedRelay) {
           devices.push({
             id: `${panel.ip}:light:${relay.index}`,
             ip: panel.ip,
@@ -402,10 +405,12 @@ export default function FavoritesSection({
         }
       }
       
-      // Add curtains (shades/venetians)
+      // Add curtains (shades/venetians) - only direct, not linked
       for (const curtain of curtains) {
         const deviceType = getCurtainDeviceType(curtain.index, curtain.name, relayPairs);
-        if (deviceType === 'curtain' || deviceType === 'venetian') {
+        // Filter out any curtain with "Link" suffix (linked devices)
+        const isLinkedCurtain = curtain.name && /[-_\s]?link$/i.test(curtain.name.trim());
+        if ((deviceType === 'curtain' || deviceType === 'venetian') && curtain.name && !isLinkedCurtain) {
           devices.push({
             id: `${panel.ip}:${deviceType === 'venetian' ? 'venetian' : 'shade'}:${curtain.index}`,
             ip: panel.ip,
@@ -420,6 +425,27 @@ export default function FavoritesSection({
     }
     return devices;
   }, [discoveredPanels, livePanelStates]);
+
+  // Filter available devices based on search - smart multi-term search
+  const filteredAvailableDevices = useMemo(() => {
+    if (!switchPickerSearch.trim()) return availableDevices;
+    
+    // Split search into terms and normalize
+    const searchTerms = switchPickerSearch
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(term => term.length > 0);
+    
+    if (searchTerms.length === 0) return availableDevices;
+    
+    return availableDevices.filter(device => {
+      // Combine panel name and device name for searching
+      const searchableText = `${device.panelName} ${device.name}`.toLowerCase();
+      
+      // All terms must match somewhere in the searchable text
+      return searchTerms.every(term => searchableText.includes(term));
+    });
+  }, [availableDevices, switchPickerSearch]);
 
   // Get live state for a switch
   const getSwitchState = useCallback((sw: FavoriteSwitch): { isOn?: boolean; curtainState?: string } => {
@@ -1111,15 +1137,38 @@ export default function FavoritesSection({
                       <div className={styles.switchPickerInline}>
                         <div className={styles.switchPickerHeader}>
                           <span>Add Switch</span>
-                          <button onClick={() => setShowSwitchPicker(false)}>✕</button>
+                          <button onClick={() => { setShowSwitchPicker(false); setSwitchPickerSearch(''); }}>✕</button>
+                        </div>
+                        <div className={styles.switchPickerSearchWrapper}>
+                          <input
+                            type="text"
+                            value={switchPickerSearch}
+                            onChange={(e) => setSwitchPickerSearch(e.target.value)}
+                            placeholder="Search... (e.g. Entr Spot)"
+                            className={styles.switchPickerSearchInput}
+                            autoFocus
+                          />
+                          {switchPickerSearch && (
+                            <button
+                              type="button"
+                              className={styles.switchPickerSearchClear}
+                              onClick={() => setSwitchPickerSearch('')}
+                            >
+                              ✕
+                            </button>
+                          )}
                         </div>
                         <div className={styles.switchPickerList}>
                           {availableDevices.length === 0 ? (
                             <div className={styles.switchPickerEmpty}>
                               Run discovery to find panels
                             </div>
+                          ) : filteredAvailableDevices.length === 0 ? (
+                            <div className={styles.switchPickerEmpty}>
+                              No matches for &quot;{switchPickerSearch}&quot;
+                            </div>
                           ) : (
-                            availableDevices.map(device => {
+                            filteredAvailableDevices.map(device => {
                               const alreadyAdded = currentZoneSwitches.some(
                                 s => s.ip === device.ip && s.index === device.index && s.type === device.type
                               );

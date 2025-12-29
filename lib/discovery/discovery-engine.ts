@@ -536,7 +536,7 @@ async function fetchPanelSettings(ip: string, timeoutMs: number = SETTINGS_TIMEO
  * Parse relay pair configurations from the settings page HTML.
  * 
  * Structure (3 pairs):
- * - mode0, mode1, mode2: Pair mode selects (0=Normal, 1=Curtain, 2=Venetian)
+ * - mode0, mode1, mode2: Pair mode selects (0=Normal, 1=Curtain, 2=Venetian, 3=Linked)
  * - relay_mode0..5: Individual relay modes (0=Switch, 1=Momentary, 2=Disabled)
  */
 function parseRelayPairConfigs(html: string): RelayPairConfig[] | null {
@@ -571,6 +571,7 @@ function parseRelayPairConfigs(html: string): RelayPairConfig[] | null {
     let pairMode: RelayPairMode = "normal";
     if (pairModeValue === "1") pairMode = "curtain";
     else if (pairModeValue === "2") pairMode = "venetian";
+    else if (pairModeValue === "3") pairMode = "linked";
     
     // Parse individual relay modes for both relays in the pair
     // Relay indices: pair 0 -> relays 0,1; pair 1 -> relays 2,3; pair 2 -> relays 4,5
