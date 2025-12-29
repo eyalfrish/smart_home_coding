@@ -1574,14 +1574,15 @@ export default function FavoritesSection({
                         </button>
                       );
                     } else {
-                      // Shade/Venetian
+                      // Shade/Venetian - use teal color for venetians, blue for shades
+                      const isVenetian = sw.type === 'venetian';
                       return (
                         <div
                           key={`${sw.ip}-${sw.type}-${sw.index}-${idx}`}
-                          className={`${styles.favoritesCollapsedShade} ${showInvalidState ? styles.favoritesCollapsedButtonInvalid : ''}`}
+                          className={`${styles.favoritesCollapsedShade} ${isVenetian ? styles.favoritesCollapsedShadeVenetian : ''} ${showInvalidState ? styles.favoritesCollapsedButtonInvalid : ''}`}
                         >
                           <span className={styles.favoritesCollapsedIcon}>
-                            {showInvalidState ? '⚠️' : sw.type === 'venetian' ? '🪟' : '🪞'}
+                            {showInvalidState ? '⚠️' : isVenetian ? '🪟' : '🪞'}
                           </span>
                           <span className={styles.favoritesCollapsedLabel}>{sw.alias}</span>
                           <div className={styles.favoritesCollapsedShadeButtons}>

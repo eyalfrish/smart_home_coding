@@ -5030,21 +5030,29 @@
   gap: 0.4rem;
 }
 
+/* Light button in collapsed view - matches table lightButton style */
 .favoritesCollapsedButton {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.65rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--light-off-bg);
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .favoritesCollapsedButton:hover:not(:disabled) {
-  background: var(--card-hover);
-  border-color: var(--accent);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background: var(--button-secondary-hover);
+}
+
+.favoritesCollapsedButton:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .favoritesCollapsedButton:disabled {
@@ -5052,46 +5060,53 @@
   cursor: not-allowed;
 }
 
+/* Light ON state - yellow gradient like table */
 .favoritesCollapsedButtonOn {
-  background: var(--badge-accent-bg);
-  border-color: var(--accent);
+  background: var(--light-on-gradient);
+  color: var(--light-on-text);
+  box-shadow: 0 0 8px var(--light-on-shadow);
 }
 
+/* Flow button - purple style like table doorButton */
 .favoritesCollapsedButtonFlow {
-  background: rgba(168, 85, 247, 0.1);
-  border-color: rgba(168, 85, 247, 0.3);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #9333ea;
 }
 
 .favoritesCollapsedButtonFlow:hover:not(:disabled) {
-  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.25);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
 }
 
 .favoritesCollapsedButtonRunning {
-  background: rgba(34, 197, 94, 0.15);
-  border-color: rgba(34, 197, 94, 0.6);
+  background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%) !important;
+  color: white !important;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .favoritesCollapsedButtonRunning:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.7);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
 }
 
 .favoritesCollapsedButtonInvalid {
   background: rgba(239, 68, 68, 0.1) !important;
-  border-color: rgba(239, 68, 68, 0.4) !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
   color: #ef4444 !important;
 }
 
 .favoritesCollapsedIcon {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   line-height: 1;
 }
 
 .favoritesCollapsedLabel {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--foreground);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: inherit;
   white-space: nowrap;
 }
 
@@ -5099,41 +5114,68 @@
   color: #ef4444;
 }
 
-/* Collapsed shade with up/down buttons */
+/* ON state icon glow */
+.favoritesCollapsedButtonOn .favoritesCollapsedIcon {
+  filter: drop-shadow(0 0 3px rgba(234, 179, 8, 0.5));
+}
+
+/* Collapsed shade - matches table shadeNameButton/shadeSwitch style */
 .favoritesCollapsedShade {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.5rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+  color: #1d4ed8;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.favoritesCollapsedShade:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+/* Venetian shade variant - teal/cyan tones */
+.favoritesCollapsedShadeVenetian {
+  background: rgba(20, 184, 166, 0.12);
+  border-color: rgba(20, 184, 166, 0.3);
+  color: #0d9488;
+}
+
+.favoritesCollapsedShadeVenetian:hover {
+  background: rgba(20, 184, 166, 0.2);
 }
 
 .favoritesCollapsedShadeButtons {
   display: flex;
-  gap: 0.15rem;
-  margin-left: 0.25rem;
+  gap: 2px;
+  margin-left: 0.15rem;
 }
 
 .favoritesCollapsedShadeButtons button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.65rem;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.6rem;
   cursor: pointer;
   transition: all 0.15s ease;
+  color: inherit;
 }
 
 .favoritesCollapsedShadeButtons button:hover:not(:disabled) {
-  background: var(--badge-accent-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: rgba(59, 130, 246, 0.25);
+  transform: scale(1.1);
+}
+
+.favoritesCollapsedShadeButtons button:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .favoritesCollapsedShadeButtons button:disabled {
@@ -5141,15 +5183,19 @@
   cursor: not-allowed;
 }
 
+/* Venetian shade buttons hover */
+.favoritesCollapsedShadeVenetian .favoritesCollapsedShadeButtons button:hover:not(:disabled) {
+  background: rgba(20, 184, 166, 0.25);
+}
+
 .favoritesCollapsedShadeStop {
-  width: 44px !important;
-  background: var(--badge-warning-bg) !important;
-  border-color: var(--warning) !important;
-  color: var(--warning) !important;
+  width: 40px !important;
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #ef4444 !important;
 }
 
 .favoritesCollapsedShadeStop:hover:not(:disabled) {
-  background: var(--warning) !important;
+  background: #ef4444 !important;
   color: #fff !important;
 }
 
@@ -7531,33 +7577,36 @@
   }
 
   .favoritesCollapsedButton {
-    padding: 0.5rem 0.65rem;
-    gap: 0.35rem;
-    min-height: 38px;
+    padding: 0.4rem 0.6rem;
+    gap: 0.3rem;
+    min-height: 34px;
+    border-radius: 4px;
   }
 
   .favoritesCollapsedIcon {
-    font-size: 1rem;
+    font-size: 0.85rem;
   }
 
   .favoritesCollapsedLabel {
-    font-size: 0.8rem;
-  }
-
-  .favoritesCollapsedShade {
-    padding: 0.4rem 0.5rem;
-    gap: 0.35rem;
-    min-height: 38px;
-  }
-
-  .favoritesCollapsedShadeButtons button {
-    width: 28px;
-    height: 28px;
     font-size: 0.75rem;
   }
 
+  .favoritesCollapsedShade {
+    padding: 0.35rem 0.5rem;
+    gap: 0.3rem;
+    min-height: 34px;
+    border-radius: 4px;
+  }
+
+  .favoritesCollapsedShadeButtons button {
+    width: 26px;
+    height: 26px;
+    font-size: 0.7rem;
+    border-radius: 3px;
+  }
+
   .favoritesCollapsedShadeStop {
-    width: 56px !important;
+    width: 52px !important;
   }
 
   /* Zone nav row mobile */
