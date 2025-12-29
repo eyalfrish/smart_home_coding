@@ -414,6 +414,10 @@ export default function FavoritesSection({
   const [draggedFlow, setDraggedFlow] = useState<{ index: number; flow: SmartFlow } | null>(null);
   const [flowDropIndicator, setFlowDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
   
+  // Drag and drop state for zones
+  const [draggedZone, setDraggedZone] = useState<{ index: number; name: string } | null>(null);
+  const [zoneDropIndicator, setZoneDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
+  
   // Flow builder state
   const [editingFlow, setEditingFlow] = useState<{ zoneName: string; flowIndex: number } | null>(null);
   const [editingFlowData, setEditingFlowData] = useState<SmartFlow | null>(null);
@@ -916,6 +920,97 @@ export default function FavoritesSection({
       setActiveZone(remaining.length > 0 ? remaining[0] : null);
     }
   }, [profile, favoritesData.zones, smartSwitchesData.zones, activeZone, allZones, onFavoritesUpdate, onSmartSwitchesUpdate]);
+
+  // Zone drag and drop handlers
+  const handleZoneDragStart = useCallback((e: React.DragEvent, index: number, zoneName: string) => {
+    setDraggedZone({ index, name: zoneName });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', zoneName);
+    
+    // Style the dragged element
+    const target = e.currentTarget as HTMLElement;
+    setTimeout(() => target.classList.add(styles.zoneTabDragging), 0);
+  }, []);
+
+  const handleZoneDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggedZone(null);
+    setZoneDropIndicator(null);
+    (e.currentTarget as HTMLElement).classList.remove(styles.zoneTabDragging);
+  }, []);
+
+  const handleZoneDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    if (!draggedZone || draggedZone.index === index) return;
+    
+    // Determine drop position (before/after) based on mouse position
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const position: 'before' | 'after' = e.clientX < midX ? 'before' : 'after';
+    
+    setZoneDropIndicator({ index, position });
+  }, [draggedZone]);
+
+  const handleZoneDragLeave = useCallback((e: React.DragEvent) => {
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!e.currentTarget.contains(relatedTarget)) {
+      setZoneDropIndicator(null);
+    }
+  }, []);
+
+  const handleZoneDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    
+    if (!draggedZone || !zoneDropIndicator || !profile) {
+      setZoneDropIndicator(null);
+      setDraggedZone(null);
+      return;
+    }
+    
+    const dragIndex = draggedZone.index;
+    let dropIndex = targetIndex;
+    
+    // Adjust drop index based on position
+    if (zoneDropIndicator.position === 'after') {
+      dropIndex += 1;
+    }
+    
+    // Adjust for removal of dragged item
+    if (dragIndex < dropIndex) {
+      dropIndex -= 1;
+    }
+    
+    // No change needed
+    if (dragIndex === dropIndex) {
+      setZoneDropIndicator(null);
+      setDraggedZone(null);
+      return;
+    }
+    
+    // Reorder zones - create new ordered arrays
+    const newZoneOrder = [...allZones];
+    const [removed] = newZoneOrder.splice(dragIndex, 1);
+    newZoneOrder.splice(dropIndex, 0, removed);
+    
+    // Rebuild favorites zones with new order
+    const newFavoritesZones: Record<string, FavoriteSwitch[]> = {};
+    for (const zoneName of newZoneOrder) {
+      newFavoritesZones[zoneName] = (favoritesData.zones || {})[zoneName] || [];
+    }
+    
+    // Rebuild smart switches zones with new order
+    const newSmartSwitchesZones: Record<string, SmartFlow[]> = {};
+    for (const zoneName of newZoneOrder) {
+      newSmartSwitchesZones[zoneName] = (smartSwitchesData.zones || {})[zoneName] || [];
+    }
+    
+    onFavoritesUpdate?.(profile.id, { zones: newFavoritesZones });
+    onSmartSwitchesUpdate?.(profile.id, { zones: newSmartSwitchesZones });
+    
+    setZoneDropIndicator(null);
+    setDraggedZone(null);
+  }, [draggedZone, zoneDropIndicator, profile, allZones, favoritesData.zones, smartSwitchesData.zones, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
   const handleAddSwitch = useCallback((sw: typeof availableDevices[0]) => {
     if (!profile || !effectiveActiveZone) return;
@@ -1712,30 +1807,43 @@ export default function FavoritesSection({
             {/* Zone Navigation Row */}
             <div className={styles.favZoneNavRow}>
               <div className={styles.favoritesZoneTabs}>
-                {allZones.map((zoneName) => (
-                  <button
-                    key={zoneName}
-                    type="button"
-                    className={`${styles.favoritesZoneTab} ${effectiveActiveZone === zoneName ? styles.favoritesZoneTabActive : ''}`}
-                    onClick={() => setActiveZone(zoneName)}
-                  >
-                    {zoneName}
-                    <span
-                      className={styles.favoritesZoneTabDelete}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirm({
-                          type: 'zone',
-                          name: zoneName,
-                          onConfirm: () => handleDeleteZone(zoneName),
-                        });
-                      }}
-                      title="Delete zone"
+                {allZones.map((zoneName, idx) => {
+                  const isDragging = draggedZone?.name === zoneName;
+                  const showDropBefore = zoneDropIndicator?.index === idx && zoneDropIndicator?.position === 'before' && draggedZone?.index !== idx;
+                  const showDropAfter = zoneDropIndicator?.index === idx && zoneDropIndicator?.position === 'after' && draggedZone?.index !== idx;
+                  
+                  return (
+                    <button
+                      key={zoneName}
+                      type="button"
+                      className={`${styles.favoritesZoneTab} ${effectiveActiveZone === zoneName ? styles.favoritesZoneTabActive : ''} ${isDragging ? styles.zoneTabDragging : ''} ${showDropBefore ? styles.zoneTabDropBefore : ''} ${showDropAfter ? styles.zoneTabDropAfter : ''}`}
+                      onClick={() => setActiveZone(zoneName)}
+                      draggable
+                      onDragStart={(e) => handleZoneDragStart(e, idx, zoneName)}
+                      onDragEnd={handleZoneDragEnd}
+                      onDragOver={(e) => handleZoneDragOver(e, idx)}
+                      onDragLeave={handleZoneDragLeave}
+                      onDrop={(e) => handleZoneDrop(e, idx)}
                     >
-                      ✕
-                    </span>
-                  </button>
-                ))}
+                      <span className={styles.zoneTabDragHandle} title="Drag to reorder">⋮⋮</span>
+                      {zoneName}
+                      <span
+                        className={styles.favoritesZoneTabDelete}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirm({
+                            type: 'zone',
+                            name: zoneName,
+                            onConfirm: () => handleDeleteZone(zoneName),
+                          });
+                        }}
+                        title="Delete zone"
+                      >
+                        ✕
+                      </span>
+                    </button>
+                  );
+                })}
                 
                 {/* Add Zone - styled as a zone tab */}
                 {showNewZoneInput ? (
