@@ -5542,44 +5542,28 @@
   cursor: grabbing;
 }
 
-/* Drop indicator line - before */
-.favoriteSwitchCardDropBefore::before,
-.favoriteShadeCardDropBefore::before {
-  content: '';
-  position: absolute;
-  left: -6px;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--accent);
-  border-radius: 2px;
-  animation: dropIndicatorPulse 0.6s ease-in-out infinite;
-  box-shadow: 0 0 8px var(--accent);
+/* Drop indicator - before (left border) */
+.favoriteSwitchCardDropBefore,
+.favoriteShadeCardDropBefore {
+  border-left: 3px solid var(--accent) !important;
+  margin-left: -3px;
+  animation: dropIndicatorPulse 0.8s ease-in-out infinite;
 }
 
-/* Drop indicator line - after */
-.favoriteSwitchCardDropAfter::after,
-.favoriteShadeCardDropAfter::after {
-  content: '';
-  position: absolute;
-  right: -6px;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--accent);
-  border-radius: 2px;
-  animation: dropIndicatorPulse 0.6s ease-in-out infinite;
-  box-shadow: 0 0 8px var(--accent);
+/* Drop indicator - after (right border) */
+.favoriteSwitchCardDropAfter,
+.favoriteShadeCardDropAfter {
+  border-right: 3px solid var(--accent) !important;
+  margin-right: -3px;
+  animation: dropIndicatorPulse 0.8s ease-in-out infinite;
 }
 
 @keyframes dropIndicatorPulse {
   0%, 100% {
     opacity: 1;
-    transform: scaleY(1);
   }
   50% {
-    opacity: 0.6;
-    transform: scaleY(0.95);
+    opacity: 0.5;
   }
 }
 
@@ -6281,6 +6265,11 @@
   border-radius: 14px;
   transition: all 0.2s ease;
   min-height: 115px;
+  cursor: grab;
+}
+
+.smartFlowCard:active {
+  cursor: grabbing;
 }
 
 .smartFlowCard:hover {
@@ -6555,6 +6544,7 @@
   border-color: #a855f7 !important;
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(139, 92, 246, 0.12) 100%) !important;
   animation: flowPulse 2s ease-in-out infinite;
+  cursor: default;
 }
 
 @keyframes flowPulse {
@@ -6574,6 +6564,19 @@
 .smartFlowCardStopped {
   border-color: #f59e0b !important;
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%) !important;
+}
+
+/* Flow Card Drag & Drop Indicators */
+.smartFlowCardDropBefore {
+  border-left: 3px solid var(--accent) !important;
+  margin-left: -3px;
+  animation: dropIndicatorPulse 0.8s ease-in-out infinite;
+}
+
+.smartFlowCardDropAfter {
+  border-right: 3px solid var(--accent) !important;
+  margin-right: -3px;
+  animation: dropIndicatorPulse 0.8s ease-in-out infinite;
 }
 
 /* Flow Progress Bar */

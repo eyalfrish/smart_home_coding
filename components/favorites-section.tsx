@@ -400,9 +400,13 @@ export default function FavoritesSection({
     onConfirm: () => void;
   } | null>(null);
   
-  // Drag and drop state
+  // Drag and drop state for switches
   const [draggedSwitch, setDraggedSwitch] = useState<{ index: number; switch: FavoriteSwitch } | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
+  
+  // Drag and drop state for flows
+  const [draggedFlow, setDraggedFlow] = useState<{ index: number; flow: SmartFlow } | null>(null);
+  const [flowDropIndicator, setFlowDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
   
   // Flow builder state
   const [editingFlow, setEditingFlow] = useState<{ zoneName: string; flowIndex: number } | null>(null);
@@ -746,6 +750,87 @@ export default function FavoritesSection({
     setDraggedSwitch(null);
     setDropIndicator(null);
   }, [draggedSwitch, dropIndicator, profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
+
+  // Flow drag and drop handlers
+  const handleFlowDragStart = useCallback((e: React.DragEvent, index: number, flow: SmartFlow) => {
+    setDraggedFlow({ index, flow });
+    e.dataTransfer.effectAllowed = 'move';
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  }, []);
+
+  const handleFlowDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggedFlow(null);
+    setFlowDropIndicator(null);
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+  }, []);
+
+  const handleFlowDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    if (!draggedFlow) return;
+    
+    // Determine if dropping before or after based on mouse position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const position: 'before' | 'after' = e.clientX < midX ? 'before' : 'after';
+    
+    setFlowDropIndicator({ index, position });
+  }, [draggedFlow]);
+
+  const handleFlowDragLeave = useCallback((e: React.DragEvent) => {
+    const relatedTarget = e.relatedTarget as HTMLElement | null;
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+      setFlowDropIndicator(null);
+    }
+  }, []);
+
+  const handleFlowDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (!draggedFlow || !profile || !effectiveActiveZone || !flowDropIndicator) return;
+    
+    const { index: dragIndex } = draggedFlow;
+    let targetIndex = flowDropIndicator.index;
+    
+    // Adjust target index based on position
+    if (flowDropIndicator.position === 'after') {
+      targetIndex += 1;
+    }
+    
+    // Adjust for the removal of the dragged item
+    if (dragIndex < targetIndex) {
+      targetIndex -= 1;
+    }
+    
+    // Don't do anything if dropping at the same position
+    if (dragIndex === targetIndex) {
+      setDraggedFlow(null);
+      setFlowDropIndicator(null);
+      return;
+    }
+    
+    // Reorder flows
+    const currentFlows = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
+    const newFlows = [...currentFlows];
+    const [movedFlow] = newFlows.splice(dragIndex, 1);
+    newFlows.splice(targetIndex, 0, movedFlow);
+    
+    const newSmartSwitches = {
+      ...smartSwitchesData,
+      zones: {
+        ...(smartSwitchesData.zones || {}),
+        [effectiveActiveZone]: newFlows,
+      }
+    };
+    
+    onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
+    setDraggedFlow(null);
+    setFlowDropIndicator(null);
+  }, [draggedFlow, flowDropIndicator, profile, effectiveActiveZone, smartSwitchesData, onSmartSwitchesUpdate]);
 
   const handleShadeAction = useCallback(async (sw: FavoriteSwitch, action: 'open' | 'close' | 'stop') => {
     if (sw.type !== 'shade' && sw.type !== 'venetian') return;
@@ -1946,10 +2031,20 @@ export default function FavoritesSection({
                       const totalDurationMs = flow.scheduling?.reduce((acc, s) => 
                         acc + (s.type === 'delay' ? (s.delayMs || 0) : 2000), 0) || 0;
                       
+                      // Drag and drop indicators
+                      const showFlowDropBefore = flowDropIndicator?.index === idx && flowDropIndicator?.position === 'before' && draggedFlow?.index !== idx;
+                      const showFlowDropAfter = flowDropIndicator?.index === idx && flowDropIndicator?.position === 'after' && draggedFlow?.index !== idx;
+                      
                       return (
                         <div
                           key={`flow-${flow.name}-${idx}`}
-                          className={`${styles.smartFlowCard} ${showInvalidState ? styles.smartFlowCardInvalid : ''} ${isThisFlowExecuting ? styles.smartFlowCardExecuting : ''} ${isThisFlowCompleted ? styles.smartFlowCardCompleted : ''} ${isThisFlowStopped ? styles.smartFlowCardStopped : ''}`}
+                          className={`${styles.smartFlowCard} ${showInvalidState ? styles.smartFlowCardInvalid : ''} ${isThisFlowExecuting ? styles.smartFlowCardExecuting : ''} ${isThisFlowCompleted ? styles.smartFlowCardCompleted : ''} ${isThisFlowStopped ? styles.smartFlowCardStopped : ''} ${showFlowDropBefore ? styles.smartFlowCardDropBefore : ''} ${showFlowDropAfter ? styles.smartFlowCardDropAfter : ''}`}
+                          draggable={!isThisFlowExecuting}
+                          onDragStart={(e) => handleFlowDragStart(e, idx, flow)}
+                          onDragEnd={handleFlowDragEnd}
+                          onDragOver={(e) => handleFlowDragOver(e, idx)}
+                          onDragLeave={handleFlowDragLeave}
+                          onDrop={handleFlowDrop}
                           onContextMenu={(e) => !isThisFlowExecuting && handleFlowContextMenu(e, effectiveActiveZone!, idx, flow.name)}
                         >
                           <div className={styles.smartFlowCardHeader}>
