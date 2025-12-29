@@ -3,7 +3,9 @@ import {
   getAllProfiles,
   createProfile,
   getDefaultProfileId,
+  DEFAULT_SECTION_ORDER,
 } from "@/server/db";
+import type { DashboardSection } from "@/server/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +52,9 @@ export async function GET() {
 interface CreateProfileBody {
   name?: string;
   ip_ranges?: string[];
+  favorites?: Record<string, Record<string, boolean>>;
+  smart_switches?: Record<string, unknown>;
+  section_order?: DashboardSection[];
 }
 
 /**
@@ -69,7 +74,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, ip_ranges } = body;
+    const { name, ip_ranges, favorites, smart_switches, section_order } = body;
 
     // Validate name is provided and not empty
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -110,10 +115,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate section_order if provided
+    if (section_order !== undefined) {
+      if (!Array.isArray(section_order)) {
+        return NextResponse.json(
+          { error: "section_order must be an array" },
+          { status: 400 }
+        );
+      }
+
+      const validSections = new Set(DEFAULT_SECTION_ORDER);
+      const seenSections = new Set<string>();
+      
+      for (const section of section_order) {
+        if (!validSections.has(section)) {
+          return NextResponse.json(
+            { error: `Invalid section: ${section}. Valid sections: ${DEFAULT_SECTION_ORDER.join(", ")}` },
+            { status: 400 }
+          );
+        }
+        if (seenSections.has(section)) {
+          return NextResponse.json(
+            { error: `Duplicate section: ${section}` },
+            { status: 400 }
+          );
+        }
+        seenSections.add(section);
+      }
+
+      if (section_order.length !== DEFAULT_SECTION_ORDER.length) {
+        return NextResponse.json(
+          { error: `section_order must contain all sections: ${DEFAULT_SECTION_ORDER.join(", ")}` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create the profile
     const profile = await createProfile({
       name: trimmedName,
       ip_ranges: ip_ranges ?? [],
+      favorites: favorites ?? {},
+      smart_switches: smart_switches ?? {},
+      section_order: section_order ?? [...DEFAULT_SECTION_ORDER],
     });
 
     console.log(`[API] POST /api/profiles - Created profile: ${profile.name} (id: ${profile.id})`);

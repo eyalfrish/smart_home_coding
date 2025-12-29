@@ -6,6 +6,7 @@ import {
   CreateProfileData,
   UpdateProfileData,
   CURRENT_SCHEMA_VERSION,
+  DEFAULT_SECTION_ORDER,
 } from './types';
 
 // =============================================================================
@@ -64,19 +65,15 @@ async function ensureDataDir(): Promise<void> {
 function migrateDatabase(db: ProfilesDatabase): ProfilesDatabase {
   let currentVersion = db.version ?? 0;
   
-  // No migrations needed yet - this is v1
-  // Future migrations will be added here:
-  
-  // MIGRATION_HOOK: Add migrations here when schema changes
-  // Example for v2:
-  // if (currentVersion < 2) {
-  //   console.log('[ProfilesDB] Migrating from v1 to v2...');
-  //   db.profiles = db.profiles.map(profile => ({
-  //     ...profile,
-  //     new_field: 'default_value', // Add new field with default
-  //   }));
-  //   currentVersion = 2;
-  // }
+  // Migration v1 -> v2: Add section_order field
+  if (currentVersion < 2) {
+    console.log('[ProfilesDB] Migrating from v1 to v2: adding section_order...');
+    db.profiles = db.profiles.map(profile => ({
+      ...profile,
+      section_order: [...DEFAULT_SECTION_ORDER], // Add default section order
+    }));
+    currentVersion = 2;
+  }
   
   // Ensure next_id exists (added in v1, but handle old files)
   if (db.next_id === undefined) {
@@ -105,6 +102,7 @@ function migrateDatabase(db: ProfilesDatabase): ProfilesDatabase {
     ip_ranges: profile.ip_ranges ?? [],
     favorites: profile.favorites ?? {},
     smart_switches: profile.smart_switches ?? {},
+    section_order: profile.section_order ?? [...DEFAULT_SECTION_ORDER],
     created_at: profile.created_at ?? new Date().toISOString(),
     updated_at: profile.updated_at ?? new Date().toISOString(),
   }));
@@ -237,6 +235,7 @@ export async function createProfile(data: CreateProfileData): Promise<Profile> {
     ip_ranges: data.ip_ranges ?? [],
     favorites: data.favorites ?? {},
     smart_switches: data.smart_switches ?? {},
+    section_order: data.section_order ?? [...DEFAULT_SECTION_ORDER],
     created_at: now,
     updated_at: now,
   };

@@ -20,9 +20,10 @@ export type {
   ProfilesDatabase,
   CreateProfileData,
   UpdateProfileData,
+  DashboardSection,
 } from './types';
 
-export { CURRENT_SCHEMA_VERSION } from './types';
+export { CURRENT_SCHEMA_VERSION, DEFAULT_SECTION_ORDER } from './types';
 
 // Re-export all helper functions
 export {

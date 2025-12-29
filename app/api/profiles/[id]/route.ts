@@ -4,8 +4,9 @@ import {
   updateProfile,
   deleteProfile,
   getAllProfiles,
+  DEFAULT_SECTION_ORDER,
 } from "@/server/db";
-import type { UpdateProfileData } from "@/server/db";
+import type { UpdateProfileData, DashboardSection } from "@/server/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,6 +75,7 @@ interface UpdateProfileBody {
   ip_ranges?: string[];
   favorites?: Record<string, Record<string, boolean>>;
   smart_switches?: Record<string, unknown>;
+  section_order?: DashboardSection[];
 }
 
 /**
@@ -113,16 +115,17 @@ export async function PUT(
     }
 
     // Validate that at least one field is being updated
-    const { name, ip_ranges, favorites, smart_switches } = body;
+    const { name, ip_ranges, favorites, smart_switches, section_order } = body;
     
     if (
       name === undefined &&
       ip_ranges === undefined &&
       favorites === undefined &&
-      smart_switches === undefined
+      smart_switches === undefined &&
+      section_order === undefined
     ) {
       return NextResponse.json(
-        { error: "No fields to update. Provide at least one of: name, ip_ranges, favorites, smart_switches" },
+        { error: "No fields to update. Provide at least one of: name, ip_ranges, favorites, smart_switches, section_order" },
         { status: 400 }
       );
     }
@@ -196,6 +199,46 @@ export async function PUT(
         );
       }
       updateData.smart_switches = smart_switches;
+    }
+
+    // Add section_order if provided
+    if (section_order !== undefined) {
+      if (!Array.isArray(section_order)) {
+        return NextResponse.json(
+          { error: "section_order must be an array" },
+          { status: 400 }
+        );
+      }
+
+      // Validate that all sections are valid and unique
+      const validSections = new Set(DEFAULT_SECTION_ORDER);
+      const seenSections = new Set<string>();
+      
+      for (const section of section_order) {
+        if (!validSections.has(section)) {
+          return NextResponse.json(
+            { error: `Invalid section: ${section}. Valid sections: ${DEFAULT_SECTION_ORDER.join(", ")}` },
+            { status: 400 }
+          );
+        }
+        if (seenSections.has(section)) {
+          return NextResponse.json(
+            { error: `Duplicate section: ${section}` },
+            { status: 400 }
+          );
+        }
+        seenSections.add(section);
+      }
+
+      // Ensure all sections are present
+      if (section_order.length !== DEFAULT_SECTION_ORDER.length) {
+        return NextResponse.json(
+          { error: `section_order must contain all sections: ${DEFAULT_SECTION_ORDER.join(", ")}` },
+          { status: 400 }
+        );
+      }
+
+      updateData.section_order = section_order;
     }
 
     // Perform update

@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import DiscoveryForm, { type DiscoveryFormValues, type IpRange, type ThoroughSettings, createDefaultRange, validateFormRanges, DEFAULT_THOROUGH_SETTINGS } from "./discovery-form";
 import DiscoveryResults from "./discovery-results";
 import AllPanelsView from "./all-panels-view";
 import BatchOperationsView from "./batch-operations-view";
-import ProfilePicker, { type FullProfile } from "./profile-picker";
+import ProfilePicker, { type FullProfile, type DashboardSection, DEFAULT_SECTION_ORDER } from "./profile-picker";
 import FavoritesSection, { type FavoritesData, type SmartSwitchesData } from "./favorites-section";
 import styles from "./discovery-dashboard.module.css";
 import type {
@@ -83,6 +83,13 @@ export default function DiscoveryDashboard() {
   
   // Selected profile (full profile data for favorites section)
   const [selectedProfile, setSelectedProfile] = useState<FullProfile | null>(null);
+  
+  // Section order for drag-and-drop reordering
+  const [sectionOrder, setSectionOrder] = useState<DashboardSection[]>([...DEFAULT_SECTION_ORDER]);
+  
+  // Drag state
+  const [draggedSection, setDraggedSection] = useState<DashboardSection | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<{ section: DashboardSection; position: 'before' | 'after' } | null>(null);
   
   // Track if registry has been reset
   const [registryReady, setRegistryReady] = useState(false);
@@ -547,6 +554,10 @@ export default function DiscoveryDashboard() {
       ...prev,
       ranges,
     }));
+    // Load section order from profile
+    if (fullProfile.section_order && fullProfile.section_order.length === DEFAULT_SECTION_ORDER.length) {
+      setSectionOrder(fullProfile.section_order);
+    }
     // Collapse IP ranges section after loading profile
     setIsIpRangesExpanded(false);
   }, []);
@@ -560,6 +571,8 @@ export default function DiscoveryDashboard() {
     setPanelInfoMap({});
     setSelectedPanelIps(new Set());
     setDiscoveryCompleted(false);
+    // Reset section order to default
+    setSectionOrder([...DEFAULT_SECTION_ORDER]);
   }, []);
 
   // Handle showing toast notifications
@@ -684,6 +697,102 @@ export default function DiscoveryDashboard() {
     setSelectedProfile(prev => prev ? { ...prev, smart_switches: smartSwitches } : null);
   }, []);
 
+  // =============================================================================
+  // Drag and Drop Handlers for Section Reordering
+  // =============================================================================
+
+  const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, section: DashboardSection) => {
+    setDraggedSection(section);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', section);
+    
+    // Create custom drag image
+    const dragTarget = e.currentTarget;
+    if (dragTarget) {
+      // Use a timeout to apply dragging styles after the drag image is captured
+      setTimeout(() => {
+        dragTarget.classList.add(styles.dragging);
+      }, 0);
+    }
+  }, []);
+
+  const handleDragEnd = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    setDraggedSection(null);
+    setDropIndicator(null);
+    e.currentTarget.classList.remove(styles.dragging);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>, section: DashboardSection) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    if (!draggedSection || draggedSection === section) return;
+    
+    // Determine if dropping before or after based on mouse Y position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const position: 'before' | 'after' = e.clientY < midY ? 'before' : 'after';
+    
+    setDropIndicator({ section, position });
+  }, [draggedSection]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    // Only clear if we're leaving the section entirely
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!e.currentTarget.contains(relatedTarget)) {
+      setDropIndicator(null);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>, targetSection: DashboardSection) => {
+    e.preventDefault();
+    
+    if (!draggedSection || !dropIndicator || draggedSection === targetSection) {
+      setDropIndicator(null);
+      setDraggedSection(null);
+      return;
+    }
+
+    setSectionOrder(prev => {
+      const newOrder = [...prev];
+      const draggedIndex = newOrder.indexOf(draggedSection);
+      let targetIndex = newOrder.indexOf(targetSection);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+      
+      // Adjust target index based on position
+      if (dropIndicator.position === 'after') {
+        targetIndex += 1;
+      }
+      
+      // Adjust for removal of dragged item
+      if (draggedIndex < targetIndex) {
+        targetIndex -= 1;
+      }
+      
+      // If no actual change, return original
+      if (draggedIndex === targetIndex) return prev;
+      
+      // Remove from old position and insert at new position
+      const [removed] = newOrder.splice(draggedIndex, 1);
+      newOrder.splice(targetIndex, 0, removed);
+      
+      console.log('[Dashboard] Section order changed:', newOrder);
+      return newOrder;
+    });
+
+    setDropIndicator(null);
+    setDraggedSection(null);
+  }, [draggedSection, dropIndicator]);
+
+  // Section labels for display
+  const sectionLabels: Record<DashboardSection, string> = {
+    'profile': '👤 Profile',
+    'ip-ranges': '🌐 IP Ranges',
+    'discovery': '🔍 Panel Discovery',
+    'favorites': '⭐ Favorites',
+  };
+
   const panelResults = response?.results ?? [];
 
   // Get list of Cubixx panel IPs for selection purposes
@@ -729,39 +838,76 @@ export default function DiscoveryDashboard() {
         />
       ) : (
         <>
-          {/* Profile Picker - at the very top */}
-          <ProfilePicker
-            currentRanges={formValues.ranges}
-            currentFavorites={selectedProfile?.favorites || {}}
-            currentSmartSwitches={selectedProfile?.smart_switches || {}}
-            onProfileSelect={handleProfileSelect}
-            onTriggerDiscovery={handleTriggerDiscoveryFromProfile}
-            onProfileClear={handleProfileClear}
-            onShowToast={handleShowToast}
-            isLoading={isLoading}
-            disabled={isLoading}
-          />
+          {/* Render sections in the configured order */}
+          {sectionOrder.map((section) => {
+            const isDragging = draggedSection === section;
+            const showDropBefore = dropIndicator?.section === section && dropIndicator?.position === 'before' && draggedSection !== section;
+            const showDropAfter = dropIndicator?.section === section && dropIndicator?.position === 'after' && draggedSection !== section;
+            
+            // Draggable wrapper for each section
+            const wrapSection = (content: React.ReactNode, sectionId: DashboardSection) => (
+              <div
+                key={sectionId}
+                className={`${styles.draggableSection} ${isDragging ? styles.dragging : ''} ${showDropBefore ? styles.draggableSectionDropBefore : ''} ${showDropAfter ? styles.draggableSectionDropAfter : ''}`}
+                draggable={!isLoading}
+                onDragStart={(e) => handleDragStart(e, sectionId)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, sectionId)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, sectionId)}
+              >
+                {/* Drag handle */}
+                <div className={styles.dragHandle} title="Drag to reorder sections">
+                  <span className={styles.dragHandleIcon}>⋮⋮</span>
+                </div>
+                <div className={styles.draggableSectionContent}>
+                  {content}
+                </div>
+              </div>
+            );
+            
+            switch (section) {
+              case 'profile':
+                return wrapSection(
+                  <ProfilePicker
+                    currentRanges={formValues.ranges}
+                    currentFavorites={selectedProfile?.favorites || {}}
+                    currentSmartSwitches={selectedProfile?.smart_switches || {}}
+                    currentSectionOrder={sectionOrder}
+                    onProfileSelect={handleProfileSelect}
+                    onTriggerDiscovery={handleTriggerDiscoveryFromProfile}
+                    onProfileClear={handleProfileClear}
+                    onShowToast={handleShowToast}
+                    isLoading={isLoading}
+                    disabled={isLoading}
+                  />,
+                  section
+                );
 
-          {/* IP Ranges Form - Collapsible */}
-          <DiscoveryForm
-            values={formValues}
-            disabled={isLoading}
-            isLoading={isLoading}
-            onChange={setFormValues}
-            onSubmit={handleFormSubmit}
-            selectedCount={selectedPanelIps.size}
-            onBatchOperationsClick={handleBatchOperationsClick}
-            hasResults={hasResults}
-            onExportClick={handleExportToExcel}
-            hideActions={true}
-            hideThoroughMode={true}
-            collapsed={!isIpRangesExpanded}
-            onExpand={() => setIsIpRangesExpanded(true)}
-            onCollapse={() => setIsIpRangesExpanded(false)}
-          />
+              case 'ip-ranges':
+                return wrapSection(
+                  <DiscoveryForm
+                    values={formValues}
+                    disabled={isLoading}
+                    isLoading={isLoading}
+                    onChange={setFormValues}
+                    onSubmit={handleFormSubmit}
+                    selectedCount={selectedPanelIps.size}
+                    onBatchOperationsClick={handleBatchOperationsClick}
+                    hasResults={hasResults}
+                    onExportClick={handleExportToExcel}
+                    hideActions={true}
+                    hideThoroughMode={true}
+                    collapsed={!isIpRangesExpanded}
+                    onExpand={() => setIsIpRangesExpanded(true)}
+                    onCollapse={() => setIsIpRangesExpanded(false)}
+                  />,
+                  section
+                );
 
-          {/* Panel Discovery Section - Collapsible */}
-          <div className={`${styles.collapsibleSection} ${isPanelDiscoveryExpanded ? styles.collapsibleSectionExpanded : ""}`}>
+              case 'discovery':
+                return wrapSection(
+                  <div className={`${styles.collapsibleSection} ${isPanelDiscoveryExpanded ? styles.collapsibleSectionExpanded : ""}`}>
             {/* Header - always visible, entire header is clickable */}
             <div 
               className={styles.collapsibleSectionHeader}
@@ -1180,24 +1326,34 @@ export default function DiscoveryDashboard() {
           />
               )}
             </div>
-          </div>
+          </div>,
+                  section
+                );
 
-          {/* Favorite Switches Section */}
-          <FavoritesSection
-            profile={selectedProfile ? {
-              id: selectedProfile.id,
-              name: selectedProfile.name,
-              favorites: selectedProfile.favorites,
-              smart_switches: selectedProfile.smart_switches,
-            } : null}
-            discoveredPanelIps={new Set(discoveredPanelIps)}
-            isLoading={isLoading}
-            discoveryCompleted={discoveryCompleted}
-            livePanelStates={panelStates}
-            discoveredPanels={response?.results || []}
-            onFavoritesUpdate={handleFavoritesUpdate}
-            onSmartSwitchesUpdate={handleSmartSwitchesUpdate}
-          />
+              case 'favorites':
+                return wrapSection(
+                  <FavoritesSection
+                    profile={selectedProfile ? {
+                      id: selectedProfile.id,
+                      name: selectedProfile.name,
+                      favorites: selectedProfile.favorites,
+                      smart_switches: selectedProfile.smart_switches,
+                    } : null}
+                    discoveredPanelIps={new Set(discoveredPanelIps)}
+                    isLoading={isLoading}
+                    discoveryCompleted={discoveryCompleted}
+                    livePanelStates={panelStates}
+                    discoveredPanels={response?.results || []}
+                    onFavoritesUpdate={handleFavoritesUpdate}
+                    onSmartSwitchesUpdate={handleSmartSwitchesUpdate}
+                  />,
+                  section
+                );
+
+              default:
+                return null;
+            }
+          })}
         </>
       )}
       
