@@ -3,7 +3,7 @@
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
-  padding: 2rem;
+  padding: 1.5rem 2rem;
 }
 
 .header {
@@ -11,40 +11,18 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-}
-
-.headerLeft {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.appIcon {
-  font-size: 1.5rem;
+  max-width: 1600px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .appTitle {
   font-weight: 700;
-  font-size: 1.125rem;
+  font-size: 1.35rem;
   color: var(--foreground);
-  display: none;
-}
-
-.hero {
-  max-width: 720px;
-  margin: 0 auto 2rem;
-  text-align: center;
-}
-
-.hero h1 {
-  margin-bottom: 0.75rem;
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  color: var(--foreground);
-}
-
-.hero p {
   margin: 0;
-  color: var(--muted);
+  letter-spacing: -0.02em;
 }
 
 .content {
@@ -69,40 +47,14 @@
     z-index: 100;
     background: var(--card);
     border-bottom: 1px solid var(--border);
-    padding: var(--mobile-spacing, 16px);
+    padding: 12px var(--mobile-spacing, 16px);
     margin-bottom: 0;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
   
-  .headerLeft {
-    display: flex;
-  }
-  
-  .appIcon {
-    font-size: 1.25rem;
-  }
-  
   .appTitle {
-    display: block;
     font-size: 1.1rem;
-  }
-  
-  .hero {
-    padding: 1.25rem var(--mobile-spacing, 16px);
-    margin-bottom: 0;
-    text-align: left;
-    background: linear-gradient(180deg, var(--surface) 0%, transparent 100%);
-  }
-  
-  .hero h1 {
-    font-size: 1.5rem;
-    margin-bottom: 0.35rem;
-  }
-  
-  .hero p {
-    font-size: 0.85rem;
-    display: none; /* Hide description on mobile for cleaner look */
   }
   
   .content {
@@ -112,18 +64,7 @@
 
 /* Small phones */
 @media (max-width: 380px) {
-  .hero h1 {
-    font-size: 1.35rem;
-  }
-  
   .appTitle {
     font-size: 1rem;
-  }
-}
-
-/* Hide hero completely on very small screens */
-@media (max-height: 600px) and (max-width: 768px) {
-  .hero {
-    display: none;
   }
 }
