@@ -5018,7 +5018,7 @@
   color: #fff;
 }
 
-/* Purple variant for flows */
+/* Purple variant for actions */
 .favActionButton[data-variant="purple"] {
   background: transparent;
   border-color: #a855f7;
@@ -5053,7 +5053,7 @@
   border-top: 1px solid var(--border);
 }
 
-.favoritesSummaryZone {
+.favoritesSummaryGroup {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -5064,12 +5064,12 @@
   font-size: 0.8rem;
 }
 
-.favoritesSummaryZoneName {
+.favoritesSummaryGroupName {
   color: var(--foreground);
   font-weight: 500;
 }
 
-.favoritesSummaryZoneCount {
+.favoritesSummaryGroupCount {
   color: var(--accent);
   font-weight: 700;
   background: var(--badge-accent-bg);
@@ -5096,7 +5096,7 @@
   border-top: 1px solid var(--border);
 }
 
-.favoritesCollapsedZone {
+.favoritesCollapsedGroup {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -5106,7 +5106,7 @@
   padding: 0.65rem 0.75rem;
 }
 
-.favoritesCollapsedZoneName {
+.favoritesCollapsedGroupName {
   font-size: 1.05rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -5161,14 +5161,14 @@
   box-shadow: 0 0 8px var(--light-on-shadow);
 }
 
-/* Flow button - purple style like table doorButton */
-.favoritesCollapsedButtonFlow {
+/* Action button - purple style like table doorButton */
+.favoritesCollapsedButtonAction {
   background: rgba(168, 85, 247, 0.12);
   border: 1px solid rgba(168, 85, 247, 0.3);
   color: #9333ea;
 }
 
-.favoritesCollapsedButtonFlow:hover:not(:disabled) {
+.favoritesCollapsedButtonAction:hover:not(:disabled) {
   background: rgba(168, 85, 247, 0.25);
   transform: scale(1.05);
   box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
@@ -5294,9 +5294,9 @@
 }
 
 /* ===========================================
-   Zone Navigation Row
+   Group Navigation Row
    =========================================== */
-.favZoneNavRow {
+.favGroupNavRow {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -5306,7 +5306,7 @@
   flex-wrap: wrap;
 }
 
-.favoritesZoneTabs {
+.favoritesGroupTabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
@@ -5315,7 +5315,7 @@
   align-items: center;
 }
 
-.favoritesZoneTab {
+.favoritesGroupTab {
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: 10px;
@@ -5330,19 +5330,19 @@
   gap: 0.5rem;
 }
 
-.favoritesZoneTab:hover {
+.favoritesGroupTab:hover {
   background: var(--card-hover);
   border-color: var(--accent);
   color: var(--foreground);
 }
 
-.favoritesZoneTabActive {
+.favoritesGroupTabActive {
   background: var(--badge-accent-bg);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.favoritesZoneTabCount {
+.favoritesGroupTabCount {
   font-size: 0.7rem;
   font-weight: 700;
   background: var(--card);
@@ -5351,15 +5351,15 @@
   color: var(--muted);
 }
 
-.favoritesZoneTabActive .favoritesZoneTabCount {
+.favoritesGroupTabActive .favoritesGroupTabCount {
   background: var(--accent);
   color: #fff;
 }
 
 /* ===========================================
-   Zone Content Wrapper - Two Sub-Areas
+   Group Content Wrapper - Two Sub-Areas
    =========================================== */
-.favZoneContentWrapper {
+.favGroupContentWrapper {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -5379,7 +5379,7 @@
   padding: 1rem 1.25rem 1.25rem;
 }
 
-.favSubSectionFlows {
+.favSubSectionActions {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.03) 0%, rgba(139, 92, 246, 0.06) 100%);
   border-color: rgba(168, 85, 247, 0.2);
 }
@@ -5559,8 +5559,8 @@
   font-weight: 600;
 }
 
-/* Zone tab drag handle */
-.zoneTabDragHandle {
+/* Group tab drag handle */
+.groupTabDragHandle {
   font-size: 0.75rem;
   color: var(--muted);
   opacity: 0.5;
@@ -5570,33 +5570,33 @@
   transition: opacity 0.15s ease;
 }
 
-.favoritesZoneTab:hover .zoneTabDragHandle {
+.favoritesGroupTab:hover .groupTabDragHandle {
   opacity: 0.8;
 }
 
-.zoneTabDragHandle:active {
+.groupTabDragHandle:active {
   cursor: grabbing;
 }
 
-/* Zone tab dragging state */
-.zoneTabDragging {
+/* Group tab dragging state */
+.groupTabDragging {
   opacity: 0.5;
   transform: scale(0.95);
 }
 
-/* Zone tab drop indicators */
-.zoneTabDropBefore {
+/* Group tab drop indicators */
+.groupTabDropBefore {
   box-shadow: -3px 0 0 0 var(--accent);
   margin-left: 6px;
 }
 
-.zoneTabDropAfter {
+.groupTabDropAfter {
   box-shadow: 3px 0 0 0 var(--accent);
   margin-right: 6px;
 }
 
-/* Zone tab delete button */
-.favoritesZoneTabDelete {
+/* Group tab delete button */
+.favoritesGroupTabDelete {
   display: inline-block;
   margin-left: 0.35rem;
   font-size: 0.7rem;
@@ -5607,24 +5607,24 @@
   transition: all 0.15s ease;
 }
 
-.favoritesZoneTabDelete:hover {
+.favoritesGroupTabDelete:hover {
   color: var(--warning);
 }
 
-/* Add Zone tab style */
-.favoritesZoneTabAdd {
+/* Add Group tab style */
+.favoritesGroupTabAdd {
   border-style: dashed;
   color: var(--accent);
   background: transparent;
 }
 
-.favoritesZoneTabAdd:hover {
+.favoritesGroupTabAdd:hover {
   background: var(--badge-accent-bg);
   border-style: solid;
 }
 
-/* New zone input inline (styled like a zone tab) */
-.newZoneInputInline {
+/* New group input inline (styled like a group tab) */
+.newGroupInputInline {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -5634,7 +5634,7 @@
   border-radius: 999px;
 }
 
-.newZoneInputField {
+.newGroupInputField {
   border: none;
   background: transparent;
   color: var(--foreground);
@@ -5643,12 +5643,12 @@
   outline: none;
 }
 
-.newZoneInputField::placeholder {
+.newGroupInputField::placeholder {
   color: var(--muted);
 }
 
-.newZoneInputConfirm,
-.newZoneInputCancel {
+.newGroupInputConfirm,
+.newGroupInputCancel {
   font-size: 0.8rem;
   cursor: pointer;
   padding: 0.1rem 0.2rem;
@@ -5656,19 +5656,19 @@
   transition: all 0.15s ease;
 }
 
-.newZoneInputConfirm {
+.newGroupInputConfirm {
   color: var(--panel);
 }
 
-.newZoneInputConfirm:hover {
+.newGroupInputConfirm:hover {
   color: var(--accent);
 }
 
-.newZoneInputCancel {
+.newGroupInputCancel {
   color: var(--muted);
 }
 
-.newZoneInputCancel:hover {
+.newGroupInputCancel:hover {
   color: var(--warning);
 }
 
@@ -5904,8 +5904,8 @@
   font-weight: 600;
 }
 
-/* Flow delete button */
-.smartFlowDelete {
+/* Action delete button */
+.smartActionDelete {
   margin-left: auto;
   background: transparent;
   border: none;
@@ -5916,12 +5916,12 @@
   padding: 0.25rem;
 }
 
-.smartFlowDelete:hover {
+.smartActionDelete:hover {
   color: var(--warning);
 }
 
 /* More options button (mobile only) */
-.smartFlowMore {
+.smartActionMore {
   display: none;
   background: transparent;
   border: none;
@@ -5933,7 +5933,7 @@
   line-height: 1;
 }
 
-.smartFlowMore:hover {
+.smartActionMore:hover {
   color: var(--foreground);
 }
 
@@ -5944,7 +5944,7 @@
 
 @media (max-width: 768px) {
   /* Show more button on mobile, hide delete button */
-  .smartFlowMore {
+  .smartActionMore {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -5952,7 +5952,7 @@
     min-height: 32px;
   }
   
-  .smartFlowDelete {
+  .smartActionDelete {
     display: none;
   }
   
@@ -5961,8 +5961,8 @@
   }
 }
 
-/* Flow Creator Card */
-.flowCreatorCard {
+/* Action Creator Card */
+.actionCreatorCard {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -5973,25 +5973,25 @@
   min-width: 180px;
 }
 
-.flowCreatorHeader {
+.actionCreatorHeader {
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.flowCreatorIcon {
+.actionCreatorIcon {
   font-size: 1rem;
   filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
 }
 
-.flowCreatorTitle {
+.actionCreatorTitle {
   flex: 1;
   font-size: 0.85rem;
   font-weight: 700;
   color: #a855f7;
 }
 
-.flowCreatorClose {
+.actionCreatorClose {
   background: transparent;
   border: none;
   font-size: 0.8rem;
@@ -6003,12 +6003,12 @@
   line-height: 1;
 }
 
-.flowCreatorClose:hover {
+.actionCreatorClose:hover {
   color: var(--warning);
   background: rgba(239, 68, 68, 0.1);
 }
 
-.flowCreatorInput {
+.actionCreatorInput {
   width: 100%;
   padding: 0.55rem 0.7rem;
   border: 1px solid rgba(168, 85, 247, 0.5);
@@ -6019,18 +6019,18 @@
   box-sizing: border-box;
 }
 
-.flowCreatorInput:focus {
+.actionCreatorInput:focus {
   outline: none;
   border-color: #a855f7;
   box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
 }
 
-.flowCreatorInput::placeholder {
+.actionCreatorInput::placeholder {
   color: var(--muted);
   opacity: 0.7;
 }
 
-.flowCreatorSubmit {
+.actionCreatorSubmit {
   width: 100%;
   padding: 0.6rem 0.9rem;
   border: none;
@@ -6047,23 +6047,23 @@
   gap: 0.35rem;
 }
 
-.flowCreatorSubmit:hover:not(:disabled) {
+.actionCreatorSubmit:hover:not(:disabled) {
   background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
   box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35);
   transform: translateY(-1px);
 }
 
-.flowCreatorSubmit:active:not(:disabled) {
+.actionCreatorSubmit:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.flowCreatorSubmit:disabled {
+.actionCreatorSubmit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* Legacy inline creator (keeping for reference) */
-.flowCreatorInline {
+.actionCreatorInline {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -6073,13 +6073,13 @@
   border-radius: 12px;
 }
 
-.flowCreatorButtons {
+.actionCreatorButtons {
   display: flex;
   gap: 0.35rem;
 }
 
-.flowCreatorConfirm,
-.flowCreatorCancel {
+.actionCreatorConfirm,
+.actionCreatorCancel {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6093,26 +6093,26 @@
   transition: all 0.15s ease;
 }
 
-.flowCreatorConfirm {
+.actionCreatorConfirm {
   color: #a855f7;
 }
 
-.flowCreatorConfirm:hover:not(:disabled) {
+.actionCreatorConfirm:hover:not(:disabled) {
   background: #a855f7;
   border-color: #a855f7;
   color: #fff;
 }
 
-.flowCreatorConfirm:disabled {
+.actionCreatorConfirm:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.flowCreatorCancel {
+.actionCreatorCancel {
   color: var(--muted);
 }
 
-.flowCreatorCancel:hover {
+.actionCreatorCancel:hover {
   background: var(--badge-warning-bg);
   border-color: var(--warning);
   color: var(--warning);
@@ -6423,16 +6423,16 @@
 }
 
 /* ===========================================
-   Smart Flows Grid & Cards
+   Smart Actions Grid & Cards
    =========================================== */
 
-.smartFlowsGrid {
+.smartActionsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 0.75rem;
 }
 
-.smartFlowCard {
+.smartActionCard {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -6445,28 +6445,28 @@
   cursor: grab;
 }
 
-.smartFlowCard:active {
+.smartActionCard:active {
   cursor: grabbing;
 }
 
-.smartFlowCard:hover {
+.smartActionCard:hover {
   border-color: #a855f7;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(168, 85, 247, 0.2);
 }
 
-.smartFlowCardHeader {
+.smartActionCardHeader {
   display: flex;
   align-items: center;
   gap: 0.45rem;
 }
 
-.smartFlowIcon {
+.smartActionIcon {
   font-size: 1.2rem;
   filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
 }
 
-.smartFlowName {
+.smartActionName {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--foreground);
@@ -6476,7 +6476,7 @@
   white-space: nowrap;
 }
 
-.smartFlowMeta {
+.smartActionMeta {
   font-size: 0.72rem;
   color: var(--muted);
   display: flex;
@@ -6484,7 +6484,7 @@
   gap: 0.5rem;
 }
 
-.smartFlowDuration {
+.smartActionDuration {
   background: rgba(168, 85, 247, 0.15);
   color: #a855f7;
   padding: 0.12rem 0.35rem;
@@ -6493,7 +6493,7 @@
   font-size: 0.68rem;
 }
 
-.smartFlowRunButton {
+.smartActionRunButton {
   margin-top: auto;
   background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%);
   color: #fff;
@@ -6510,17 +6510,17 @@
   gap: 0.35rem;
 }
 
-.smartFlowRunButton:hover:not(:disabled) {
+.smartActionRunButton:hover:not(:disabled) {
   background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
   transform: scale(1.02);
   box-shadow: 0 4px 15px rgba(168, 85, 247, 0.35);
 }
 
-.smartFlowRunButton:active:not(:disabled) {
+.smartActionRunButton:active:not(:disabled) {
   transform: scale(0.98);
 }
 
-.smartFlowRunButton:disabled {
+.smartActionRunButton:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -6629,16 +6629,16 @@
 }
 
 /* ===========================================
-   Invalid Smart Flow State
+   Invalid Smart Action State
    =========================================== */
 
-.smartFlowCardInvalid {
+.smartActionCardInvalid {
   border-color: rgba(239, 68, 68, 0.4) !important;
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(220, 38, 38, 0.1) 100%) !important;
   position: relative;
 }
 
-.smartFlowCardInvalid::before {
+.smartActionCardInvalid::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -6653,13 +6653,13 @@
   pointer-events: none;
 }
 
-.smartFlowCardInvalid:hover {
+.smartActionCardInvalid:hover {
   transform: none !important;
   box-shadow: none !important;
   border-color: rgba(239, 68, 68, 0.5) !important;
 }
 
-.smartFlowInvalidCount {
+.smartActionInvalidCount {
   background: rgba(239, 68, 68, 0.15);
   color: #dc2626;
   padding: 0.12rem 0.4rem;
@@ -6668,14 +6668,14 @@
   font-size: 0.68rem;
 }
 
-.smartFlowInvalidSteps {
+.smartActionInvalidSteps {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
   margin-top: 0.25rem;
 }
 
-.smartFlowInvalidStep {
+.smartActionInvalidStep {
   font-size: 0.62rem;
   color: #dc2626;
   background: rgba(239, 68, 68, 0.1);
@@ -6684,21 +6684,21 @@
   font-family: var(--font-mono, monospace);
 }
 
-.smartFlowRunButtonDisabled {
+.smartActionRunButtonDisabled {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.6) 0%, rgba(220, 38, 38, 0.7) 100%) !important;
   cursor: not-allowed !important;
 }
 
-.smartFlowRunButtonDisabled:hover {
+.smartActionRunButtonDisabled:hover {
   transform: none !important;
   box-shadow: none !important;
 }
 
 /* ===========================================
-   Smart Flow Edit Button
+   Smart Action Edit Button
    =========================================== */
 
-.smartFlowEdit {
+.smartActionEdit {
   background: transparent;
   border: none;
   font-size: 0.85rem;
@@ -6709,22 +6709,22 @@
   margin-left: auto;
 }
 
-.smartFlowEdit:hover {
+.smartActionEdit:hover {
   opacity: 1;
 }
 
 /* ===========================================
-   Smart Flow Execution States
+   Smart Action Execution States
    =========================================== */
 
-.smartFlowCardExecuting {
+.smartActionCardExecuting {
   border-color: #a855f7 !important;
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(139, 92, 246, 0.12) 100%) !important;
-  animation: flowPulse 2s ease-in-out infinite;
+  animation: actionPulse 2s ease-in-out infinite;
   cursor: default;
 }
 
-@keyframes flowPulse {
+@keyframes actionPulse {
   0%, 100% {
     box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
   }
@@ -6733,52 +6733,52 @@
   }
 }
 
-.smartFlowCardCompleted {
+.smartActionCardCompleted {
   border-color: #22c55e !important;
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(22, 163, 74, 0.12) 100%) !important;
 }
 
-.smartFlowCardStopped {
+.smartActionCardStopped {
   border-color: #f59e0b !important;
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%) !important;
 }
 
-/* Flow Card Drag & Drop Indicators */
-.smartFlowCardDropBefore {
+/* Action Card Drag & Drop Indicators */
+.smartActionCardDropBefore {
   border-left: 3px solid var(--accent) !important;
   margin-left: -3px;
   animation: dropIndicatorPulse 0.8s ease-in-out infinite;
 }
 
-.smartFlowCardDropAfter {
+.smartActionCardDropAfter {
   border-right: 3px solid var(--accent) !important;
   margin-right: -3px;
   animation: dropIndicatorPulse 0.8s ease-in-out infinite;
 }
 
-/* Flow Progress Bar */
-.smartFlowProgress {
+/* Action Progress Bar */
+.smartActionProgress {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   margin: 0.3rem 0;
 }
 
-.smartFlowProgressBar {
+.smartActionProgressBar {
   height: 6px;
   background: rgba(168, 85, 247, 0.15);
   border-radius: 3px;
   overflow: hidden;
 }
 
-.smartFlowProgressFill {
+.smartActionProgressFill {
   height: 100%;
   background: linear-gradient(90deg, #a855f7 0%, #8b5cf6 100%);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 
-.smartFlowProgressText {
+.smartActionProgressText {
   font-size: 0.72rem;
   color: #a855f7;
   display: flex;
@@ -6787,14 +6787,14 @@
   font-weight: 600;
 }
 
-.smartFlowWaiting {
+.smartActionWaiting {
   font-size: 0.68rem;
   color: var(--muted);
   font-weight: 500;
 }
 
 /* Stop Button */
-.smartFlowStopButton {
+.smartActionStopButton {
   margin-top: auto;
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: #fff;
@@ -6811,21 +6811,21 @@
   gap: 0.35rem;
 }
 
-.smartFlowStopButton:hover {
+.smartActionStopButton:hover {
   background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
   transform: scale(1.02);
   box-shadow: 0 4px 15px rgba(245, 158, 11, 0.35);
 }
 
-.smartFlowStopButton:active {
+.smartActionStopButton:active {
   transform: scale(0.98);
 }
 
 /* ===========================================
-   Flow Builder Modal
+   Action Builder Modal
    =========================================== */
 
-.flowBuilderOverlay {
+.actionBuilderOverlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -6837,7 +6837,7 @@
   padding: 1rem;
 }
 
-.flowBuilderModal {
+.actionBuilderModal {
   background: var(--card);
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -6850,7 +6850,7 @@
   overflow: hidden;
 }
 
-.flowBuilderHeader {
+.actionBuilderHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6859,7 +6859,7 @@
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.06) 0%, rgba(139, 92, 246, 0.1) 100%);
 }
 
-.flowBuilderTitle {
+.actionBuilderTitle {
   margin: 0;
   font-size: 1.2rem;
   font-weight: 700;
@@ -6874,13 +6874,13 @@
   white-space: nowrap;
 }
 
-.flowBuilderTitleIcon {
+.actionBuilderTitleIcon {
   font-size: 1.3rem;
   filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.5));
   flex-shrink: 0;
 }
 
-.flowBuilderClose {
+.actionBuilderClose {
   background: transparent;
   border: none;
   font-size: 1.2rem;
@@ -6891,13 +6891,13 @@
   transition: all 0.2s ease;
 }
 
-.flowBuilderClose:hover {
+.actionBuilderClose:hover {
   background: var(--surface);
   color: var(--foreground);
 }
 
-/* Flow Builder Title Editing */
-.flowBuilderTitleEdit {
+/* Action Builder Title Editing */
+.actionBuilderTitleEdit {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -6905,32 +6905,32 @@
   min-width: 0;
 }
 
-.flowBuilderTitleText {
+.actionBuilderTitleText {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.flowBuilderTitleEditHint {
+.actionBuilderTitleEditHint {
   font-size: 0.8rem;
   opacity: 0;
   transition: opacity 0.2s ease;
   flex-shrink: 0;
 }
 
-.flowBuilderTitle:hover .flowBuilderTitleEditHint {
+.actionBuilderTitle:hover .actionBuilderTitleEditHint {
   opacity: 0.6;
 }
 
-.flowBuilderTitle {
+.actionBuilderTitle {
   cursor: pointer;
 }
 
-.flowBuilderTitle:hover {
+.actionBuilderTitle:hover {
   color: #a855f7;
 }
 
-.flowBuilderNameInput {
+.actionBuilderNameInput {
   flex: 1;
   padding: 0.5rem 0.75rem;
   border: 2px solid #a855f7;
@@ -6942,13 +6942,13 @@
   min-width: 100px;
 }
 
-.flowBuilderNameInput:focus {
+.actionBuilderNameInput:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
 }
 
-.flowBuilderNameSave,
-.flowBuilderNameCancel {
+.actionBuilderNameSave,
+.actionBuilderNameCancel {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6962,32 +6962,32 @@
   flex-shrink: 0;
 }
 
-.flowBuilderNameSave {
+.actionBuilderNameSave {
   background: #a855f7;
   color: #fff;
 }
 
-.flowBuilderNameSave:hover:not(:disabled) {
+.actionBuilderNameSave:hover:not(:disabled) {
   background: #9333ea;
 }
 
-.flowBuilderNameSave:disabled {
+.actionBuilderNameSave:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.flowBuilderNameCancel {
+.actionBuilderNameCancel {
   background: var(--surface);
   color: var(--muted);
 }
 
-.flowBuilderNameCancel:hover {
+.actionBuilderNameCancel:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
 }
 
-/* Flow Context Menu */
-.flowContextMenu {
+/* Action Context Menu */
+.actionContextMenu {
   position: fixed;
   z-index: 1100;
   background: var(--card);
@@ -7010,7 +7010,7 @@
   }
 }
 
-.flowContextMenuTitle {
+.actionContextMenuTitle {
   padding: 0.75rem 1rem;
   font-size: 0.8rem;
   font-weight: 700;
@@ -7022,7 +7022,7 @@
   white-space: nowrap;
 }
 
-.flowContextMenuItem {
+.actionContextMenuItem {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -7037,41 +7037,41 @@
   text-align: left;
 }
 
-.flowContextMenuItem:hover {
+.actionContextMenuItem:hover {
   background: var(--surface);
 }
 
-.flowContextMenuItemDanger:hover {
+.actionContextMenuItemDanger:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
 }
 
-.flowContextMenuIcon {
+.actionContextMenuIcon {
   font-size: 1rem;
   width: 1.2rem;
   text-align: center;
 }
 
-.flowBuilderContent {
+.actionBuilderContent {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
 }
 
-/* Flow Timeline */
-.flowTimeline {
+/* Action Timeline */
+.actionTimeline {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.flowTimelineSection {
+.actionTimelineSection {
   display: flex;
   flex-direction: column;
 }
 
 /* Stage Card */
-.flowStageCard {
+.actionStageCard {
   background: var(--surface);
   border: 2px solid var(--border);
   border-radius: 12px;
@@ -7079,7 +7079,7 @@
   position: relative;
 }
 
-.flowStageCard::before {
+.actionStageCard::before {
   content: '';
   position: absolute;
   left: 24px;
@@ -7089,18 +7089,18 @@
   background: linear-gradient(180deg, transparent 0%, var(--border) 100%);
 }
 
-.flowTimelineSection:first-child .flowStageCard::before {
+.actionTimelineSection:first-child .actionStageCard::before {
   display: none;
 }
 
-.flowStageHeader {
+.actionStageHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.75rem;
 }
 
-.flowStageNumber {
+.actionStageNumber {
   font-size: 0.85rem;
   font-weight: 700;
   color: #a855f7;
@@ -7109,7 +7109,7 @@
   border-radius: 6px;
 }
 
-.flowStageRemove {
+.actionStageRemove {
   background: transparent;
   border: none;
   font-size: 0.9rem;
@@ -7120,20 +7120,20 @@
   transition: all 0.2s ease;
 }
 
-.flowStageRemove:hover {
+.actionStageRemove:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
 }
 
 /* Stage Actions */
-.flowStageActions {
+.actionStageActions {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
 
-.flowStageEmpty {
+.actionStageEmpty {
   color: var(--muted);
   font-size: 0.85rem;
   font-style: italic;
@@ -7143,7 +7143,7 @@
   border-radius: 8px;
 }
 
-.flowActionItem {
+.actionActionItem {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -7153,11 +7153,11 @@
   padding: 0.5rem 0.75rem;
 }
 
-.flowActionIcon {
+.actionActionIcon {
   font-size: 1rem;
 }
 
-.flowActionName {
+.actionActionName {
   flex: 1;
   font-size: 0.85rem;
   font-weight: 600;
@@ -7167,7 +7167,7 @@
   white-space: nowrap;
 }
 
-.flowActionSelect {
+.actionActionSelect {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -7177,12 +7177,12 @@
   cursor: pointer;
 }
 
-.flowActionSelect:focus {
+.actionActionSelect:focus {
   outline: none;
   border-color: #a855f7;
 }
 
-.flowActionRemove {
+.actionActionRemove {
   background: transparent;
   border: none;
   font-size: 0.8rem;
@@ -7193,17 +7193,17 @@
   transition: all 0.15s ease;
 }
 
-.flowActionRemove:hover {
+.actionActionRemove:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
 }
 
 /* Add Switch */
-.flowAddSwitch {
+.actionAddSwitch {
   margin-top: 0.5rem;
 }
 
-.flowAddSwitchSelect {
+.actionAddSwitchSelect {
   width: 100%;
   background: var(--card);
   border: 1px dashed var(--border);
@@ -7215,19 +7215,19 @@
   transition: all 0.2s ease;
 }
 
-.flowAddSwitchSelect:hover {
+.actionAddSwitchSelect:hover {
   border-color: #a855f7;
   color: var(--foreground);
 }
 
-.flowAddSwitchSelect:focus {
+.actionAddSwitchSelect:focus {
   outline: none;
   border-color: #a855f7;
   border-style: solid;
 }
 
 /* Scheduling Card */
-.flowSchedulingCard {
+.actionSchedulingCard {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
@@ -7239,7 +7239,7 @@
   position: relative;
 }
 
-.flowSchedulingCard::before {
+.actionSchedulingCard::before {
   content: '';
   position: absolute;
   left: -25px;
@@ -7249,19 +7249,19 @@
   background: linear-gradient(90deg, var(--border) 0%, rgba(59, 130, 246, 0.5) 100%);
 }
 
-.flowSchedulingIcon {
+.actionSchedulingIcon {
   font-size: 1.2rem;
   margin-top: 0.1rem;
 }
 
-.flowSchedulingContent {
+.actionSchedulingContent {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.flowSchedulingTypeSelect {
+.actionSchedulingTypeSelect {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -7273,19 +7273,19 @@
   max-width: 250px;
 }
 
-.flowSchedulingTypeSelect:focus {
+.actionSchedulingTypeSelect:focus {
   outline: none;
   border-color: #3b82f6;
 }
 
-.flowSchedulingDelay {
+.actionSchedulingDelay {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }
 
-.flowSchedulingInput {
+.actionSchedulingInput {
   width: 90px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -7296,24 +7296,24 @@
   text-align: center;
 }
 
-.flowSchedulingInput:focus {
+.actionSchedulingInput:focus {
   outline: none;
   border-color: #3b82f6;
 }
 
-.flowSchedulingUnit {
+.actionSchedulingUnit {
   font-size: 0.8rem;
   color: var(--muted);
   font-weight: 500;
 }
 
-.flowSchedulingPresets {
+.actionSchedulingPresets {
   display: flex;
   gap: 0.35rem;
   margin-left: 0.5rem;
 }
 
-.flowSchedulingPreset {
+.actionSchedulingPreset {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -7324,25 +7324,25 @@
   transition: all 0.15s ease;
 }
 
-.flowSchedulingPreset:hover {
+.actionSchedulingPreset:hover {
   border-color: #3b82f6;
   color: #3b82f6;
 }
 
-.flowSchedulingPresetActive {
+.actionSchedulingPresetActive {
   background: rgba(59, 130, 246, 0.15);
   border-color: #3b82f6;
   color: #3b82f6;
 }
 
-.flowSchedulingInfo {
+.actionSchedulingInfo {
   font-size: 0.8rem;
   color: var(--muted);
   font-style: italic;
 }
 
 /* Add Stage Button */
-.flowAddStage {
+.actionAddStage {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7357,23 +7357,23 @@
   color: var(--muted);
 }
 
-.flowAddStage:hover {
+.actionAddStage:hover {
   border-color: #a855f7;
   color: #a855f7;
   background: rgba(168, 85, 247, 0.05);
 }
 
-.flowAddStageIcon {
+.actionAddStageIcon {
   font-size: 1.1rem;
 }
 
-.flowAddStageText {
+.actionAddStageText {
   font-size: 0.9rem;
   font-weight: 600;
 }
 
 /* Footer */
-.flowBuilderFooter {
+.actionBuilderFooter {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
@@ -7382,7 +7382,7 @@
   background: var(--surface);
 }
 
-.flowBuilderCancel {
+.actionBuilderCancel {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -7394,12 +7394,12 @@
   transition: all 0.2s ease;
 }
 
-.flowBuilderCancel:hover {
+.actionBuilderCancel:hover {
   background: var(--surface);
   color: var(--foreground);
 }
 
-.flowBuilderSave {
+.actionBuilderSave {
   background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%);
   border: none;
   border-radius: 8px;
@@ -7411,26 +7411,26 @@
   transition: all 0.2s ease;
 }
 
-.flowBuilderSave:hover:not(:disabled) {
+.actionBuilderSave:hover:not(:disabled) {
   background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
   box-shadow: 0 4px 15px rgba(168, 85, 247, 0.35);
 }
 
-.flowBuilderSave:disabled {
+.actionBuilderSave:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* ===========================================
-   Flow Builder Mobile
+   Action Builder Mobile
    =========================================== */
 
 @media (max-width: 768px) {
-  .flowBuilderOverlay {
+  .actionBuilderOverlay {
     padding: 0;
   }
 
-  .flowBuilderModal {
+  .actionBuilderModal {
     max-width: 100%;
     max-height: 100vh;
     max-height: 100dvh;
@@ -7438,76 +7438,76 @@
     border: none;
   }
 
-  .flowBuilderHeader {
+  .actionBuilderHeader {
     padding: 1rem;
   }
 
-  .flowBuilderTitle {
+  .actionBuilderTitle {
     font-size: 1.05rem;
   }
 
-  .flowBuilderContent {
+  .actionBuilderContent {
     padding: 1rem;
   }
 
-  .flowStageCard {
+  .actionStageCard {
     padding: 0.85rem;
   }
 
-  .flowActionItem {
+  .actionActionItem {
     padding: 0.45rem 0.6rem;
   }
 
-  .flowActionName {
+  .actionActionName {
     font-size: 0.8rem;
   }
 
-  .flowSchedulingCard {
+  .actionSchedulingCard {
     margin-left: 16px;
     padding: 0.75rem;
   }
 
-  .flowSchedulingPresets {
+  .actionSchedulingPresets {
     width: 100%;
     margin-left: 0;
     margin-top: 0.5rem;
   }
 
-  .flowBuilderFooter {
+  .actionBuilderFooter {
     padding: 0.85rem 1rem;
     gap: 0.5rem;
   }
 
-  .flowBuilderCancel,
-  .flowBuilderSave {
+  .actionBuilderCancel,
+  .actionBuilderSave {
     flex: 1;
     padding: 0.75rem 1rem;
   }
 
-  /* Flow name editing mobile */
-  .flowBuilderTitleEdit {
+  /* Action name editing mobile */
+  .actionBuilderTitleEdit {
     gap: 0.35rem;
   }
 
-  .flowBuilderNameInput {
+  .actionBuilderNameInput {
     font-size: 1rem;
     padding: 0.45rem 0.6rem;
   }
 
-  .flowBuilderNameSave,
-  .flowBuilderNameCancel {
+  .actionBuilderNameSave,
+  .actionBuilderNameCancel {
     width: 36px;
     height: 36px;
     min-width: var(--touch-target-min);
     min-height: var(--touch-target-min);
   }
 
-  .flowBuilderTitleEditHint {
+  .actionBuilderTitleEditHint {
     display: none;
   }
 
-  /* Flow context menu mobile - position from bottom like action sheet */
-  .flowContextMenu {
+  /* Action context menu mobile - position from bottom like action sheet */
+  .actionContextMenu {
     position: fixed;
     left: 50% !important;
     top: auto !important;
@@ -7530,33 +7530,33 @@
     }
   }
 
-  .flowContextMenuTitle {
+  .actionContextMenuTitle {
     padding: 1rem;
     font-size: 0.9rem;
     text-align: center;
   }
 
-  .flowContextMenuItem {
+  .actionContextMenuItem {
     padding: 1rem;
     font-size: 1rem;
     justify-content: center;
     min-height: var(--touch-target-min);
   }
 
-  .flowContextMenuIcon {
+  .actionContextMenuIcon {
     font-size: 1.2rem;
   }
 
   /* Execution progress mobile */
-  .smartFlowProgress {
+  .smartActionProgress {
     gap: 0.3rem;
   }
 
-  .smartFlowProgressText {
+  .smartActionProgressText {
     font-size: 0.68rem;
   }
 
-  .smartFlowWaiting {
+  .smartActionWaiting {
     font-size: 0.62rem;
   }
 }
@@ -7585,20 +7585,20 @@
   background: rgba(239, 68, 68, 0.2);
 }
 
-:root.dark .smartFlowCardInvalid,
-[data-theme="dark"] .smartFlowCardInvalid {
+:root.dark .smartActionCardInvalid,
+[data-theme="dark"] .smartActionCardInvalid {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.15) 100%) !important;
   border-color: rgba(239, 68, 68, 0.5) !important;
 }
 
-:root.dark .smartFlowInvalidCount,
-[data-theme="dark"] .smartFlowInvalidCount {
+:root.dark .smartActionInvalidCount,
+[data-theme="dark"] .smartActionInvalidCount {
   color: #f87171;
   background: rgba(239, 68, 68, 0.2);
 }
 
-:root.dark .smartFlowInvalidStep,
-[data-theme="dark"] .smartFlowInvalidStep {
+:root.dark .smartActionInvalidStep,
+[data-theme="dark"] .smartActionInvalidStep {
   color: #f87171;
   background: rgba(239, 68, 68, 0.15);
 }
@@ -7645,17 +7645,17 @@
     padding: 0.1rem 0.3rem;
   }
 
-  /* Invalid flow steps mobile */
-  .smartFlowInvalidSteps {
+  /* Invalid action steps mobile */
+  .smartActionInvalidSteps {
     gap: 0.2rem;
   }
 
-  .smartFlowInvalidStep {
+  .smartActionInvalidStep {
     font-size: 0.58rem;
     padding: 0.1rem 0.25rem;
   }
 
-  .smartFlowInvalidCount {
+  .smartActionInvalidCount {
     font-size: 0.6rem;
     padding: 0.1rem 0.3rem;
   }
@@ -7682,7 +7682,7 @@
     gap: 0.4rem;
   }
 
-  .favoritesSummaryZone {
+  .favoritesSummaryGroup {
     padding: 0.3rem 0.5rem;
     font-size: 0.75rem;
   }
@@ -7693,12 +7693,12 @@
     gap: 0.6rem;
   }
 
-  .favoritesCollapsedZone {
+  .favoritesCollapsedGroup {
     padding: 0.6rem 0.65rem;
     border-radius: 8px;
   }
 
-  .favoritesCollapsedZoneName {
+  .favoritesCollapsedGroupName {
     font-size: 0.95rem;
     padding-bottom: 0.45rem;
     letter-spacing: 0.08em;
@@ -7741,15 +7741,15 @@
     width: 52px !important;
   }
 
-  /* Zone nav row mobile - keep tabs layout with horizontal scroll */
-  .favZoneNavRow {
+  /* Group nav row mobile - keep tabs layout with horizontal scroll */
+  .favGroupNavRow {
     display: block;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--border);
   }
 
-  .favoritesZoneTabs {
+  .favoritesGroupTabs {
     display: flex;
     flex-wrap: nowrap !important;
     gap: 0.5rem;
@@ -7764,22 +7764,22 @@
     scrollbar-color: var(--accent) var(--surface);
   }
 
-  .favoritesZoneTabs::-webkit-scrollbar {
+  .favoritesGroupTabs::-webkit-scrollbar {
     height: 6px;
     display: block;
   }
 
-  .favoritesZoneTabs::-webkit-scrollbar-track {
+  .favoritesGroupTabs::-webkit-scrollbar-track {
     background: var(--surface);
     border-radius: 3px;
   }
 
-  .favoritesZoneTabs::-webkit-scrollbar-thumb {
+  .favoritesGroupTabs::-webkit-scrollbar-thumb {
     background: var(--accent);
     border-radius: 3px;
   }
 
-  .favoritesZoneTab {
+  .favoritesGroupTab {
     padding: 0.6rem 1rem;
     font-size: 0.95rem;
     white-space: nowrap;
@@ -7789,12 +7789,12 @@
   }
   
   /* Hide drag handle on mobile for cleaner look */
-  .zoneTabDragHandle {
+  .groupTabDragHandle {
     display: none;
   }
 
-  /* Zone content wrapper */
-  .favZoneContentWrapper {
+  /* Group content wrapper */
+  .favGroupContentWrapper {
     gap: 1rem;
   }
 
@@ -7873,39 +7873,39 @@
     font-size: 0.9rem;
   }
 
-  /* Smart Flows Mobile */
-  .smartFlowsGrid {
+  /* Smart Actions Mobile */
+  .smartActionsGrid {
     grid-template-columns: 1fr;
     gap: 0.6rem;
   }
 
-  .smartFlowCard {
+  .smartActionCard {
     min-height: 95px;
     padding: 0.9rem;
     border-radius: var(--mobile-radius);
   }
 
-  .smartFlowName {
+  .smartActionName {
     font-size: 0.88rem;
   }
 
-  .smartFlowRunButton {
+  .smartActionRunButton {
     min-height: var(--touch-target-min);
     padding: 0.7rem 0.9rem;
   }
 
-  /* Flow Creator Mobile */
-  .flowCreatorCard {
+  /* Action Creator Mobile */
+  .actionCreatorCard {
     padding: 0.75rem;
     min-width: auto;
   }
 
-  .flowCreatorInput {
+  .actionCreatorInput {
     padding: 0.6rem 0.7rem;
     font-size: 0.9rem;
   }
 
-  .flowCreatorSubmit {
+  .actionCreatorSubmit {
     min-height: var(--touch-target-min);
     padding: 0.7rem;
   }

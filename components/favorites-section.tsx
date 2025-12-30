@@ -31,17 +31,17 @@ export interface FavoriteSwitch {
 }
 
 /**
- * Favorites data structure with zones.
- * Stored in profile.favorites.zones
+ * Favorites data structure with groups.
+ * Stored in profile.favorites.groups
  */
 export interface FavoritesData {
-  zones: Record<string, FavoriteSwitch[]>;
+  groups: Record<string, FavoriteSwitch[]>;
 }
 
 /**
- * A single step in a smart flow sequence (legacy format - for backward compatibility)
+ * A single step in a smart action sequence (legacy format - for backward compatibility)
  */
-export interface FlowStep {
+export interface ActionStep {
   /** ID of the switch to control (format: "ip:type:index") */
   switchId: string;
   /** Action to perform: "on", "off", "toggle", "open", "close", "stop" */
@@ -51,26 +51,26 @@ export interface FlowStep {
 }
 
 /**
- * Action type for a switch in a flow
+ * Action type for a switch in an action stage
  */
-export type FlowActionType = 'on' | 'off' | 'toggle' | 'open' | 'close' | 'stop';
+export type StageActionType = 'on' | 'off' | 'toggle' | 'open' | 'close' | 'stop';
 
 /**
- * A single switch action within a flow stage
+ * A single switch action within an action stage
  */
-export interface FlowAction {
+export interface StageAction {
   /** ID of the switch to control (format: "ip:type:index") */
   switchId: string;
   /** Action to perform */
-  action: FlowActionType;
+  action: StageActionType;
 }
 
 /**
- * A stage in the flow - one or more actions executed simultaneously
+ * A stage in a smart action - one or more switch actions executed simultaneously
  */
-export interface FlowStage {
+export interface ActionStage {
   /** Actions to execute in this stage (all run in parallel) */
-  actions: FlowAction[];
+  actions: StageAction[];
 }
 
 /**
@@ -79,9 +79,9 @@ export interface FlowStage {
 export type SchedulingType = 'delay' | 'waitForCurtains';
 
 /**
- * Scheduling configuration between flow stages
+ * Scheduling configuration between action stages
  */
-export interface FlowScheduling {
+export interface ActionScheduling {
   /** Type of scheduling: fixed delay or wait for curtains to finish */
   type: SchedulingType;
   /** Delay in milliseconds (only used when type is 'delay') */
@@ -89,31 +89,31 @@ export interface FlowScheduling {
 }
 
 /**
- * A smart flow - a user-programmed sequence with stages and scheduling.
+ * A smart action - a user-programmed sequence with stages and scheduling.
  * New format: stages[] with scheduling[] between them
  */
-export interface SmartFlow {
-  /** Display name for this flow */
+export interface SmartAction {
+  /** Display name for this smart action */
   name: string;
-  /** Flow stages - each contains 1+ switch actions executed together */
-  stages: FlowStage[];
+  /** Action stages - each contains 1+ switch actions executed together */
+  stages: ActionStage[];
   /** Scheduling between stages - scheduling[i] is between stages[i] and stages[i+1] */
-  scheduling: FlowScheduling[];
+  scheduling: ActionScheduling[];
   /** Legacy steps format (for backward compatibility) - deprecated */
-  steps?: FlowStep[];
+  steps?: ActionStep[];
 }
 
 /**
- * Flow execution state
+ * Action execution state
  */
-export type FlowExecutionState = 'idle' | 'running' | 'paused' | 'stopped' | 'completed';
+export type ActionExecutionState = 'idle' | 'running' | 'paused' | 'stopped' | 'completed';
 
 /**
- * Current flow execution progress
+ * Current action execution progress
  */
-export interface FlowExecutionProgress {
+export interface ActionExecutionProgress {
   /** Current execution state */
-  state: FlowExecutionState;
+  state: ActionExecutionState;
   /** Currently executing stage index (-1 if not started) */
   currentStage: number;
   /** Whether waiting for scheduling (delay/curtains) */
@@ -127,11 +127,11 @@ export interface FlowExecutionProgress {
 }
 
 /**
- * Smart switches data structure with zones.
- * Stored in profile.smart_switches.zones
+ * Smart switches data structure with groups.
+ * Stored in profile.smart_switches.groups
  */
 export interface SmartSwitchesData {
-  zones: Record<string, SmartFlow[]>;
+  groups: Record<string, SmartAction[]>;
 }
 
 /**
@@ -145,13 +145,13 @@ export interface ProfileData {
 }
 
 /**
- * Validation result for switches and flows
+ * Validation result for switches and actions
  */
 interface ValidationResult {
   unreachableSwitchIds: Set<string>;
   unreachableCount: number;
-  invalidFlowSteps: Map<string, number[]>;
-  invalidFlowCount: number;
+  invalidActionSteps: Map<string, number[]>;
+  invalidActionCount: number;
 }
 
 interface FavoritesSectionProps {
@@ -183,15 +183,16 @@ interface FavoritesSectionProps {
 
 function parseFavorites(favorites: unknown): FavoritesData {
   if (!favorites || typeof favorites !== 'object') {
-    return { zones: {} };
+    return { groups: {} };
   }
   const favObj = favorites as Record<string, unknown>;
-  if (favObj.zones && typeof favObj.zones === 'object') {
+  const groupsData = favObj.groups;
+  if (groupsData && typeof groupsData === 'object') {
     // Migrate old format (relayIndex) to new format (index, type)
-    const zones = favObj.zones as Record<string, unknown[]>;
-    const migratedZones: Record<string, FavoriteSwitch[]> = {};
-    for (const [zoneName, switches] of Object.entries(zones)) {
-      migratedZones[zoneName] = (switches || []).map((sw: unknown) => {
+    const groups = groupsData as Record<string, unknown[]>;
+    const migratedGroups: Record<string, FavoriteSwitch[]> = {};
+    for (const [groupName, switches] of Object.entries(groups)) {
+      migratedGroups[groupName] = (switches || []).map((sw: unknown) => {
         const swObj = sw as Record<string, unknown>;
         // Handle old format with relayIndex
         if ('relayIndex' in swObj && !('index' in swObj)) {
@@ -212,38 +213,39 @@ function parseFavorites(favorites: unknown): FavoritesData {
         };
       });
     }
-    return { zones: migratedZones };
+    return { groups: migratedGroups };
   }
-  return { zones: {} };
+  return { groups: {} };
 }
 
 function parseSmartSwitches(smartSwitches: unknown): SmartSwitchesData {
   if (!smartSwitches || typeof smartSwitches !== 'object') {
-    return { zones: {} };
+    return { groups: {} };
   }
   const ssObj = smartSwitches as Record<string, unknown>;
-  if (ssObj.zones && typeof ssObj.zones === 'object') {
+  const groupsData = ssObj.groups;
+  if (groupsData && typeof groupsData === 'object') {
     // Migrate old format (steps-based) to new format (stages-based)
-    const zones = ssObj.zones as Record<string, unknown[]>;
-    const migratedZones: Record<string, SmartFlow[]> = {};
+    const groups = groupsData as Record<string, unknown[]>;
+    const migratedGroups: Record<string, SmartAction[]> = {};
     
-    for (const [zoneName, flows] of Object.entries(zones)) {
-      migratedZones[zoneName] = (flows || []).map((flow: unknown) => {
-        const flowObj = flow as Record<string, unknown>;
+    for (const [groupName, actionsArr] of Object.entries(groups)) {
+      migratedGroups[groupName] = (actionsArr || []).map((actionItem: unknown) => {
+        const actionObj = actionItem as Record<string, unknown>;
         
         // Check if already in new format (has stages array)
-        if (Array.isArray(flowObj.stages)) {
+        if (Array.isArray(actionObj.stages)) {
           return {
-            name: flowObj.name as string,
-            stages: flowObj.stages as FlowStage[],
-            scheduling: (flowObj.scheduling as FlowScheduling[]) || [],
+            name: actionObj.name as string,
+            stages: actionObj.stages as ActionStage[],
+            scheduling: (actionObj.scheduling as ActionScheduling[]) || [],
           };
         }
         
         // Migrate from old format (steps) to new format (stages)
-        const oldSteps = (flowObj.steps as FlowStep[]) || [];
-        const stages: FlowStage[] = [];
-        const scheduling: FlowScheduling[] = [];
+        const oldSteps = (actionObj.steps as ActionStep[]) || [];
+        const stages: ActionStage[] = [];
+        const scheduling: ActionScheduling[] = [];
         
         // Each old step becomes a single-action stage
         for (let i = 0; i < oldSteps.length; i++) {
@@ -267,19 +269,19 @@ function parseSmartSwitches(smartSwitches: unknown): SmartSwitchesData {
         }
         
         return {
-          name: flowObj.name as string,
+          name: actionObj.name as string,
           stages,
           scheduling,
         };
       });
     }
     
-    return { zones: migratedZones };
+    return { groups: migratedGroups };
   }
-  return { zones: {} };
+  return { groups: {} };
 }
 
-function validateSwitchesAndFlows(
+function validateSwitchesAndActions(
   favoritesData: FavoritesData,
   smartSwitchesData: SmartSwitchesData,
   discoveredPanelIps: Set<string>,
@@ -287,10 +289,10 @@ function validateSwitchesAndFlows(
   discoveryCompleted: boolean,
 ): ValidationResult {
   const unreachableSwitchIds = new Set<string>();
-  const invalidFlowSteps = new Map<string, number[]>();
+  const invalidActionSteps = new Map<string, number[]>();
   
   if (!discoveryCompleted) {
-    return { unreachableSwitchIds, unreachableCount: 0, invalidFlowSteps, invalidFlowCount: 0 };
+    return { unreachableSwitchIds, unreachableCount: 0, invalidActionSteps, invalidActionCount: 0 };
   }
 
   const isPanelReachable = (ip: string): boolean => {
@@ -299,7 +301,7 @@ function validateSwitchesAndFlows(
     return !state || state.connectionStatus === 'connected' || state.connectionStatus === 'connecting';
   };
 
-  for (const [_zoneName, switches] of Object.entries(favoritesData.zones || {})) {
+  for (const [_groupName, switches] of Object.entries(favoritesData.groups || {})) {
     for (const sw of switches) {
       const switchId = `${sw.ip}:${sw.type}:${sw.index}`;
       if (!isPanelReachable(sw.ip)) {
@@ -308,21 +310,21 @@ function validateSwitchesAndFlows(
     }
   }
 
-  for (const [_zoneName, flows] of Object.entries(smartSwitchesData.zones || {})) {
-    for (const flow of flows) {
+  for (const [_groupName, actionsArr] of Object.entries(smartSwitchesData.groups || {})) {
+    for (const smartAction of actionsArr) {
       const invalidStageIndices: number[] = [];
       // Check each stage's actions for unreachable switches
-      (flow.stages || []).forEach((stage, stageIdx) => {
-        for (const action of stage.actions) {
-          const ip = action.switchId.split(':')[0];
+      (smartAction.stages || []).forEach((stage: ActionStage, stageIdx: number) => {
+        for (const stageAction of stage.actions) {
+          const ip = stageAction.switchId.split(':')[0];
           if (!isPanelReachable(ip)) {
             invalidStageIndices.push(stageIdx);
-            unreachableSwitchIds.add(action.switchId);
+            unreachableSwitchIds.add(stageAction.switchId);
           }
         }
       });
       if (invalidStageIndices.length > 0) {
-        invalidFlowSteps.set(flow.name, [...new Set(invalidStageIndices)]);
+        invalidActionSteps.set(smartAction.name, [...new Set(invalidStageIndices)]);
       }
     }
   }
@@ -330,8 +332,8 @@ function validateSwitchesAndFlows(
   return {
     unreachableSwitchIds,
     unreachableCount: unreachableSwitchIds.size,
-    invalidFlowSteps,
-    invalidFlowCount: invalidFlowSteps.size,
+    invalidActionSteps,
+    invalidActionCount: invalidActionSteps.size,
   };
 }
 
@@ -378,16 +380,16 @@ export default function FavoritesSection({
 }: FavoritesSectionProps) {
   // State
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeZone, setActiveZone] = useState<string | null>(null);
+  const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
   
   // Inline editing states
-  const [showNewZoneInput, setShowNewZoneInput] = useState(false);
-  const [newZoneName, setNewZoneName] = useState('');
+  const [showNewGroupInput, setShowNewGroupInput] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
   const [showSwitchPicker, setShowSwitchPicker] = useState(false);
   const [switchPickerSearch, setSwitchPickerSearch] = useState('');
-  const [showFlowCreator, setShowFlowCreator] = useState(false);
-  const [newFlowName, setNewFlowName] = useState('');
+  const [showActionCreator, setShowActionCreator] = useState(false);
+  const [newActionName, setNewActionName] = useState('');
   
   // Context menu state for renaming
   const [contextMenu, setContextMenu] = useState<{
@@ -401,7 +403,7 @@ export default function FavoritesSection({
   
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'zone' | 'switch' | 'flow';
+    type: 'group' | 'switch' | 'action';
     name: string;
     onConfirm: () => void;
   } | null>(null);
@@ -410,41 +412,41 @@ export default function FavoritesSection({
   const [draggedSwitch, setDraggedSwitch] = useState<{ index: number; switch: FavoriteSwitch } | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
   
-  // Drag and drop state for flows
-  const [draggedFlow, setDraggedFlow] = useState<{ index: number; flow: SmartFlow } | null>(null);
-  const [flowDropIndicator, setFlowDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
+  // Drag and drop state for actions
+  const [draggedAction, setDraggedAction] = useState<{ index: number; action: SmartAction } | null>(null);
+  const [actionDropIndicator, setActionDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
   
-  // Drag and drop state for zones
-  const [draggedZone, setDraggedZone] = useState<{ index: number; name: string } | null>(null);
-  const [zoneDropIndicator, setZoneDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
+  // Drag and drop state for groups
+  const [draggedGroup, setDraggedGroup] = useState<{ index: number; name: string } | null>(null);
+  const [groupDropIndicator, setGroupDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
   
-  // Flow builder state
-  const [editingFlow, setEditingFlow] = useState<{ zoneName: string; flowIndex: number } | null>(null);
-  const [editingFlowData, setEditingFlowData] = useState<SmartFlow | null>(null);
-  const [isEditingFlowName, setIsEditingFlowName] = useState(false);
-  const [editingFlowNameValue, setEditingFlowNameValue] = useState('');
+  // Action builder state
+  const [editingAction, setEditingAction] = useState<{ groupName: string; actionIndex: number } | null>(null);
+  const [editingActionData, setEditingActionData] = useState<SmartAction | null>(null);
+  const [isEditingActionName, setIsEditingActionName] = useState(false);
+  const [editingActionNameValue, setEditingActionNameValue] = useState('');
   
-  // Flow context menu (right-click on flow cards)
-  const [flowContextMenu, setFlowContextMenu] = useState<{
+  // Action context menu (right-click on action cards)
+  const [actionContextMenu, setActionContextMenu] = useState<{
     x: number;
     y: number;
-    zoneName: string;
-    flowIndex: number;
-    flowName: string;
+    groupName: string;
+    actionIndex: number;
+    actionName: string;
   } | null>(null);
-  const [flowRenameValue, setFlowRenameValue] = useState('');
-  const flowContextMenuRef = useRef<HTMLDivElement>(null);
+  const [actionRenameValue, setActionRenameValue] = useState('');
+  const actionContextMenuRef = useRef<HTMLDivElement>(null);
   
-  // Flow execution state
-  const [executingFlow, setExecutingFlow] = useState<SmartFlow | null>(null);
-  const [executionProgress, setExecutionProgress] = useState<FlowExecutionProgress>({
+  // Action execution state
+  const [executingAction, setExecutingAction] = useState<SmartAction | null>(null);
+  const [executionProgress, setExecutionProgress] = useState<ActionExecutionProgress>({
     state: 'idle',
     currentStage: -1,
     isWaiting: false,
   });
   const executionAbortRef = useRef<boolean>(false);
   const executionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentStageActionsRef = useRef<FlowAction[]>([]); // Track current stage's actions for stop
+  const currentStageActionsRef = useRef<StageAction[]>([]); // Track current stage's actions for stop
 
   // Close context menu on click outside
   useEffect(() => {
@@ -459,18 +461,18 @@ export default function FavoritesSection({
     }
   }, [contextMenu]);
   
-  // Close flow context menu on click outside
+  // Close action context menu on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (flowContextMenuRef.current && !flowContextMenuRef.current.contains(e.target as Node)) {
-        setFlowContextMenu(null);
+      if (actionContextMenuRef.current && !actionContextMenuRef.current.contains(e.target as Node)) {
+        setActionContextMenu(null);
       }
     };
-    if (flowContextMenu) {
+    if (actionContextMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [flowContextMenu]);
+  }, [actionContextMenu]);
   
   // ESC key handler for all modals/popups
   useEffect(() => {
@@ -479,30 +481,30 @@ export default function FavoritesSection({
         // Close modals in order of priority (most recent/top-level first)
         if (deleteConfirm) {
           setDeleteConfirm(null);
-        } else if (flowContextMenu) {
-          setFlowContextMenu(null);
-        } else if (editingFlow) {
-          setEditingFlow(null);
-          setEditingFlowData(null);
-          setIsEditingFlowName(false);
+        } else if (actionContextMenu) {
+          setActionContextMenu(null);
+        } else if (editingAction) {
+          setEditingAction(null);
+          setEditingActionData(null);
+          setIsEditingActionName(false);
         } else if (contextMenu) {
           setContextMenu(null);
         } else if (showSwitchPicker) {
           setShowSwitchPicker(false);
           setSwitchPickerSearch('');
-        } else if (showFlowCreator) {
-          setShowFlowCreator(false);
-          setNewFlowName('');
-        } else if (showNewZoneInput) {
-          setShowNewZoneInput(false);
-          setNewZoneName('');
+        } else if (showActionCreator) {
+          setShowActionCreator(false);
+          setNewActionName('');
+        } else if (showNewGroupInput) {
+          setShowNewGroupInput(false);
+          setNewGroupName('');
         }
       }
     };
     
     document.addEventListener('keydown', handleEscKey);
     return () => document.removeEventListener('keydown', handleEscKey);
-  }, [deleteConfirm, flowContextMenu, editingFlow, contextMenu, showSwitchPicker, showFlowCreator, showNewZoneInput]);
+  }, [deleteConfirm, actionContextMenu, editingAction, contextMenu, showSwitchPicker, showActionCreator, showNewGroupInput]);
 
   // Reset warning dismissed state when profile changes
   useEffect(() => {
@@ -511,45 +513,45 @@ export default function FavoritesSection({
 
   // Parse favorites from profile (no placeholders)
   const favoritesData = useMemo(() => {
-    if (!profile) return { zones: {} };
+    if (!profile) return { groups: {} };
     return parseFavorites(profile.favorites);
   }, [profile]);
 
   // Parse smart switches from profile (no placeholders)
   const smartSwitchesData = useMemo(() => {
-    if (!profile) return { zones: {} };
+    if (!profile) return { groups: {} };
     return parseSmartSwitches(profile.smart_switches);
   }, [profile]);
 
-  // Combine zones from both favorites and smart switches
-  const allZones = useMemo(() => {
-    const favoriteZones = new Set(Object.keys(favoritesData.zones || {}));
-    const smartZones = new Set(Object.keys(smartSwitchesData.zones || {}));
-    return [...new Set([...favoriteZones, ...smartZones])];
-  }, [favoritesData.zones, smartSwitchesData.zones]);
+  // Combine groups from both favorites and smart switches
+  const allGroups = useMemo(() => {
+    const favoriteGroups = new Set(Object.keys(favoritesData.groups || {}));
+    const smartGroups = new Set(Object.keys(smartSwitchesData.groups || {}));
+    return [...new Set([...favoriteGroups, ...smartGroups])];
+  }, [favoritesData.groups, smartSwitchesData.groups]);
 
-  const totalSwitches = Object.values(favoritesData.zones || {}).reduce(
+  const totalSwitches = Object.values(favoritesData.groups || {}).reduce(
     (sum, switches) => sum + switches.length, 0
   );
 
-  const totalFlows = Object.values(smartSwitchesData.zones || {}).reduce(
-    (sum, flows) => sum + flows.length, 0
+  const totalActions = Object.values(smartSwitchesData.groups || {}).reduce(
+    (sum, actions) => sum + actions.length, 0
   );
 
-  // Set first zone as active when expanded and no zone is selected
-  const effectiveActiveZone = activeZone ?? (allZones.length > 0 ? allZones[0] : null);
+  // Set first group as active when expanded and no group is selected
+  const effectiveActiveGroup = activeGroup ?? (allGroups.length > 0 ? allGroups[0] : null);
 
-  // Get current zone data
-  const currentZoneSwitches = effectiveActiveZone 
-    ? (favoritesData.zones || {})[effectiveActiveZone] ?? []
+  // Get current group data
+  const currentGroupSwitches = effectiveActiveGroup 
+    ? (favoritesData.groups || {})[effectiveActiveGroup] ?? []
     : [];
-  const currentZoneFlows = effectiveActiveZone 
-    ? (smartSwitchesData.zones || {})[effectiveActiveZone] ?? []
+  const currentGroupActions = effectiveActiveGroup 
+    ? (smartSwitchesData.groups || {})[effectiveActiveGroup] ?? []
     : [];
 
   // Validation
   const validation = useMemo(() => {
-    return validateSwitchesAndFlows(
+    return validateSwitchesAndActions(
       favoritesData,
       smartSwitchesData,
       discoveredPanelIps,
@@ -562,13 +564,13 @@ export default function FavoritesSection({
     return validation.unreachableSwitchIds.has(`${sw.ip}:${sw.type}:${sw.index}`);
   }, [validation.unreachableSwitchIds]);
 
-  const hasInvalidSteps = useCallback((flow: SmartFlow): boolean => {
-    return validation.invalidFlowSteps.has(flow.name);
-  }, [validation.invalidFlowSteps]);
+  const hasInvalidSteps = useCallback((smartAction: SmartAction): boolean => {
+    return validation.invalidActionSteps.has(smartAction.name);
+  }, [validation.invalidActionSteps]);
 
-  const getInvalidStepIndices = useCallback((flow: SmartFlow): number[] => {
-    return validation.invalidFlowSteps.get(flow.name) ?? [];
-  }, [validation.invalidFlowSteps]);
+  const getInvalidStepIndices = useCallback((smartAction: SmartAction): number[] => {
+    return validation.invalidActionSteps.get(smartAction.name) ?? [];
+  }, [validation.invalidActionSteps]);
 
   // Only show validation warning AFTER discovery completes (not during loading)
   const showValidationWarning = !isLoading && validation.unreachableCount > 0 && !warningDismissed && discoveryCompleted;
@@ -724,7 +726,7 @@ export default function FavoritesSection({
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (!draggedSwitch || !profile || !effectiveActiveZone || !dropIndicator) return;
+    if (!draggedSwitch || !profile || !effectiveActiveGroup || !dropIndicator) return;
     
     const { index: dragIndex } = draggedSwitch;
     let targetIndex = dropIndicator.index;
@@ -745,69 +747,69 @@ export default function FavoritesSection({
       return;
     }
     
-    const currentSwitches = [...((favoritesData.zones || {})[effectiveActiveZone] || [])];
+    const currentSwitches = [...((favoritesData.groups || {})[effectiveActiveGroup] || [])];
     const [removed] = currentSwitches.splice(dragIndex, 1);
     currentSwitches.splice(targetIndex, 0, removed);
     
     const newFavorites: FavoritesData = {
-      zones: {
-        ...(favoritesData.zones || {}),
-        [effectiveActiveZone]: currentSwitches,
+      groups: {
+        ...(favoritesData.groups || {}),
+        [effectiveActiveGroup]: currentSwitches,
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
     setDraggedSwitch(null);
     setDropIndicator(null);
-  }, [draggedSwitch, dropIndicator, profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
+  }, [draggedSwitch, dropIndicator, profile, effectiveActiveGroup, favoritesData.groups, onFavoritesUpdate]);
 
-  // Flow drag and drop handlers
-  const handleFlowDragStart = useCallback((e: React.DragEvent, index: number, flow: SmartFlow) => {
-    setDraggedFlow({ index, flow });
+  // Action drag and drop handlers
+  const handleActionDragStart = useCallback((e: React.DragEvent, index: number, smartAction: SmartAction) => {
+    setDraggedAction({ index, action: smartAction });
     e.dataTransfer.effectAllowed = 'move';
     if (e.currentTarget instanceof HTMLElement) {
       e.currentTarget.style.opacity = '0.4';
     }
   }, []);
 
-  const handleFlowDragEnd = useCallback((e: React.DragEvent) => {
-    setDraggedFlow(null);
-    setFlowDropIndicator(null);
+  const handleActionDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggedAction(null);
+    setActionDropIndicator(null);
     if (e.currentTarget instanceof HTMLElement) {
       e.currentTarget.style.opacity = '1';
     }
   }, []);
 
-  const handleFlowDragOver = useCallback((e: React.DragEvent, index: number) => {
+  const handleActionDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
-    if (!draggedFlow) return;
+    if (!draggedAction) return;
     
     // Determine if dropping before or after based on mouse position
     const rect = e.currentTarget.getBoundingClientRect();
     const midX = rect.left + rect.width / 2;
     const position: 'before' | 'after' = e.clientX < midX ? 'before' : 'after';
     
-    setFlowDropIndicator({ index, position });
-  }, [draggedFlow]);
+    setActionDropIndicator({ index, position });
+  }, [draggedAction]);
 
-  const handleFlowDragLeave = useCallback((e: React.DragEvent) => {
+  const handleActionDragLeave = useCallback((e: React.DragEvent) => {
     const relatedTarget = e.relatedTarget as HTMLElement | null;
     if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
-      setFlowDropIndicator(null);
+      setActionDropIndicator(null);
     }
   }, []);
 
-  const handleFlowDrop = useCallback((e: React.DragEvent) => {
+  const handleActionDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (!draggedFlow || !profile || !effectiveActiveZone || !flowDropIndicator) return;
+    if (!draggedAction || !profile || !effectiveActiveGroup || !actionDropIndicator) return;
     
-    const { index: dragIndex } = draggedFlow;
-    let targetIndex = flowDropIndicator.index;
+    const { index: dragIndex } = draggedAction;
+    let targetIndex = actionDropIndicator.index;
     
     // Adjust target index based on position
-    if (flowDropIndicator.position === 'after') {
+    if (actionDropIndicator.position === 'after') {
       targetIndex += 1;
     }
     
@@ -818,29 +820,29 @@ export default function FavoritesSection({
     
     // Don't do anything if dropping at the same position
     if (dragIndex === targetIndex) {
-      setDraggedFlow(null);
-      setFlowDropIndicator(null);
+      setDraggedAction(null);
+      setActionDropIndicator(null);
       return;
     }
     
-    // Reorder flows
-    const currentFlows = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
-    const newFlows = [...currentFlows];
-    const [movedFlow] = newFlows.splice(dragIndex, 1);
-    newFlows.splice(targetIndex, 0, movedFlow);
+    // Reorder actions
+    const currentActions = (smartSwitchesData.groups || {})[effectiveActiveGroup] || [];
+    const newActions = [...currentActions];
+    const [movedAction] = newActions.splice(dragIndex, 1);
+    newActions.splice(targetIndex, 0, movedAction);
     
     const newSmartSwitches = {
       ...smartSwitchesData,
-      zones: {
-        ...(smartSwitchesData.zones || {}),
-        [effectiveActiveZone]: newFlows,
+      groups: {
+        ...(smartSwitchesData.groups || {}),
+        [effectiveActiveGroup]: newActions,
       }
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
-    setDraggedFlow(null);
-    setFlowDropIndicator(null);
-  }, [draggedFlow, flowDropIndicator, profile, effectiveActiveZone, smartSwitchesData, onSmartSwitchesUpdate]);
+    setDraggedAction(null);
+    setActionDropIndicator(null);
+  }, [draggedAction, actionDropIndicator, profile, effectiveActiveGroup, smartSwitchesData, onSmartSwitchesUpdate]);
 
   const handleShadeAction = useCallback(async (sw: FavoriteSwitch, action: 'open' | 'close' | 'stop') => {
     if (sw.type !== 'shade' && sw.type !== 'venetian') return;
@@ -860,12 +862,12 @@ export default function FavoritesSection({
   }, []);
 
   const handleRename = useCallback(() => {
-    if (!contextMenu || !profile || !effectiveActiveZone || !renameValue.trim()) return;
+    if (!contextMenu || !profile || !effectiveActiveGroup || !renameValue.trim()) return;
     
     const [ip, type, indexStr] = contextMenu.switchId.split(':');
     const index = parseInt(indexStr, 10);
     
-    const currentSwitches = (favoritesData.zones || {})[effectiveActiveZone] || [];
+    const currentSwitches = (favoritesData.groups || {})[effectiveActiveGroup] || [];
     const newSwitches = currentSwitches.map(sw => {
       if (sw.ip === ip && sw.type === type && sw.index === index) {
         return { ...sw, alias: renameValue.trim() };
@@ -874,105 +876,105 @@ export default function FavoritesSection({
     });
     
     const newFavorites: FavoritesData = {
-      zones: {
-        ...(favoritesData.zones || {}),
-        [effectiveActiveZone]: newSwitches,
+      groups: {
+        ...(favoritesData.groups || {}),
+        [effectiveActiveGroup]: newSwitches,
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
     setContextMenu(null);
-  }, [contextMenu, profile, effectiveActiveZone, renameValue, favoritesData.zones, onFavoritesUpdate]);
+  }, [contextMenu, profile, effectiveActiveGroup, renameValue, favoritesData.groups, onFavoritesUpdate]);
 
-  const handleAddZone = useCallback(() => {
-    if (!newZoneName.trim() || !profile) return;
-    const zoneName = newZoneName.trim();
+  const handleAddGroup = useCallback(() => {
+    if (!newGroupName.trim() || !profile) return;
+    const groupName = newGroupName.trim();
     
-    if (allZones.includes(zoneName)) return;
+    if (allGroups.includes(groupName)) return;
     
     const newFavorites: FavoritesData = {
-      zones: { ...(favoritesData.zones || {}), [zoneName]: [] }
+      groups: { ...(favoritesData.groups || {}), [groupName]: [] }
     };
     
     const newSmartSwitches: SmartSwitchesData = {
-      zones: { ...(smartSwitchesData.zones || {}), [zoneName]: [] }
+      groups: { ...(smartSwitchesData.groups || {}), [groupName]: [] }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
     
-    setActiveZone(zoneName);
-    setNewZoneName('');
-    setShowNewZoneInput(false);
-  }, [newZoneName, profile, allZones, favoritesData.zones, smartSwitchesData.zones, onFavoritesUpdate, onSmartSwitchesUpdate]);
+    setActiveGroup(groupName);
+    setNewGroupName('');
+    setShowNewGroupInput(false);
+  }, [newGroupName, profile, allGroups, favoritesData.groups, smartSwitchesData.groups, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
-  const handleDeleteZone = useCallback((zoneName: string) => {
+  const handleDeleteGroup = useCallback((groupName: string) => {
     if (!profile) return;
     
-    const { [zoneName]: _, ...restFavorites } = favoritesData.zones || {};
-    const { [zoneName]: __, ...restSmartSwitches } = smartSwitchesData.zones || {};
+    const { [groupName]: _, ...restFavorites } = favoritesData.groups || {};
+    const { [groupName]: __, ...restSmartSwitches } = smartSwitchesData.groups || {};
     
-    onFavoritesUpdate?.(profile.id, { zones: restFavorites });
-    onSmartSwitchesUpdate?.(profile.id, { zones: restSmartSwitches });
+    onFavoritesUpdate?.(profile.id, { groups: restFavorites });
+    onSmartSwitchesUpdate?.(profile.id, { groups: restSmartSwitches });
     
-    if (activeZone === zoneName) {
-      const remaining = allZones.filter(z => z !== zoneName);
-      setActiveZone(remaining.length > 0 ? remaining[0] : null);
+    if (activeGroup === groupName) {
+      const remaining = allGroups.filter(z => z !== groupName);
+      setActiveGroup(remaining.length > 0 ? remaining[0] : null);
     }
-  }, [profile, favoritesData.zones, smartSwitchesData.zones, activeZone, allZones, onFavoritesUpdate, onSmartSwitchesUpdate]);
+  }, [profile, favoritesData.groups, smartSwitchesData.groups, activeGroup, allGroups, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
-  // Zone drag and drop handlers
-  const handleZoneDragStart = useCallback((e: React.DragEvent, index: number, zoneName: string) => {
-    setDraggedZone({ index, name: zoneName });
+  // Group drag and drop handlers
+  const handleGroupDragStart = useCallback((e: React.DragEvent, index: number, groupName: string) => {
+    setDraggedGroup({ index, name: groupName });
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', zoneName);
+    e.dataTransfer.setData('text/plain', groupName);
     
     // Style the dragged element
     const target = e.currentTarget as HTMLElement;
-    setTimeout(() => target.classList.add(styles.zoneTabDragging), 0);
+    setTimeout(() => target.classList.add(styles.groupTabDragging), 0);
   }, []);
 
-  const handleZoneDragEnd = useCallback((e: React.DragEvent) => {
-    setDraggedZone(null);
-    setZoneDropIndicator(null);
-    (e.currentTarget as HTMLElement).classList.remove(styles.zoneTabDragging);
+  const handleGroupDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggedGroup(null);
+    setGroupDropIndicator(null);
+    (e.currentTarget as HTMLElement).classList.remove(styles.groupTabDragging);
   }, []);
 
-  const handleZoneDragOver = useCallback((e: React.DragEvent, index: number) => {
+  const handleGroupDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
-    if (!draggedZone || draggedZone.index === index) return;
+    if (!draggedGroup || draggedGroup.index === index) return;
     
     // Determine drop position (before/after) based on mouse position
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const midX = rect.left + rect.width / 2;
     const position: 'before' | 'after' = e.clientX < midX ? 'before' : 'after';
     
-    setZoneDropIndicator({ index, position });
-  }, [draggedZone]);
+    setGroupDropIndicator({ index, position });
+  }, [draggedGroup]);
 
-  const handleZoneDragLeave = useCallback((e: React.DragEvent) => {
+  const handleGroupDragLeave = useCallback((e: React.DragEvent) => {
     const relatedTarget = e.relatedTarget as HTMLElement;
     if (!e.currentTarget.contains(relatedTarget)) {
-      setZoneDropIndicator(null);
+      setGroupDropIndicator(null);
     }
   }, []);
 
-  const handleZoneDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
+  const handleGroupDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
     
-    if (!draggedZone || !zoneDropIndicator || !profile) {
-      setZoneDropIndicator(null);
-      setDraggedZone(null);
+    if (!draggedGroup || !groupDropIndicator || !profile) {
+      setGroupDropIndicator(null);
+      setDraggedGroup(null);
       return;
     }
     
-    const dragIndex = draggedZone.index;
+    const dragIndex = draggedGroup.index;
     let dropIndex = targetIndex;
     
     // Adjust drop index based on position
-    if (zoneDropIndicator.position === 'after') {
+    if (groupDropIndicator.position === 'after') {
       dropIndex += 1;
     }
     
@@ -983,37 +985,37 @@ export default function FavoritesSection({
     
     // No change needed
     if (dragIndex === dropIndex) {
-      setZoneDropIndicator(null);
-      setDraggedZone(null);
+      setGroupDropIndicator(null);
+      setDraggedGroup(null);
       return;
     }
     
-    // Reorder zones - create new ordered arrays
-    const newZoneOrder = [...allZones];
-    const [removed] = newZoneOrder.splice(dragIndex, 1);
-    newZoneOrder.splice(dropIndex, 0, removed);
+    // Reorder groups - create new ordered arrays
+    const newGroupOrder = [...allGroups];
+    const [removed] = newGroupOrder.splice(dragIndex, 1);
+    newGroupOrder.splice(dropIndex, 0, removed);
     
-    // Rebuild favorites zones with new order
-    const newFavoritesZones: Record<string, FavoriteSwitch[]> = {};
-    for (const zoneName of newZoneOrder) {
-      newFavoritesZones[zoneName] = (favoritesData.zones || {})[zoneName] || [];
+    // Rebuild favorites groups with new order
+    const newFavoritesGroups: Record<string, FavoriteSwitch[]> = {};
+    for (const groupName of newGroupOrder) {
+      newFavoritesGroups[groupName] = (favoritesData.groups || {})[groupName] || [];
     }
     
-    // Rebuild smart switches zones with new order
-    const newSmartSwitchesZones: Record<string, SmartFlow[]> = {};
-    for (const zoneName of newZoneOrder) {
-      newSmartSwitchesZones[zoneName] = (smartSwitchesData.zones || {})[zoneName] || [];
+    // Rebuild smart switches groups with new order
+    const newSmartSwitchesGroups: Record<string, SmartAction[]> = {};
+    for (const groupName of newGroupOrder) {
+      newSmartSwitchesGroups[groupName] = (smartSwitchesData.groups || {})[groupName] || [];
     }
     
-    onFavoritesUpdate?.(profile.id, { zones: newFavoritesZones });
-    onSmartSwitchesUpdate?.(profile.id, { zones: newSmartSwitchesZones });
+    onFavoritesUpdate?.(profile.id, { groups: newFavoritesGroups });
+    onSmartSwitchesUpdate?.(profile.id, { groups: newSmartSwitchesGroups });
     
-    setZoneDropIndicator(null);
-    setDraggedZone(null);
-  }, [draggedZone, zoneDropIndicator, profile, allZones, favoritesData.zones, smartSwitchesData.zones, onFavoritesUpdate, onSmartSwitchesUpdate]);
+    setGroupDropIndicator(null);
+    setDraggedGroup(null);
+  }, [draggedGroup, groupDropIndicator, profile, allGroups, favoritesData.groups, smartSwitchesData.groups, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
   const handleAddSwitch = useCallback((sw: typeof availableDevices[0]) => {
-    if (!profile || !effectiveActiveZone) return;
+    if (!profile || !effectiveActiveGroup) return;
     
     const newSwitch: FavoriteSwitch = {
       ip: sw.ip,
@@ -1023,7 +1025,7 @@ export default function FavoritesSection({
       alias: sw.name,
     };
     
-    const currentSwitches = (favoritesData.zones || {})[effectiveActiveZone] || [];
+    const currentSwitches = (favoritesData.groups || {})[effectiveActiveGroup] || [];
     
     // Check if already exists
     if (currentSwitches.some(s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type)) {
@@ -1031,188 +1033,188 @@ export default function FavoritesSection({
     }
     
     const newFavorites: FavoritesData = {
-      zones: {
-        ...(favoritesData.zones || {}),
-        [effectiveActiveZone]: [...currentSwitches, newSwitch],
+      groups: {
+        ...(favoritesData.groups || {}),
+        [effectiveActiveGroup]: [...currentSwitches, newSwitch],
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
-  }, [profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
+  }, [profile, effectiveActiveGroup, favoritesData.groups, onFavoritesUpdate]);
 
   const handleRemoveSwitch = useCallback((sw: FavoriteSwitch) => {
-    if (!profile || !effectiveActiveZone) return;
+    if (!profile || !effectiveActiveGroup) return;
     
-    const currentSwitches = (favoritesData.zones || {})[effectiveActiveZone] || [];
+    const currentSwitches = (favoritesData.groups || {})[effectiveActiveGroup] || [];
     const newSwitches = currentSwitches.filter(
       s => !(s.ip === sw.ip && s.index === sw.index && s.type === sw.type)
     );
     
     const newFavorites: FavoritesData = {
-      zones: {
-        ...(favoritesData.zones || {}),
-        [effectiveActiveZone]: newSwitches,
+      groups: {
+        ...(favoritesData.groups || {}),
+        [effectiveActiveGroup]: newSwitches,
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
-  }, [profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
+  }, [profile, effectiveActiveGroup, favoritesData.groups, onFavoritesUpdate]);
 
-  const handleCreateFlow = useCallback(() => {
-    if (!newFlowName.trim() || !profile || !effectiveActiveZone) return;
+  const handleCreateAction = useCallback(() => {
+    if (!newActionName.trim() || !profile || !effectiveActiveGroup) return;
     
-    const newFlow: SmartFlow = {
-      name: newFlowName.trim(),
+    const newSmartAction: SmartAction = {
+      name: newActionName.trim(),
       stages: [{ actions: [] }], // Start with one empty stage
       scheduling: [],
     };
     
-    const currentFlows = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
+    const currentActions = (smartSwitchesData.groups || {})[effectiveActiveGroup] || [];
     
     const newSmartSwitches: SmartSwitchesData = {
-      zones: {
-        ...(smartSwitchesData.zones || {}),
-        [effectiveActiveZone]: [...currentFlows, newFlow],
+      groups: {
+        ...(smartSwitchesData.groups || {}),
+        [effectiveActiveGroup]: [...currentActions, newSmartAction],
       }
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
     
-    // Auto-open the flow editor for the newly created flow
-    const newFlowIndex = currentFlows.length;
-    setEditingFlow({ zoneName: effectiveActiveZone, flowIndex: newFlowIndex });
-    setEditingFlowData(JSON.parse(JSON.stringify(newFlow)));
+    // Auto-open the action editor for the newly created action
+    const newSmartActionIndex = currentActions.length;
+    setEditingAction({ groupName: effectiveActiveGroup, actionIndex: newSmartActionIndex });
+    setEditingActionData(JSON.parse(JSON.stringify(newSmartAction)));
     
-    setNewFlowName('');
-    setShowFlowCreator(false);
-  }, [newFlowName, profile, effectiveActiveZone, smartSwitchesData.zones, onSmartSwitchesUpdate]);
+    setNewActionName('');
+    setShowActionCreator(false);
+  }, [newActionName, profile, effectiveActiveGroup, smartSwitchesData.groups, onSmartSwitchesUpdate]);
 
-  const handleDeleteFlow = useCallback((flowIndex: number) => {
-    if (!profile || !effectiveActiveZone) return;
+  const handleDeleteAction = useCallback((actionIndex: number) => {
+    if (!profile || !effectiveActiveGroup) return;
     
-    const currentFlows = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
-    const newFlows = currentFlows.filter((_, i) => i !== flowIndex);
+    const currentActions = (smartSwitchesData.groups || {})[effectiveActiveGroup] || [];
+    const newActions = currentActions.filter((_, i) => i !== actionIndex);
     
     const newSmartSwitches: SmartSwitchesData = {
-      zones: {
-        ...(smartSwitchesData.zones || {}),
-        [effectiveActiveZone]: newFlows,
+      groups: {
+        ...(smartSwitchesData.groups || {}),
+        [effectiveActiveGroup]: newActions,
       }
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
-  }, [profile, effectiveActiveZone, smartSwitchesData.zones, onSmartSwitchesUpdate]);
+  }, [profile, effectiveActiveGroup, smartSwitchesData.groups, onSmartSwitchesUpdate]);
   
-  // Open flow editor
-  const handleEditFlow = useCallback((flowIndex: number) => {
-    if (!effectiveActiveZone) return;
+  // Open action editor
+  const handleEditAction = useCallback((actionIndex: number) => {
+    if (!effectiveActiveGroup) return;
     
-    const flow = currentZoneFlows[flowIndex];
-    if (!flow) return;
+    const actionToEdit = currentGroupActions[actionIndex];
+    if (!actionToEdit) return;
     
-    setEditingFlow({ zoneName: effectiveActiveZone, flowIndex });
-    // Deep copy the flow data
-    setEditingFlowData(JSON.parse(JSON.stringify(flow)));
-  }, [effectiveActiveZone, currentZoneFlows]);
+    setEditingAction({ groupName: effectiveActiveGroup, actionIndex });
+    // Deep copy the action data
+    setEditingActionData(JSON.parse(JSON.stringify(actionToEdit)));
+  }, [effectiveActiveGroup, currentGroupActions]);
   
-  // Close flow editor without saving
-  const handleCancelEditFlow = useCallback(() => {
-    setEditingFlow(null);
-    setEditingFlowData(null);
-    setIsEditingFlowName(false);
+  // Close action editor without saving
+  const handleCancelEditAction = useCallback(() => {
+    setEditingAction(null);
+    setEditingActionData(null);
+    setIsEditingActionName(false);
   }, []);
   
-  // Start editing flow name
-  const handleStartRenameFlow = useCallback(() => {
-    if (editingFlowData) {
-      setEditingFlowNameValue(editingFlowData.name);
-      setIsEditingFlowName(true);
+  // Start editing action name
+  const handleStartRenameAction = useCallback(() => {
+    if (editingActionData) {
+      setEditingActionNameValue(editingActionData.name);
+      setIsEditingActionName(true);
     }
-  }, [editingFlowData]);
+  }, [editingActionData]);
   
-  // Save flow name
-  const handleSaveFlowName = useCallback(() => {
-    if (!editingFlowData || !editingFlowNameValue.trim()) return;
+  // Save action name
+  const handleSaveActionName = useCallback(() => {
+    if (!editingActionData || !editingActionNameValue.trim()) return;
     
-    setEditingFlowData({
-      ...editingFlowData,
-      name: editingFlowNameValue.trim(),
+    setEditingActionData({
+      ...editingActionData,
+      name: editingActionNameValue.trim(),
     });
-    setIsEditingFlowName(false);
-  }, [editingFlowData, editingFlowNameValue]);
+    setIsEditingActionName(false);
+  }, [editingActionData, editingActionNameValue]);
   
-  // Cancel flow name editing
-  const handleCancelRenameFlow = useCallback(() => {
-    setIsEditingFlowName(false);
-    setEditingFlowNameValue('');
+  // Cancel action name editing
+  const handleCancelRenameAction = useCallback(() => {
+    setIsEditingActionName(false);
+    setEditingActionNameValue('');
   }, []);
   
-  // Flow context menu handler (right-click on flow card) - directly starts renaming
-  const handleFlowContextMenu = useCallback((e: React.MouseEvent, zoneName: string, flowIndex: number, flowName: string) => {
+  // Action context menu handler (right-click on action card) - directly starts renaming
+  const handleActionContextMenu = useCallback((e: React.MouseEvent, groupName: string, actionIndex: number, actionName: string) => {
     e.preventDefault();
-    setFlowContextMenu({
+    setActionContextMenu({
       x: e.clientX,
       y: e.clientY,
-      zoneName,
-      flowIndex,
-      flowName,
+      groupName,
+      actionIndex,
+      actionName,
     });
-    setFlowRenameValue(flowName);
+    setActionRenameValue(actionName);
   }, []);
   
-  // Rename flow directly from context menu (save)
-  const handleSaveFlowRenameFromContext = useCallback(() => {
-    if (!flowContextMenu || !profile || !flowRenameValue.trim()) return;
+  // Rename action directly from context menu (save)
+  const handleSaveActionRenameFromContext = useCallback(() => {
+    if (!actionContextMenu || !profile || !actionRenameValue.trim()) return;
     
-    const { zoneName, flowIndex } = flowContextMenu;
-    const newName = flowRenameValue.trim();
+    const { groupName, actionIndex } = actionContextMenu;
+    const newName = actionRenameValue.trim();
     
     // Check if name changed
-    if (newName === flowContextMenu.flowName) {
-      setFlowContextMenu(null);
+    if (newName === actionContextMenu.actionName) {
+      setActionContextMenu(null);
       return;
     }
     
-    const currentFlows = (smartSwitchesData.zones || {})[zoneName] || [];
-    const updatedFlows = [...currentFlows];
+    const currentActions = (smartSwitchesData.groups || {})[groupName] || [];
+    const updatedActions = [...currentActions];
     
-    if (updatedFlows[flowIndex]) {
-      updatedFlows[flowIndex] = {
-        ...updatedFlows[flowIndex],
+    if (updatedActions[actionIndex]) {
+      updatedActions[actionIndex] = {
+        ...updatedActions[actionIndex],
         name: newName,
       };
       
       onSmartSwitchesUpdate?.(profile.id, {
         ...smartSwitchesData,
-        zones: {
-          ...(smartSwitchesData.zones || {}),
-          [zoneName]: updatedFlows,
+        groups: {
+          ...(smartSwitchesData.groups || {}),
+          [groupName]: updatedActions,
         },
       });
     }
     
-    setFlowContextMenu(null);
-    setFlowRenameValue('');
-  }, [flowContextMenu, profile, flowRenameValue, smartSwitchesData, onSmartSwitchesUpdate]);
+    setActionContextMenu(null);
+    setActionRenameValue('');
+  }, [actionContextMenu, profile, actionRenameValue, smartSwitchesData, onSmartSwitchesUpdate]);
   
-  // Delete flow from context menu
-  const handleDeleteFlowFromContext = useCallback(() => {
-    if (!flowContextMenu) return;
+  // Delete action from context menu
+  const handleDeleteActionFromContext = useCallback(() => {
+    if (!actionContextMenu) return;
     
-    const { zoneName, flowIndex, flowName } = flowContextMenu;
+    const { groupName, actionIndex, actionName } = actionContextMenu;
     
     setDeleteConfirm({
-      type: 'flow',
-      name: flowName,
+      type: 'action',
+      name: actionName,
       onConfirm: () => {
         if (!profile) return;
-        const currentFlows = (smartSwitchesData.zones || {})[zoneName] || [];
-        const newFlows = currentFlows.filter((_, i) => i !== flowIndex);
+        const currentActions = (smartSwitchesData.groups || {})[groupName] || [];
+        const newActions = currentActions.filter((_, i) => i !== actionIndex);
         
         const newSmartSwitches: SmartSwitchesData = {
-          zones: {
-            ...(smartSwitchesData.zones || {}),
-            [zoneName]: newFlows,
+          groups: {
+            ...(smartSwitchesData.groups || {}),
+            [groupName]: newActions,
           }
         };
         
@@ -1220,54 +1222,54 @@ export default function FavoritesSection({
       },
     });
     
-    setFlowContextMenu(null);
-  }, [flowContextMenu, profile, smartSwitchesData.zones, onSmartSwitchesUpdate]);
+    setActionContextMenu(null);
+  }, [actionContextMenu, profile, smartSwitchesData.groups, onSmartSwitchesUpdate]);
   
-  // Save edited flow
-  const handleSaveEditFlow = useCallback(() => {
-    if (!profile || !editingFlow || !editingFlowData) return;
+  // Save edited action
+  const handleSaveEditAction = useCallback(() => {
+    if (!profile || !editingAction || !editingActionData) return;
     
-    const currentFlows = (smartSwitchesData.zones || {})[editingFlow.zoneName] || [];
-    const newFlows = [...currentFlows];
-    newFlows[editingFlow.flowIndex] = editingFlowData;
+    const currentActions = (smartSwitchesData.groups || {})[editingAction.groupName] || [];
+    const newActions = [...currentActions];
+    newActions[editingAction.actionIndex] = editingActionData;
     
     const newSmartSwitches: SmartSwitchesData = {
-      zones: {
-        ...(smartSwitchesData.zones || {}),
-        [editingFlow.zoneName]: newFlows,
+      groups: {
+        ...(smartSwitchesData.groups || {}),
+        [editingAction.groupName]: newActions,
       }
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
-    setEditingFlow(null);
-    setEditingFlowData(null);
-  }, [profile, editingFlow, editingFlowData, smartSwitchesData.zones, onSmartSwitchesUpdate]);
+    setEditingAction(null);
+    setEditingActionData(null);
+  }, [profile, editingAction, editingActionData, smartSwitchesData.groups, onSmartSwitchesUpdate]);
   
-  // Add a new stage to the flow
+  // Add a new stage to the action
   const handleAddStage = useCallback(() => {
-    if (!editingFlowData) return;
+    if (!editingActionData) return;
     
-    const newStages = [...editingFlowData.stages, { actions: [] }];
-    const newScheduling = [...editingFlowData.scheduling];
+    const newStages = [...editingActionData.stages, { actions: [] }];
+    const newScheduling = [...editingActionData.scheduling];
     
     // Add scheduling between previous stage and new stage (if not first)
     if (newStages.length > 1) {
       newScheduling.push({ type: 'delay', delayMs: 1000 });
     }
     
-    setEditingFlowData({
-      ...editingFlowData,
+    setEditingActionData({
+      ...editingActionData,
       stages: newStages,
       scheduling: newScheduling,
     });
-  }, [editingFlowData]);
+  }, [editingActionData]);
   
   // Remove a stage
   const handleRemoveStage = useCallback((stageIndex: number) => {
-    if (!editingFlowData) return;
+    if (!editingActionData) return;
     
-    const newStages = editingFlowData.stages.filter((_, i) => i !== stageIndex);
-    const newScheduling = [...editingFlowData.scheduling];
+    const newStages = editingActionData.stages.filter((_, i) => i !== stageIndex);
+    const newScheduling = [...editingActionData.scheduling];
     
     // Remove scheduling at the correct index
     if (stageIndex > 0 && newScheduling.length >= stageIndex) {
@@ -1276,19 +1278,19 @@ export default function FavoritesSection({
       newScheduling.splice(0, 1);
     }
     
-    setEditingFlowData({
-      ...editingFlowData,
+    setEditingActionData({
+      ...editingActionData,
       stages: newStages,
       scheduling: newScheduling,
     });
-  }, [editingFlowData]);
+  }, [editingActionData]);
   
   // Add a switch to a stage
   const handleAddActionToStage = useCallback((stageIndex: number, sw: typeof availableDevices[0]) => {
-    if (!editingFlowData) return;
+    if (!editingActionData) return;
     
-    const newStages = [...editingFlowData.stages];
-    const defaultAction: FlowActionType = sw.type === 'light' ? 'toggle' : 'open';
+    const newStages = [...editingActionData.stages];
+    const defaultAction: StageActionType = sw.type === 'light' ? 'toggle' : 'open';
     
     // Check if switch already exists in stage
     const existsInStage = newStages[stageIndex].actions.some(a => a.switchId === sw.id);
@@ -1301,54 +1303,54 @@ export default function FavoritesSection({
       ],
     };
     
-    setEditingFlowData({
-      ...editingFlowData,
+    setEditingActionData({
+      ...editingActionData,
       stages: newStages,
     });
-  }, [editingFlowData]);
+  }, [editingActionData]);
   
   // Remove an action from a stage
   const handleRemoveActionFromStage = useCallback((stageIndex: number, actionIndex: number) => {
-    if (!editingFlowData) return;
+    if (!editingActionData) return;
     
-    const newStages = [...editingFlowData.stages];
+    const newStages = [...editingActionData.stages];
     newStages[stageIndex] = {
       actions: newStages[stageIndex].actions.filter((_, i) => i !== actionIndex),
     };
     
-    setEditingFlowData({
-      ...editingFlowData,
+    setEditingActionData({
+      ...editingActionData,
       stages: newStages,
     });
-  }, [editingFlowData]);
+  }, [editingActionData]);
   
   // Update action type
-  const handleUpdateActionType = useCallback((stageIndex: number, actionIndex: number, newAction: FlowActionType) => {
-    if (!editingFlowData) return;
+  const handleUpdateActionType = useCallback((stageIndex: number, actionIndex: number, newAction: StageActionType) => {
+    if (!editingActionData) return;
     
-    const newStages = [...editingFlowData.stages];
+    const newStages = [...editingActionData.stages];
     const actions = [...newStages[stageIndex].actions];
     actions[actionIndex] = { ...actions[actionIndex], action: newAction };
     newStages[stageIndex] = { actions };
     
-    setEditingFlowData({
-      ...editingFlowData,
+    setEditingActionData({
+      ...editingActionData,
       stages: newStages,
     });
-  }, [editingFlowData]);
+  }, [editingActionData]);
   
   // Update scheduling between stages
-  const handleUpdateScheduling = useCallback((schedIndex: number, updates: Partial<FlowScheduling>) => {
-    if (!editingFlowData) return;
+  const handleUpdateScheduling = useCallback((schedIndex: number, updates: Partial<ActionScheduling>) => {
+    if (!editingActionData) return;
     
-    const newScheduling = [...editingFlowData.scheduling];
+    const newScheduling = [...editingActionData.scheduling];
     newScheduling[schedIndex] = { ...newScheduling[schedIndex], ...updates };
     
-    setEditingFlowData({
-      ...editingFlowData,
+    setEditingActionData({
+      ...editingActionData,
       scheduling: newScheduling,
     });
-  }, [editingFlowData]);
+  }, [editingActionData]);
   
   // Get switch name from switchId
   const getSwitchNameFromId = useCallback((switchId: string): string => {
@@ -1365,7 +1367,7 @@ export default function FavoritesSection({
   }, []);
 
   // Execute a single action (send command to panel)
-  const executeFlowAction = useCallback(async (action: FlowAction): Promise<boolean> => {
+  const executeActionAction = useCallback(async (action: StageAction): Promise<boolean> => {
     const [ip, type, indexStr] = action.switchId.split(':');
     const index = parseInt(indexStr, 10);
     
@@ -1384,7 +1386,7 @@ export default function FavoritesSection({
   }, []);
   
   // Check if any curtain in the given actions is still moving
-  const areCurtainsStillMoving = useCallback((actions: FlowAction[]): boolean => {
+  const areCurtainsStillMoving = useCallback((actions: StageAction[]): boolean => {
     for (const action of actions) {
       const [ip, type, indexStr] = action.switchId.split(':');
       if (type === 'shade' || type === 'venetian') {
@@ -1399,15 +1401,15 @@ export default function FavoritesSection({
     return false;
   }, [livePanelStates]);
   
-  // Run a flow
-  const handleRunFlow = useCallback(async (flow: SmartFlow) => {
-    if (executingFlow) {
-      console.log('[FavoritesSection] Flow already running');
+  // Run an action
+  const handleRunAction = useCallback(async (smartAction: SmartAction) => {
+    if (executingAction) {
+      console.log('[FavoritesSection] Action already running');
       return;
     }
     
-    console.log('[FavoritesSection] Starting flow:', flow.name);
-    setExecutingFlow(flow);
+    console.log('[FavoritesSection] Starting action:', smartAction.name);
+    setExecutingAction(smartAction);
     executionAbortRef.current = false;
     
     setExecutionProgress({
@@ -1418,16 +1420,16 @@ export default function FavoritesSection({
     });
     
     try {
-      for (let stageIdx = 0; stageIdx < flow.stages.length; stageIdx++) {
+      for (let stageIdx = 0; stageIdx < smartAction.stages.length; stageIdx++) {
         // Check for abort
         if (executionAbortRef.current) {
-          console.log('[FavoritesSection] Flow aborted at stage', stageIdx);
+          console.log('[FavoritesSection] Action aborted at stage', stageIdx);
           setExecutionProgress(prev => ({ ...prev, state: 'stopped' }));
           break;
         }
         
-        const stage = flow.stages[stageIdx];
-        console.log(`[FavoritesSection] Executing stage ${stageIdx + 1}/${flow.stages.length}:`, 
+        const stage = smartAction.stages[stageIdx];
+        console.log(`[FavoritesSection] Executing stage ${stageIdx + 1}/${smartAction.stages.length}:`, 
           stage.actions.map(a => `${a.switchId} → ${a.action}`).join(', '));
         
         // Track current stage actions for stop functionality
@@ -1440,17 +1442,17 @@ export default function FavoritesSection({
         }));
         
         // Execute all actions in this stage concurrently
-        await Promise.all(stage.actions.map(action => executeFlowAction(action)));
+        await Promise.all(stage.actions.map(action => executeActionAction(action)));
         
         // Check for abort after executing actions
         if (executionAbortRef.current) {
-          console.log('[FavoritesSection] Flow aborted after stage execution');
+          console.log('[FavoritesSection] Action aborted after stage execution');
           break;
         }
         
         // Wait for scheduling if not the last stage
-        if (stageIdx < flow.stages.length - 1 && flow.scheduling[stageIdx]) {
-          const sched = flow.scheduling[stageIdx];
+        if (stageIdx < smartAction.stages.length - 1 && smartAction.scheduling[stageIdx]) {
+          const sched = smartAction.scheduling[stageIdx];
           
           if (sched.type === 'delay' && sched.delayMs && sched.delayMs > 0) {
             // Delay scheduling
@@ -1519,10 +1521,10 @@ export default function FavoritesSection({
                 console.log(`[FavoritesSection] Checking curtains: stillMoving=${stillMoving}, elapsed=${elapsed}ms`);
                 
                 if (elapsed >= maxWait) {
-                  console.log('[FavoritesSection] Max wait time reached, continuing flow');
+                  console.log('[FavoritesSection] Max wait time reached, continuing action');
                   resolve();
                 } else if (!stillMoving) {
-                  console.log('[FavoritesSection] Curtains stopped, continuing flow');
+                  console.log('[FavoritesSection] Curtains stopped, continuing action');
                   resolve();
                 } else {
                   executionTimeoutRef.current = setTimeout(checkCurtains, pollInterval);
@@ -1537,16 +1539,16 @@ export default function FavoritesSection({
       
       // Completed
       if (!executionAbortRef.current) {
-        console.log('[FavoritesSection] Flow completed:', flow.name);
+        console.log('[FavoritesSection] Action completed:', smartAction.name);
         setExecutionProgress(prev => ({
           ...prev,
           state: 'completed',
-          currentStage: flow.stages.length,
+          currentStage: smartAction.stages.length,
           isWaiting: false,
         }));
       }
     } catch (error) {
-      console.error('[FavoritesSection] Flow error:', error);
+      console.error('[FavoritesSection] Action error:', error);
       setExecutionProgress(prev => ({
         ...prev,
         state: 'stopped',
@@ -1554,20 +1556,20 @@ export default function FavoritesSection({
       }));
     }
     
-    // Clear executing flow after a delay to show completion state
+    // Clear executing action after a delay to show completion state
     setTimeout(() => {
-      setExecutingFlow(null);
+      setExecutingAction(null);
       setExecutionProgress({
         state: 'idle',
         currentStage: -1,
         isWaiting: false,
       });
     }, 2000);
-  }, [executingFlow, executeFlowAction, areCurtainsStillMoving]);
+  }, [executingAction, executeActionAction, areCurtainsStillMoving]);
   
-  // Stop the running flow - also stops any shades in progress
-  const handleStopFlow = useCallback(async () => {
-    console.log('[FavoritesSection] Stopping flow immediately...');
+  // Stop the running action - also stops any shades in progress
+  const handleStopAction = useCallback(async () => {
+    console.log('[FavoritesSection] Stopping action immediately...');
     executionAbortRef.current = true;
     
     // Clear any pending timeout
@@ -1629,11 +1631,11 @@ export default function FavoritesSection({
             {effectivelyExpanded ? '▼' : '▶'}
           </span>
           <h3 className={styles.collapsibleSectionTitle}>
-            ⭐ Favorites &amp; Smart Flows
-            {profile && allZones.length > 0 && (
+            ⭐ Favorites &amp; Smart Actions
+            {profile && allGroups.length > 0 && (
               <span className={styles.favoritesBadge}>
-                {allZones.length} zone{allZones.length !== 1 ? 's' : ''} · {totalSwitches} switch{totalSwitches !== 1 ? 'es' : ''}
-                {totalFlows > 0 && ` · ${totalFlows} flow${totalFlows !== 1 ? 's' : ''}`}
+                {allGroups.length} group{allGroups.length !== 1 ? 's' : ''} · {totalSwitches} switch{totalSwitches !== 1 ? 'es' : ''}
+                {totalActions > 0 && ` · ${totalActions} action${totalActions !== 1 ? 's' : ''}`}
               </span>
             )}
           </h3>
@@ -1652,19 +1654,19 @@ export default function FavoritesSection({
         </div>
       </div>
 
-      {/* Collapsed summary - clickable buttons grouped by zone */}
-      {!effectivelyExpanded && profile && allZones.length > 0 && (
+      {/* Collapsed summary - clickable buttons grouped by group */}
+      {!effectivelyExpanded && profile && allGroups.length > 0 && (
         <div className={styles.favoritesCollapsedView}>
-          {allZones.map((zoneName) => {
-            const zoneSwitches = (favoritesData.zones || {})[zoneName] || [];
-            const zoneFlows = (smartSwitchesData.zones || {})[zoneName] || [];
-            if (zoneSwitches.length === 0 && zoneFlows.length === 0) return null;
+          {allGroups.map((groupName) => {
+            const groupSwitches = (favoritesData.groups || {})[groupName] || [];
+            const groupActions = (smartSwitchesData.groups || {})[groupName] || [];
+            if (groupSwitches.length === 0 && groupActions.length === 0) return null;
             
             return (
-              <div key={zoneName} className={styles.favoritesCollapsedZone}>
-                <div className={styles.favoritesCollapsedZoneName}>{zoneName}</div>
+              <div key={groupName} className={styles.favoritesCollapsedGroup}>
+                <div className={styles.favoritesCollapsedGroupName}>{groupName}</div>
                 <div className={styles.favoritesCollapsedItems}>
-                  {zoneSwitches.map((sw, idx) => {
+                  {groupSwitches.map((sw, idx) => {
                     const isDiscovered = discoveredPanelIps.has(sw.ip);
                     const isUnreachable = isSwitchUnreachable(sw);
                     const isReachable = isDiscovered && !isUnreachable;
@@ -1734,33 +1736,33 @@ export default function FavoritesSection({
                       );
                     }
                   })}
-                  {zoneFlows.map((flow, idx) => {
-                    const flowHasInvalidSteps = hasInvalidSteps(flow);
+                  {groupActions.map((smartAction, idx) => {
+                    const actionHasInvalidSteps = hasInvalidSteps(smartAction);
                     // Only show invalid state AFTER discovery completes (not during loading)
-                    const showInvalidState = !isLoading && discoveryCompleted && flowHasInvalidSteps;
-                    // Check if this specific flow is running
-                    const isThisFlowRunning = executingFlow?.name === flow.name && 
+                    const showInvalidState = !isLoading && discoveryCompleted && actionHasInvalidSteps;
+                    // Check if this specific action is running
+                    const isThisActionRunning = executingAction?.name === smartAction.name && 
                       executionProgress.state === 'running';
                     
                     return (
                       <button
-                        key={`flow-${flow.name}-${idx}`}
+                        key={`action-${smartAction.name}-${idx}`}
                         type="button"
-                        className={`${styles.favoritesCollapsedButton} ${styles.favoritesCollapsedButtonFlow} ${showInvalidState ? styles.favoritesCollapsedButtonInvalid : ''} ${isThisFlowRunning ? styles.favoritesCollapsedButtonRunning : ''}`}
+                        className={`${styles.favoritesCollapsedButton} ${styles.favoritesCollapsedButtonAction} ${showInvalidState ? styles.favoritesCollapsedButtonInvalid : ''} ${isThisActionRunning ? styles.favoritesCollapsedButtonRunning : ''}`}
                         onClick={() => {
-                          if (isThisFlowRunning) {
-                            handleStopFlow();
-                          } else if (!showInvalidState && !executingFlow) {
-                            handleRunFlow(flow);
+                          if (isThisActionRunning) {
+                            handleStopAction();
+                          } else if (!showInvalidState && !executingAction) {
+                            handleRunAction(smartAction);
                           }
                         }}
-                        disabled={isLoading || showInvalidState || (!!executingFlow && !isThisFlowRunning)}
-                        title={isThisFlowRunning ? 'Stop flow' : flow.name}
+                        disabled={isLoading || showInvalidState || (!!executingAction && !isThisActionRunning)}
+                        title={isThisActionRunning ? 'Stop action' : smartAction.name}
                       >
                         <span className={styles.favoritesCollapsedIcon}>
-                          {showInvalidState ? '⚠️' : isThisFlowRunning ? '⏹️' : '▶'}
+                          {showInvalidState ? '⚠️' : isThisActionRunning ? '⏹️' : '▶'}
                         </span>
-                        <span className={styles.favoritesCollapsedLabel}>{flow.name}</span>
+                        <span className={styles.favoritesCollapsedLabel}>{smartAction.name}</span>
                       </button>
                     );
                   })}
@@ -1779,8 +1781,8 @@ export default function FavoritesSection({
             <span className={styles.validationWarningIcon}>⚠️</span>
             <span className={styles.validationWarningText}>
               {validation.unreachableCount} switch{validation.unreachableCount !== 1 ? 'es' : ''} unreachable
-              {validation.invalidFlowCount > 0 && (
-                <> · {validation.invalidFlowCount} flow{validation.invalidFlowCount !== 1 ? 's' : ''} affected</>
+              {validation.invalidActionCount > 0 && (
+                <> · {validation.invalidActionCount} action{validation.invalidActionCount !== 1 ? 's' : ''} affected</>
               )}
             </span>
             <button
@@ -1804,40 +1806,40 @@ export default function FavoritesSection({
         {/* Main content when profile exists */}
         {profile && (
           <>
-            {/* Zone Navigation Row */}
-            <div className={styles.favZoneNavRow}>
-              <div className={styles.favoritesZoneTabs}>
-                {allZones.map((zoneName, idx) => {
-                  const isDragging = draggedZone?.name === zoneName;
-                  const showDropBefore = zoneDropIndicator?.index === idx && zoneDropIndicator?.position === 'before' && draggedZone?.index !== idx;
-                  const showDropAfter = zoneDropIndicator?.index === idx && zoneDropIndicator?.position === 'after' && draggedZone?.index !== idx;
+            {/* Group Navigation Row */}
+            <div className={styles.favGroupNavRow}>
+              <div className={styles.favoritesGroupTabs}>
+                {allGroups.map((groupName, idx) => {
+                  const isDragging = draggedGroup?.name === groupName;
+                  const showDropBefore = groupDropIndicator?.index === idx && groupDropIndicator?.position === 'before' && draggedGroup?.index !== idx;
+                  const showDropAfter = groupDropIndicator?.index === idx && groupDropIndicator?.position === 'after' && draggedGroup?.index !== idx;
                   
                   return (
                     <button
-                      key={zoneName}
+                      key={groupName}
                       type="button"
-                      className={`${styles.favoritesZoneTab} ${effectiveActiveZone === zoneName ? styles.favoritesZoneTabActive : ''} ${isDragging ? styles.zoneTabDragging : ''} ${showDropBefore ? styles.zoneTabDropBefore : ''} ${showDropAfter ? styles.zoneTabDropAfter : ''}`}
-                      onClick={() => setActiveZone(zoneName)}
+                      className={`${styles.favoritesGroupTab} ${effectiveActiveGroup === groupName ? styles.favoritesGroupTabActive : ''} ${isDragging ? styles.groupTabDragging : ''} ${showDropBefore ? styles.groupTabDropBefore : ''} ${showDropAfter ? styles.groupTabDropAfter : ''}`}
+                      onClick={() => setActiveGroup(groupName)}
                       draggable
-                      onDragStart={(e) => handleZoneDragStart(e, idx, zoneName)}
-                      onDragEnd={handleZoneDragEnd}
-                      onDragOver={(e) => handleZoneDragOver(e, idx)}
-                      onDragLeave={handleZoneDragLeave}
-                      onDrop={(e) => handleZoneDrop(e, idx)}
+                      onDragStart={(e) => handleGroupDragStart(e, idx, groupName)}
+                      onDragEnd={handleGroupDragEnd}
+                      onDragOver={(e) => handleGroupDragOver(e, idx)}
+                      onDragLeave={handleGroupDragLeave}
+                      onDrop={(e) => handleGroupDrop(e, idx)}
                     >
-                      <span className={styles.zoneTabDragHandle} title="Drag to reorder">⋮⋮</span>
-                      {zoneName}
+                      <span className={styles.groupTabDragHandle} title="Drag to reorder">⋮⋮</span>
+                      {groupName}
                       <span
-                        className={styles.favoritesZoneTabDelete}
+                        className={styles.favoritesGroupTabDelete}
                         onClick={(e) => {
                           e.stopPropagation();
                           setDeleteConfirm({
-                            type: 'zone',
-                            name: zoneName,
-                            onConfirm: () => handleDeleteZone(zoneName),
+                            type: 'group',
+                            name: groupName,
+                            onConfirm: () => handleDeleteGroup(groupName),
                           });
                         }}
-                        title="Delete zone"
+                        title="Delete group"
                       >
                         ✕
                       </span>
@@ -1845,36 +1847,36 @@ export default function FavoritesSection({
                   );
                 })}
                 
-                {/* Add Zone - styled as a zone tab */}
-                {showNewZoneInput ? (
-                  <div className={styles.newZoneInputInline}>
+                {/* Add Group - styled as a group tab */}
+                {showNewGroupInput ? (
+                  <div className={styles.newGroupInputInline}>
                     <input
                       type="text"
-                      value={newZoneName}
-                      onChange={(e) => setNewZoneName(e.target.value)}
-                      placeholder="Zone name..."
-                      className={styles.newZoneInputField}
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      placeholder="Group name..."
+                      className={styles.newGroupInputField}
                       autoFocus
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddZone();
+                        if (e.key === 'Enter') handleAddGroup();
                         if (e.key === 'Escape') {
-                          setShowNewZoneInput(false);
-                          setNewZoneName('');
+                          setShowNewGroupInput(false);
+                          setNewGroupName('');
                         }
                       }}
                     />
                     <span
-                      className={styles.newZoneInputConfirm}
-                      onClick={handleAddZone}
-                      style={{ opacity: newZoneName.trim() ? 1 : 0.4 }}
+                      className={styles.newGroupInputConfirm}
+                      onClick={handleAddGroup}
+                      style={{ opacity: newGroupName.trim() ? 1 : 0.4 }}
                     >
                       ✓
                     </span>
                     <span
-                      className={styles.newZoneInputCancel}
+                      className={styles.newGroupInputCancel}
                       onClick={() => {
-                        setShowNewZoneInput(false);
-                        setNewZoneName('');
+                        setShowNewGroupInput(false);
+                        setNewGroupName('');
                       }}
                     >
                       ✕
@@ -1883,34 +1885,34 @@ export default function FavoritesSection({
                 ) : (
                   <button
                     type="button"
-                    className={`${styles.favoritesZoneTab} ${styles.favoritesZoneTabAdd}`}
-                    onClick={() => setShowNewZoneInput(true)}
+                    className={`${styles.favoritesGroupTab} ${styles.favoritesGroupTabAdd}`}
+                    onClick={() => setShowNewGroupInput(true)}
                   >
-                    + Add Zone
+                    + Add Group
                   </button>
                 )}
               </div>
             </div>
 
-            {/* No zones empty state */}
-            {allZones.length === 0 && (
+            {/* No groups empty state */}
+            {allGroups.length === 0 && (
               <div className={styles.favoritesEmptyState}>
                 <div className={styles.favoritesEmptyIcon}>🏠</div>
-                <p>No zones yet. Create a zone to organize your switches.</p>
+                <p>No groups yet. Create a group to organize your switches.</p>
                 <button
                   type="button"
                   className={styles.favActionButton}
-                  onClick={() => setShowNewZoneInput(true)}
+                  onClick={() => setShowNewGroupInput(true)}
                   data-variant="primary"
                 >
-                  ➕ Create Your First Zone
+                  ➕ Create Your First Group
                 </button>
               </div>
             )}
 
-            {/* Active zone content */}
-            {effectiveActiveZone && allZones.length > 0 && (
-              <div className={styles.favZoneContentWrapper}>
+            {/* Active group content */}
+            {effectiveActiveGroup && allGroups.length > 0 && (
+              <div className={styles.favGroupContentWrapper}>
                 
                 {/* SWITCHES SECTION */}
                 <div className={styles.favSubSection}>
@@ -1918,14 +1920,14 @@ export default function FavoritesSection({
                     <h4 className={styles.favSubSectionTitle}>
                       <span className={styles.favSubSectionIcon}>💡</span>
                       Switches
-                      {currentZoneSwitches.length > 0 && (
-                        <span className={styles.favSubSectionCount}>{currentZoneSwitches.length}</span>
+                      {currentGroupSwitches.length > 0 && (
+                        <span className={styles.favSubSectionCount}>{currentGroupSwitches.length}</span>
                       )}
                     </h4>
                   </div>
 
                   <div className={styles.favoritesSwitchGrid} onDragLeave={handleGridDragLeave}>
-                    {currentZoneSwitches.map((sw, idx) => {
+                    {currentGroupSwitches.map((sw, idx) => {
                       const isDiscovered = discoveredPanelIps.has(sw.ip);
                       const isUnreachable = isSwitchUnreachable(sw);
                       const isReachable = isDiscovered && !isUnreachable;
@@ -2091,7 +2093,7 @@ export default function FavoritesSection({
                             </div>
                           ) : (
                             filteredAvailableSwitches.map(sw => {
-                              const alreadyAdded = currentZoneSwitches.some(
+                              const alreadyAdded = currentGroupSwitches.some(
                                 s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type
                               );
                               return (
@@ -2119,7 +2121,7 @@ export default function FavoritesSection({
                         type="button"
                         className={styles.favAddItemCard}
                         onClick={() => setShowSwitchPicker(true)}
-                        title="Add a switch to this zone"
+                        title="Add a switch to this group"
                       >
                         <span className={styles.favAddItemIcon}>➕</span>
                         <span className={styles.favAddItemText}>Add Switch</span>
@@ -2129,97 +2131,97 @@ export default function FavoritesSection({
                 </div>
 
                 {/* FLOWS SECTION */}
-                <div className={`${styles.favSubSection} ${styles.favSubSectionFlows}`}>
+                <div className={`${styles.favSubSection} ${styles.favSubSectionActions}`}>
                   <div className={styles.favSubSectionHeader}>
                     <h4 className={styles.favSubSectionTitle}>
                       <span className={styles.favSubSectionIcon}>⚡</span>
-                      Smart Flows
-                      {currentZoneFlows.length > 0 && (
+                      Smart Actions
+                      {currentGroupActions.length > 0 && (
                         <span className={`${styles.favSubSectionCount} ${styles.favSubSectionCountPurple}`}>
-                          {currentZoneFlows.length}
+                          {currentGroupActions.length}
                         </span>
                       )}
                     </h4>
                   </div>
 
-                  <div className={styles.smartFlowsGrid}>
-                    {currentZoneFlows.map((flow, idx) => {
-                      const flowHasInvalidSteps = hasInvalidSteps(flow);
-                      const invalidStepIndices = getInvalidStepIndices(flow);
+                  <div className={styles.smartActionsGrid}>
+                    {currentGroupActions.map((smartAction, idx) => {
+                      const actionHasInvalidSteps = hasInvalidSteps(smartAction);
+                      const invalidStepIndices = getInvalidStepIndices(smartAction);
                       // Only show invalid state AFTER discovery completes (not during loading)
-                      const showInvalidState = !isLoading && discoveryCompleted && flowHasInvalidSteps;
+                      const showInvalidState = !isLoading && discoveryCompleted && actionHasInvalidSteps;
                       
-                      // Check if this flow is currently executing
-                      const isThisFlowExecuting = executingFlow?.name === flow.name && 
+                      // Check if this action is currently executing
+                      const isThisActionExecuting = executingAction?.name === smartAction.name && 
                         executionProgress.state === 'running';
-                      const isThisFlowCompleted = executingFlow?.name === flow.name && 
+                      const isThisActionCompleted = executingAction?.name === smartAction.name && 
                         executionProgress.state === 'completed';
-                      const isThisFlowStopped = executingFlow?.name === flow.name && 
+                      const isThisActionStopped = executingAction?.name === smartAction.name && 
                         executionProgress.state === 'stopped';
                       
                       // Calculate total duration
-                      const totalDurationMs = flow.scheduling?.reduce((acc, s) => 
+                      const totalDurationMs = smartAction.scheduling?.reduce((acc, s) => 
                         acc + (s.type === 'delay' ? (s.delayMs || 0) : 2000), 0) || 0;
                       
                       // Drag and drop indicators
-                      const showFlowDropBefore = flowDropIndicator?.index === idx && flowDropIndicator?.position === 'before' && draggedFlow?.index !== idx;
-                      const showFlowDropAfter = flowDropIndicator?.index === idx && flowDropIndicator?.position === 'after' && draggedFlow?.index !== idx;
+                      const showActionDropBefore = actionDropIndicator?.index === idx && actionDropIndicator?.position === 'before' && draggedAction?.index !== idx;
+                      const showActionDropAfter = actionDropIndicator?.index === idx && actionDropIndicator?.position === 'after' && draggedAction?.index !== idx;
                       
                       return (
                         <div
-                          key={`flow-${flow.name}-${idx}`}
-                          className={`${styles.smartFlowCard} ${showInvalidState ? styles.smartFlowCardInvalid : ''} ${isThisFlowExecuting ? styles.smartFlowCardExecuting : ''} ${isThisFlowCompleted ? styles.smartFlowCardCompleted : ''} ${isThisFlowStopped ? styles.smartFlowCardStopped : ''} ${showFlowDropBefore ? styles.smartFlowCardDropBefore : ''} ${showFlowDropAfter ? styles.smartFlowCardDropAfter : ''}`}
-                          draggable={!isThisFlowExecuting}
-                          onDragStart={(e) => handleFlowDragStart(e, idx, flow)}
-                          onDragEnd={handleFlowDragEnd}
-                          onDragOver={(e) => handleFlowDragOver(e, idx)}
-                          onDragLeave={handleFlowDragLeave}
-                          onDrop={handleFlowDrop}
-                          onContextMenu={(e) => !isThisFlowExecuting && handleFlowContextMenu(e, effectiveActiveZone!, idx, flow.name)}
+                          key={`action-${smartAction.name}-${idx}`}
+                          className={`${styles.smartActionCard} ${showInvalidState ? styles.smartActionCardInvalid : ''} ${isThisActionExecuting ? styles.smartActionCardExecuting : ''} ${isThisActionCompleted ? styles.smartActionCardCompleted : ''} ${isThisActionStopped ? styles.smartActionCardStopped : ''} ${showActionDropBefore ? styles.smartActionCardDropBefore : ''} ${showActionDropAfter ? styles.smartActionCardDropAfter : ''}`}
+                          draggable={!isThisActionExecuting}
+                          onDragStart={(e) => handleActionDragStart(e, idx, smartAction)}
+                          onDragEnd={handleActionDragEnd}
+                          onDragOver={(e) => handleActionDragOver(e, idx)}
+                          onDragLeave={handleActionDragLeave}
+                          onDrop={handleActionDrop}
+                          onContextMenu={(e) => !isThisActionExecuting && handleActionContextMenu(e, effectiveActiveGroup!, idx, smartAction.name)}
                         >
-                          <div className={styles.smartFlowCardHeader}>
-                            <span className={styles.smartFlowIcon}>
-                              {isThisFlowExecuting ? '⏳' : isThisFlowCompleted ? '✅' : isThisFlowStopped ? '⏹️' : showInvalidState ? '⚠️' : '⚡'}
+                          <div className={styles.smartActionCardHeader}>
+                            <span className={styles.smartActionIcon}>
+                              {isThisActionExecuting ? '⏳' : isThisActionCompleted ? '✅' : isThisActionStopped ? '⏹️' : showInvalidState ? '⚠️' : '⚡'}
                             </span>
-                            <span className={styles.smartFlowName}>{flow.name}</span>
-                            {!isThisFlowExecuting && (
+                            <span className={styles.smartActionName}>{smartAction.name}</span>
+                            {!isThisActionExecuting && (
                               <>
                                 <button
                                   type="button"
-                                  className={styles.smartFlowEdit}
-                                  onClick={() => handleEditFlow(idx)}
-                                  title="Edit flow"
+                                  className={styles.smartActionEdit}
+                                  onClick={() => handleEditAction(idx)}
+                                  title="Edit action"
                                 >
                                   ✏️
                                 </button>
                                 {/* Desktop: delete button. Mobile: more menu button */}
                                 <button
                                   type="button"
-                                  className={styles.smartFlowDelete}
+                                  className={styles.smartActionDelete}
                                   onClick={() => setDeleteConfirm({
-                                    type: 'flow',
-                                    name: flow.name,
-                                    onConfirm: () => handleDeleteFlow(idx),
+                                    type: 'action',
+                                    name: smartAction.name,
+                                    onConfirm: () => handleDeleteAction(idx),
                                   })}
-                                  title="Delete flow"
+                                  title="Delete action"
                                 >
                                   <span className={styles.desktopOnly}>✕</span>
                                 </button>
                                 <button
                                   type="button"
-                                  className={styles.smartFlowMore}
+                                  className={styles.smartActionMore}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     // Position context menu near the button on mobile
                                     const rect = e.currentTarget.getBoundingClientRect();
-                                    setFlowContextMenu({
+                                    setActionContextMenu({
                                       x: rect.left,
                                       y: rect.bottom + 4,
-                                      zoneName: effectiveActiveZone!,
-                                      flowIndex: idx,
-                                      flowName: flow.name,
+                                      groupName: effectiveActiveGroup!,
+                                      actionIndex: idx,
+                                      actionName: smartAction.name,
                                     });
-                                    setFlowRenameValue(flow.name);
+                                    setActionRenameValue(smartAction.name);
                                   }}
                                   title="More options"
                                 >
@@ -2230,25 +2232,25 @@ export default function FavoritesSection({
                           </div>
                           
                           {/* Execution Progress */}
-                          {isThisFlowExecuting && (
-                            <div className={styles.smartFlowProgress}>
-                              <div className={styles.smartFlowProgressBar}>
+                          {isThisActionExecuting && (
+                            <div className={styles.smartActionProgress}>
+                              <div className={styles.smartActionProgressBar}>
                                 <div 
-                                  className={styles.smartFlowProgressFill}
+                                  className={styles.smartActionProgressFill}
                                   style={{ 
-                                    width: `${((executionProgress.currentStage + 1) / flow.stages.length) * 100}%` 
+                                    width: `${((executionProgress.currentStage + 1) / smartAction.stages.length) * 100}%` 
                                   }}
                                 />
                               </div>
-                              <div className={styles.smartFlowProgressText}>
-                                Stage {executionProgress.currentStage + 1}/{flow.stages.length}
+                              <div className={styles.smartActionProgressText}>
+                                Stage {executionProgress.currentStage + 1}/{smartAction.stages.length}
                                 {executionProgress.isWaiting && executionProgress.remainingDelayMs !== undefined && (
-                                  <span className={styles.smartFlowWaiting}>
+                                  <span className={styles.smartActionWaiting}>
                                     ⏱️ {(executionProgress.remainingDelayMs / 1000).toFixed(1)}s
                                   </span>
                                 )}
                                 {executionProgress.isWaiting && executionProgress.remainingDelayMs === undefined && (
-                                  <span className={styles.smartFlowWaiting}>
+                                  <span className={styles.smartActionWaiting}>
                                     🔄 Waiting until done...
                                   </span>
                                 )}
@@ -2257,16 +2259,16 @@ export default function FavoritesSection({
                           )}
                           
                           {/* Normal meta info */}
-                          {!isThisFlowExecuting && (
-                            <div className={styles.smartFlowMeta}>
-                              {flow.stages?.length || 0} stage{(flow.stages?.length || 0) !== 1 ? 's' : ''}
+                          {!isThisActionExecuting && (
+                            <div className={styles.smartActionMeta}>
+                              {smartAction.stages?.length || 0} stage{(smartAction.stages?.length || 0) !== 1 ? 's' : ''}
                               {showInvalidState && (
-                                <span className={styles.smartFlowInvalidCount}>
+                                <span className={styles.smartActionInvalidCount}>
                                   {invalidStepIndices.length} unreachable
                                 </span>
                               )}
-                              {(flow.stages?.length || 0) > 0 && !showInvalidState && totalDurationMs > 0 && (
-                                <span className={styles.smartFlowDuration}>
+                              {(smartAction.stages?.length || 0) > 0 && !showInvalidState && totalDurationMs > 0 && (
+                                <span className={styles.smartActionDuration}>
                                   &gt; {Math.ceil(totalDurationMs / 1000)}s
                                 </span>
                               )}
@@ -2274,40 +2276,40 @@ export default function FavoritesSection({
                           )}
                           
                           {/* Action buttons */}
-                          {isThisFlowExecuting ? (
+                          {isThisActionExecuting ? (
                             <button
                               type="button"
-                              className={styles.smartFlowStopButton}
-                              onClick={handleStopFlow}
+                              className={styles.smartActionStopButton}
+                              onClick={handleStopAction}
                             >
                               ⏹️ Stop
                             </button>
                           ) : (
                             <button
                               type="button"
-                              className={`${styles.smartFlowRunButton} ${showInvalidState ? styles.smartFlowRunButtonDisabled : ''}`}
-                              onClick={() => handleRunFlow(flow)}
-                              disabled={isLoading || showInvalidState || !!executingFlow}
+                              className={`${styles.smartActionRunButton} ${showInvalidState ? styles.smartActionRunButtonDisabled : ''}`}
+                              onClick={() => handleRunAction(smartAction)}
+                              disabled={isLoading || showInvalidState || !!executingAction}
                             >
-                              {isThisFlowCompleted ? '✅ Done!' : isThisFlowStopped ? '⏹️ Stopped' : showInvalidState ? '⚠️ Cannot Run' : '▶ Run'}
+                              {isThisActionCompleted ? '✅ Done!' : isThisActionStopped ? '⏹️ Stopped' : showInvalidState ? '⚠️ Cannot Run' : '▶ Run'}
                             </button>
                           )}
                         </div>
                       );
                     })}
                     
-                    {/* Create Flow */}
-                    {showFlowCreator ? (
-                      <div className={styles.flowCreatorCard}>
-                        <div className={styles.flowCreatorHeader}>
-                          <span className={styles.flowCreatorIcon}>⚡</span>
-                          <span className={styles.flowCreatorTitle}>New Flow</span>
+                    {/* Create Action */}
+                    {showActionCreator ? (
+                      <div className={styles.actionCreatorCard}>
+                        <div className={styles.actionCreatorHeader}>
+                          <span className={styles.actionCreatorIcon}>⚡</span>
+                          <span className={styles.actionCreatorTitle}>New Action</span>
                           <button
                             type="button"
-                            className={styles.flowCreatorClose}
+                            className={styles.actionCreatorClose}
                             onClick={() => {
-                              setShowFlowCreator(false);
-                              setNewFlowName('');
+                              setShowActionCreator(false);
+                              setNewActionName('');
                             }}
                             title="Cancel (Esc)"
                           >
@@ -2316,24 +2318,24 @@ export default function FavoritesSection({
                         </div>
                         <input
                           type="text"
-                          value={newFlowName}
-                          onChange={(e) => setNewFlowName(e.target.value)}
-                          placeholder="Enter flow name..."
-                          className={styles.flowCreatorInput}
+                          value={newActionName}
+                          onChange={(e) => setNewActionName(e.target.value)}
+                          placeholder="Enter action name..."
+                          className={styles.actionCreatorInput}
                           autoFocus
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newFlowName.trim()) handleCreateFlow();
+                            if (e.key === 'Enter' && newActionName.trim()) handleCreateAction();
                             if (e.key === 'Escape') {
-                              setShowFlowCreator(false);
-                              setNewFlowName('');
+                              setShowActionCreator(false);
+                              setNewActionName('');
                             }
                           }}
                         />
                         <button
                           type="button"
-                          className={styles.flowCreatorSubmit}
-                          onClick={handleCreateFlow}
-                          disabled={!newFlowName.trim()}
+                          className={styles.actionCreatorSubmit}
+                          onClick={handleCreateAction}
+                          disabled={!newActionName.trim()}
                         >
                           ✨ Create &amp; Edit
                         </button>
@@ -2342,11 +2344,11 @@ export default function FavoritesSection({
                       <button
                         type="button"
                         className={`${styles.favAddItemCard} ${styles.favAddItemCardPurple}`}
-                        onClick={() => setShowFlowCreator(true)}
-                        title="Create a new smart flow"
+                        onClick={() => setShowActionCreator(true)}
+                        title="Create a new smart action"
                       >
                         <span className={styles.favAddItemIcon}>⚡</span>
-                        <span className={styles.favAddItemText}>Create Flow</span>
+                        <span className={styles.favAddItemText}>Create Action</span>
                       </button>
                     )}
                   </div>
@@ -2384,28 +2386,28 @@ export default function FavoritesSection({
         </div>
       )}
       
-      {/* Flow Context Menu (right-click on flow cards) - direct rename */}
-      {flowContextMenu && (
+      {/* Action Context Menu (right-click on action cards) - direct rename */}
+      {actionContextMenu && (
         <div
-          ref={flowContextMenuRef}
+          ref={actionContextMenuRef}
           className={styles.contextMenu}
-          style={{ left: flowContextMenu.x, top: flowContextMenu.y }}
+          style={{ left: actionContextMenu.x, top: actionContextMenu.y }}
         >
-          <div className={styles.contextMenuTitle}>Rename Flow</div>
+          <div className={styles.contextMenuTitle}>Rename Action</div>
           <input
             type="text"
-            value={flowRenameValue}
-            onChange={(e) => setFlowRenameValue(e.target.value)}
+            value={actionRenameValue}
+            onChange={(e) => setActionRenameValue(e.target.value)}
             className={styles.contextMenuInput}
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSaveFlowRenameFromContext();
-              if (e.key === 'Escape') setFlowContextMenu(null);
+              if (e.key === 'Enter') handleSaveActionRenameFromContext();
+              if (e.key === 'Escape') setActionContextMenu(null);
             }}
           />
           <div className={styles.contextMenuButtons}>
-            <button onClick={handleSaveFlowRenameFromContext} disabled={!flowRenameValue.trim()}>Save</button>
-            <button onClick={() => setFlowContextMenu(null)}>Cancel</button>
+            <button onClick={handleSaveActionRenameFromContext} disabled={!actionRenameValue.trim()}>Save</button>
+            <button onClick={() => setActionContextMenu(null)}>Cancel</button>
           </div>
         </div>
       )}
@@ -2420,8 +2422,8 @@ export default function FavoritesSection({
             </div>
             <div className={styles.deleteConfirmMessage}>
               &quot;{deleteConfirm.name}&quot;
-              {deleteConfirm.type === 'zone' && (
-                <><br /><small>All switches and flows will be removed</small></>
+              {deleteConfirm.type === 'group' && (
+                <><br /><small>All switches and actions will be removed</small></>
               )}
             </div>
             <div className={styles.deleteConfirmButtons}>
@@ -2447,43 +2449,43 @@ export default function FavoritesSection({
         </div>
       )}
       
-      {/* Flow Builder Modal */}
-      {editingFlow && editingFlowData && (
-        <div className={styles.flowBuilderOverlay} onClick={handleCancelEditFlow}>
-          <div className={styles.flowBuilderModal} onClick={(e) => e.stopPropagation()}>
+      {/* Action Builder Modal */}
+      {editingAction && editingActionData && (
+        <div className={styles.actionBuilderOverlay} onClick={handleCancelEditAction}>
+          <div className={styles.actionBuilderModal} onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className={styles.flowBuilderHeader}>
-              {isEditingFlowName ? (
-                <div className={styles.flowBuilderTitleEdit}>
-                  <span className={styles.flowBuilderTitleIcon}>⚡</span>
+            <div className={styles.actionBuilderHeader}>
+              {isEditingActionName ? (
+                <div className={styles.actionBuilderTitleEdit}>
+                  <span className={styles.actionBuilderTitleIcon}>⚡</span>
                   <input
                     type="text"
-                    value={editingFlowNameValue}
-                    onChange={(e) => setEditingFlowNameValue(e.target.value)}
-                    className={styles.flowBuilderNameInput}
+                    value={editingActionNameValue}
+                    onChange={(e) => setEditingActionNameValue(e.target.value)}
+                    className={styles.actionBuilderNameInput}
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && editingFlowNameValue.trim()) handleSaveFlowName();
-                      if (e.key === 'Escape') handleCancelRenameFlow();
+                      if (e.key === 'Enter' && editingActionNameValue.trim()) handleSaveActionName();
+                      if (e.key === 'Escape') handleCancelRenameAction();
                     }}
                     onBlur={() => {
-                      if (editingFlowNameValue.trim()) handleSaveFlowName();
-                      else handleCancelRenameFlow();
+                      if (editingActionNameValue.trim()) handleSaveActionName();
+                      else handleCancelRenameAction();
                     }}
                   />
                   <button
                     type="button"
-                    className={styles.flowBuilderNameSave}
-                    onClick={handleSaveFlowName}
-                    disabled={!editingFlowNameValue.trim()}
+                    className={styles.actionBuilderNameSave}
+                    onClick={handleSaveActionName}
+                    disabled={!editingActionNameValue.trim()}
                     title="Save name"
                   >
                     ✓
                   </button>
                   <button
                     type="button"
-                    className={styles.flowBuilderNameCancel}
-                    onClick={handleCancelRenameFlow}
+                    className={styles.actionBuilderNameCancel}
+                    onClick={handleCancelRenameAction}
                     title="Cancel"
                   >
                     ✕
@@ -2491,37 +2493,37 @@ export default function FavoritesSection({
                 </div>
               ) : (
                 <h3 
-                  className={styles.flowBuilderTitle}
-                  onClick={handleStartRenameFlow}
+                  className={styles.actionBuilderTitle}
+                  onClick={handleStartRenameAction}
                   title="Click to rename"
                 >
-                  <span className={styles.flowBuilderTitleIcon}>⚡</span>
-                  <span className={styles.flowBuilderTitleText}>{editingFlowData.name}</span>
-                  <span className={styles.flowBuilderTitleEditHint}>✏️</span>
+                  <span className={styles.actionBuilderTitleIcon}>⚡</span>
+                  <span className={styles.actionBuilderTitleText}>{editingActionData.name}</span>
+                  <span className={styles.actionBuilderTitleEditHint}>✏️</span>
                 </h3>
               )}
               <button
                 type="button"
-                className={styles.flowBuilderClose}
-                onClick={handleCancelEditFlow}
+                className={styles.actionBuilderClose}
+                onClick={handleCancelEditAction}
               >
                 ✕
               </button>
             </div>
             
-            {/* Flow Timeline */}
-            <div className={styles.flowBuilderContent}>
-              <div className={styles.flowTimeline}>
-                {editingFlowData.stages.map((stage, stageIdx) => (
-                  <div key={`stage-${stageIdx}`} className={styles.flowTimelineSection}>
+            {/* Action Timeline */}
+            <div className={styles.actionBuilderContent}>
+              <div className={styles.actionTimeline}>
+                {editingActionData.stages.map((stage, stageIdx) => (
+                  <div key={`stage-${stageIdx}`} className={styles.actionTimelineSection}>
                     {/* Stage Card */}
-                    <div className={styles.flowStageCard}>
-                      <div className={styles.flowStageHeader}>
-                        <span className={styles.flowStageNumber}>Stage {stageIdx + 1}</span>
-                        {editingFlowData.stages.length > 1 && (
+                    <div className={styles.actionStageCard}>
+                      <div className={styles.actionStageHeader}>
+                        <span className={styles.actionStageNumber}>Stage {stageIdx + 1}</span>
+                        {editingActionData.stages.length > 1 && (
                           <button
                             type="button"
-                            className={styles.flowStageRemove}
+                            className={styles.actionStageRemove}
                             onClick={() => handleRemoveStage(stageIdx)}
                             title="Remove stage"
                           >
@@ -2531,9 +2533,9 @@ export default function FavoritesSection({
                       </div>
                       
                       {/* Actions in this stage */}
-                      <div className={styles.flowStageActions}>
+                      <div className={styles.actionStageActions}>
                         {stage.actions.length === 0 && (
-                          <div className={styles.flowStageEmpty}>
+                          <div className={styles.actionStageEmpty}>
                             No switches selected
                           </div>
                         )}
@@ -2542,17 +2544,17 @@ export default function FavoritesSection({
                           const isLight = type === 'light';
                           
                           return (
-                            <div key={`action-${actionIdx}`} className={styles.flowActionItem}>
-                              <span className={styles.flowActionIcon}>
+                            <div key={`action-${actionIdx}`} className={styles.actionActionItem}>
+                              <span className={styles.actionActionIcon}>
                                 {getSwitchTypeIcon(action.switchId)}
                               </span>
-                              <span className={styles.flowActionName}>
+                              <span className={styles.actionActionName}>
                                 {getSwitchNameFromId(action.switchId)}
                               </span>
                               <select
                                 value={action.action}
-                                onChange={(e) => handleUpdateActionType(stageIdx, actionIdx, e.target.value as FlowActionType)}
-                                className={styles.flowActionSelect}
+                                onChange={(e) => handleUpdateActionType(stageIdx, actionIdx, e.target.value as StageActionType)}
+                                className={styles.actionActionSelect}
                               >
                                 {isLight ? (
                                   <>
@@ -2570,7 +2572,7 @@ export default function FavoritesSection({
                               </select>
                               <button
                                 type="button"
-                                className={styles.flowActionRemove}
+                                className={styles.actionActionRemove}
                                 onClick={() => handleRemoveActionFromStage(stageIdx, actionIdx)}
                                 title="Remove"
                               >
@@ -2582,9 +2584,9 @@ export default function FavoritesSection({
                       </div>
                       
                       {/* Add Switch Dropdown */}
-                      <div className={styles.flowAddSwitch}>
+                      <div className={styles.actionAddSwitch}>
                         <select
-                          className={styles.flowAddSwitchSelect}
+                          className={styles.actionAddSwitchSelect}
                           value=""
                           onChange={(e) => {
                             const sw = availableDevices.find(d => d.id === e.target.value);
@@ -2609,42 +2611,42 @@ export default function FavoritesSection({
                     </div>
                     
                     {/* Scheduling between stages */}
-                    {stageIdx < editingFlowData.stages.length - 1 && editingFlowData.scheduling[stageIdx] && (
-                      <div className={styles.flowSchedulingCard}>
-                        <div className={styles.flowSchedulingIcon}>⏱️</div>
-                        <div className={styles.flowSchedulingContent}>
+                    {stageIdx < editingActionData.stages.length - 1 && editingActionData.scheduling[stageIdx] && (
+                      <div className={styles.actionSchedulingCard}>
+                        <div className={styles.actionSchedulingIcon}>⏱️</div>
+                        <div className={styles.actionSchedulingContent}>
                           <select
-                            value={editingFlowData.scheduling[stageIdx].type}
+                            value={editingActionData.scheduling[stageIdx].type}
                             onChange={(e) => handleUpdateScheduling(stageIdx, { 
                               type: e.target.value as SchedulingType,
                               delayMs: e.target.value === 'delay' ? 1000 : undefined,
                             })}
-                            className={styles.flowSchedulingTypeSelect}
+                            className={styles.actionSchedulingTypeSelect}
                           >
                             <option value="delay">⏱️ Fixed delay</option>
                             <option value="waitForCurtains">🔄 Wait until done</option>
                           </select>
                           
-                          {editingFlowData.scheduling[stageIdx].type === 'delay' && (
-                            <div className={styles.flowSchedulingDelay}>
+                          {editingActionData.scheduling[stageIdx].type === 'delay' && (
+                            <div className={styles.actionSchedulingDelay}>
                               <input
                                 type="number"
                                 min="0"
                                 max="300000"
                                 step="100"
-                                value={editingFlowData.scheduling[stageIdx].delayMs || 0}
+                                value={editingActionData.scheduling[stageIdx].delayMs || 0}
                                 onChange={(e) => handleUpdateScheduling(stageIdx, { 
                                   delayMs: parseInt(e.target.value, 10) || 0 
                                 })}
-                                className={styles.flowSchedulingInput}
+                                className={styles.actionSchedulingInput}
                               />
-                              <span className={styles.flowSchedulingUnit}>ms</span>
-                              <div className={styles.flowSchedulingPresets}>
+                              <span className={styles.actionSchedulingUnit}>ms</span>
+                              <div className={styles.actionSchedulingPresets}>
                                 {[500, 1000, 2000, 5000].map(ms => (
                                   <button
                                     key={ms}
                                     type="button"
-                                    className={`${styles.flowSchedulingPreset} ${editingFlowData.scheduling[stageIdx].delayMs === ms ? styles.flowSchedulingPresetActive : ''}`}
+                                    className={`${styles.actionSchedulingPreset} ${editingActionData.scheduling[stageIdx].delayMs === ms ? styles.actionSchedulingPresetActive : ''}`}
                                     onClick={() => handleUpdateScheduling(stageIdx, { delayMs: ms })}
                                   >
                                     {ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`}
@@ -2654,8 +2656,8 @@ export default function FavoritesSection({
                             </div>
                           )}
                           
-                          {editingFlowData.scheduling[stageIdx].type === 'waitForCurtains' && (
-                            <div className={styles.flowSchedulingInfo}>
+                          {editingActionData.scheduling[stageIdx].type === 'waitForCurtains' && (
+                            <div className={styles.actionSchedulingInfo}>
                               Waits for shades/curtains to stop moving before continuing
                             </div>
                           )}
@@ -2668,31 +2670,31 @@ export default function FavoritesSection({
                 {/* Add Stage Button */}
                 <button
                   type="button"
-                  className={styles.flowAddStage}
+                  className={styles.actionAddStage}
                   onClick={handleAddStage}
                 >
-                  <span className={styles.flowAddStageIcon}>➕</span>
-                  <span className={styles.flowAddStageText}>Add Stage</span>
+                  <span className={styles.actionAddStageIcon}>➕</span>
+                  <span className={styles.actionAddStageText}>Add Stage</span>
                 </button>
               </div>
             </div>
             
             {/* Footer */}
-            <div className={styles.flowBuilderFooter}>
+            <div className={styles.actionBuilderFooter}>
               <button
                 type="button"
-                className={styles.flowBuilderCancel}
-                onClick={handleCancelEditFlow}
+                className={styles.actionBuilderCancel}
+                onClick={handleCancelEditAction}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className={styles.flowBuilderSave}
-                onClick={handleSaveEditFlow}
-                disabled={editingFlowData.stages.length === 0 || editingFlowData.stages.every(s => s.actions.length === 0)}
+                className={styles.actionBuilderSave}
+                onClick={handleSaveEditAction}
+                disabled={editingActionData.stages.length === 0 || editingActionData.stages.every(s => s.actions.length === 0)}
               >
-                💾 Save Flow
+                💾 Save Action
               </button>
             </div>
           </div>

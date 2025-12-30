@@ -197,7 +197,7 @@ export default function BatchOperationsView({
   const [subView, setSubView] = useState<BatchSubView>("main");
   // Firmware file for upload
   const [firmwareFile, setFirmwareFile] = useState<File | null>(null);
-  // Drag state for drop zone
+  // Drag state for drop group
   const [isDragging, setIsDragging] = useState(false);
   // File input refs
   const firmwareInputRef = useRef<HTMLInputElement>(null);

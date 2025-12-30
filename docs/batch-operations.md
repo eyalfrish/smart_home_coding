@@ -6,7 +6,7 @@ This document analyzes the Cubixx panel APIs (HTTP endpoints and WebSocket comma
 
 Batch operations allow administrators to execute the same command across multiple selected panels simultaneously. This is particularly useful for:
 - Fleet-wide configuration changes
-- Synchronized actions across rooms/zones
+- Synchronized actions across rooms/groups
 - Bulk firmware updates
 - Emergency shutdowns or resets
 
