@@ -5,6 +5,7 @@ import type {
   DiscoverySummary,
 } from "@/lib/discovery/types";
 import { runMultiPhaseDiscovery, type DiscoveryOptions } from "@/lib/discovery/discovery-engine";
+import { updateCacheFromDiscovery, getCachedPanelsInRange, type UpdateCachedPanelData } from "@/server/db";
 
 interface ThoroughSettings {
   timeout?: number;      // ms
@@ -47,6 +48,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Load cached panel data for this IP range
+    const cachedPanels = await getCachedPanelsInRange(body.baseIp, body.start, body.end);
+    
     const options: DiscoveryOptions = { 
       thoroughMode: body.thoroughMode ?? false,
       thoroughSettings: body.thoroughSettings,
@@ -59,6 +63,9 @@ export async function POST(request: Request) {
       options
     );
 
+    // Track discovered panels for cache update
+    const discoveredPanels: UpdateCachedPanelData[] = [];
+
     // Build ordered results array
     const results = [];
     for (let octet = body.start; octet <= body.end; octet++) {
@@ -67,8 +74,30 @@ export async function POST(request: Request) {
       if (result) {
         // Remove panelHtml to reduce payload size
         const { panelHtml, ...rest } = result;
+        
+        // Track discovered panels for cache update
+        if (result.status === "panel") {
+          discoveredPanels.push({
+            ip: result.ip,
+            name: result.name,
+            loggingEnabled: result.settings?.logging,
+            longPressMs: result.settings?.longPressMs,
+          });
+        } else if ((result.status === "no-response" || result.status === "error") && cachedPanels[ip]) {
+          // Enrich with cached data for offline panels
+          rest.cachedName = cachedPanels[ip].name;
+          rest.cachedLastSeen = cachedPanels[ip].lastSeen;
+        }
+        
         results.push(rest);
       }
+    }
+
+    // Update cache with discovered panels (fire and forget)
+    if (discoveredPanels.length > 0) {
+      updateCacheFromDiscovery(discoveredPanels).catch(err => {
+        console.error("[Discovery] Failed to update panel cache:", err);
+      });
     }
 
     const summary: DiscoverySummary = {

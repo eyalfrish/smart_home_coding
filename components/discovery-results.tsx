@@ -1209,7 +1209,14 @@ export default function DiscoveryResults({
                       )}
                     </td>
                     <td data-label="Name">
-                      {liveState?.fullState?.hostname ?? metadata?.name ?? result.name ?? "—"}
+                      {liveState?.fullState?.hostname ?? metadata?.name ?? result.name ?? (
+                        // Show cached name for offline panels that were previously discovered
+                        result.cachedName ? (
+                          <span className={styles.cachedName} title={`Last seen: ${result.cachedLastSeen ? new Date(result.cachedLastSeen).toLocaleString() : 'Unknown'}`}>
+                            {result.cachedName}
+                          </span>
+                        ) : "—"
+                      )}
                     </td>
                     <td data-label="Status">
                       {liveState?.connectionStatus === "connected" ? (

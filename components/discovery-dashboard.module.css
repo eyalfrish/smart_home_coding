@@ -888,6 +888,15 @@
   opacity: 0.3;
 }
 
+/* Cached panel name - shown for offline panels that were previously discovered */
+.cachedName {
+  font-style: italic;
+  color: var(--muted);
+  opacity: 0.7;
+  cursor: help;
+  border-bottom: 1px dotted var(--muted);
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;

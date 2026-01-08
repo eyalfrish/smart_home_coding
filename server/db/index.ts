@@ -49,3 +49,32 @@ export {
   // See profile-picker.tsx for implementation.
 } from './helpers';
 
+// =============================================================================
+// Panel Cache - Public API
+// =============================================================================
+//
+// Caches "static" information about discovered panels.
+// Used to show last-known panel names when panels go offline.
+// =============================================================================
+
+// Re-export panel cache types
+export type {
+  CachedPanelInfo,
+  PanelCacheDatabase,
+  UpdateCachedPanelData,
+} from './panel-cache-types';
+
+export { PANEL_CACHE_VERSION } from './panel-cache-types';
+
+// Re-export panel cache functions
+export {
+  loadPanelCache,
+  savePanelCache,
+  updateCachedPanel,
+  updateCacheFromDiscovery,
+  getCachedPanel,
+  getAllCachedPanels,
+  getCachedPanelsInRange,
+  removeCachedPanel,
+  clearPanelCache,
+} from './panel-cache';

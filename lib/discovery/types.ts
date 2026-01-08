@@ -61,6 +61,10 @@ export interface DiscoveryResult {
   settings?: PanelSettings;
   /** Time taken to discover this IP in milliseconds */
   discoveryTimeMs?: number;
+  /** Cached panel name from previous discoveries (populated for no-response IPs) */
+  cachedName?: string | null;
+  /** ISO timestamp of when this panel was last seen online */
+  cachedLastSeen?: string | null;
 }
 
 export interface DiscoverySummary {
