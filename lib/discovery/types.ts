@@ -235,15 +235,17 @@ export interface PanelCommand {
  * @param relayIndex 0-based relay index (0-5)
  * @param relayName The relay name from WebSocket state
  * @param relayPairs Relay pair configuration from settings (may be undefined for older panels)
+ * @param skipLinkHiding If true, don't hide Link-suffixed relays (used for Link column display)
  */
 export function getRelayDeviceType(
   relayIndex: number,
   relayName: string | undefined,
-  relayPairs: RelayPairConfig[] | undefined
+  relayPairs: RelayPairConfig[] | undefined,
+  skipLinkHiding: boolean = false
 ): DeviceType {
   // If no settings available, fall back to name-based detection (legacy behavior)
   if (!relayPairs || relayPairs.length === 0) {
-    return getRelayDeviceTypeLegacy(relayName);
+    return getRelayDeviceTypeLegacy(relayName, skipLinkHiding);
   }
   
   // Find the pair for this relay (pair 0 = relays 0,1; pair 1 = relays 2,3; pair 2 = relays 4,5)
@@ -253,7 +255,7 @@ export function getRelayDeviceType(
   const pairConfig = relayPairs.find(p => p.pairIndex === pairIndex);
   if (!pairConfig) {
     // Pair not found in config, use legacy detection
-    return getRelayDeviceTypeLegacy(relayName);
+    return getRelayDeviceTypeLegacy(relayName, skipLinkHiding);
   }
   
   // For Curtain/Venetian/Linked modes, relays are used together - they shouldn't appear as individual relays
@@ -283,8 +285,8 @@ export function getRelayDeviceType(
   if (relayMode === "switch") {
     if (!relayName || relayName.trim() === "") return "hidden";
     if (/^Relay\s+\d+$/i.test(relayName.trim())) return "hidden";
-    // Hide linked relays (names ending with "-Link", "_Link", etc.)
-    if (/[-_–—]Link$/i.test(relayName.trim())) return "hidden";
+    // Hide linked relays (names ending with "-Link", "_Link", etc.) - unless skipLinkHiding is true
+    if (/[-_–—]Link$/i.test(relayName.trim()) && !skipLinkHiding) return "hidden";
     return "light";
   }
   
@@ -331,12 +333,13 @@ export function getCurtainDeviceType(
 
 /**
  * Legacy name-based detection for relays (fallback when settings unavailable).
+ * @param skipLinkHiding If true, don't hide Link-suffixed relays (used for Link column display)
  */
-function getRelayDeviceTypeLegacy(relayName: string | undefined): DeviceType {
+function getRelayDeviceTypeLegacy(relayName: string | undefined, skipLinkHiding: boolean = false): DeviceType {
   if (!relayName || relayName.trim() === "") return "hidden";
   if (/^Relay\s+\d+$/i.test(relayName.trim())) return "hidden";
-  // Hide linked relays (names ending with "-Link", "_Link", etc.)
-  if (/[-_–—]Link$/i.test(relayName.trim())) return "hidden";
+  // Hide linked relays (names ending with "-Link", "_Link", etc.) - unless skipLinkHiding is true
+  if (/[-_–—]Link$/i.test(relayName.trim()) && !skipLinkHiding) return "hidden";
   
   // Check for door lock indicators
   const name = relayName.toLowerCase();

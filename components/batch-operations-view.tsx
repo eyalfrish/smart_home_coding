@@ -1650,11 +1650,12 @@ export default function BatchOperationsView({
                           const relays = liveState.fullState.relays ?? [];
                           
                           // Classify relays using settings-based classification
+                          // Pass skipLinkHiding=true since we're explicitly showing Link devices in the Link column
                           const classifiedRelays = relays
                             .filter(r => isLinkDevice(r.name)) // Link only
                             .map(relay => ({
                               ...relay,
-                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs),
+                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs, true),
                             }))
                             .filter(r => r.deviceType !== "hidden");
                           

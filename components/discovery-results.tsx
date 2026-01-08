@@ -1486,12 +1486,12 @@ export default function DiscoveryResults({
                           const relayPairs = result.settings?.relayPairs;
                           
                           // Classify relays by device type using settings-based classification
-                          // Link devices only
+                          // Link devices only - pass skipLinkHiding=true since we're showing Link devices
                           const classifiedRelays = liveState.fullState.relays
-                            .filter(r => isLinkDevice(r.name)) // Link only
+                            .filter(r => isLinkDevice(r.name))
                             .map(relay => ({
                               ...relay,
-                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs),
+                              deviceType: getRelayDeviceType(relay.index, relay.name, relayPairs, true),
                             }))
                             .filter(r => r.deviceType !== "hidden");
                           
