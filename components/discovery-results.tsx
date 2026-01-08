@@ -81,6 +81,12 @@ function getBaseDeviceName(name?: string): string {
   return name.replace(/[-_\s]?link$/i, "").trim().toLowerCase();
 }
 
+// Helper to get display name (strip -Link suffix, preserve case)
+function stripLinkSuffix(name?: string): string {
+  if (!name) return "";
+  return name.replace(/[-_\s]?link$/i, "").trim();
+}
+
 export default function DiscoveryResults({
   data,
   onPanelsSummaryClick,
@@ -310,8 +316,9 @@ export default function DiscoveryResults({
   ) => {
     e.preventDefault();
     e.stopPropagation();
+    // Store the full current name but show stripped name (without -Link) in input
     setEditingDevice({ ip, type, index, currentName });
-    setEditValue(currentName);
+    setEditValue(stripLinkSuffix(currentName));
   }, []);
 
   const handleCancelEdit = useCallback(() => {
@@ -323,39 +330,114 @@ export default function DiscoveryResults({
     if (!editingDevice || savingRename) return;
     
     const trimmedValue = editValue.trim();
-    if (!trimmedValue || trimmedValue === editingDevice.currentName) {
+    const currentBaseName = getBaseDeviceName(editingDevice.currentName);
+    const newBaseName = trimmedValue.toLowerCase();
+    
+    // If no change or empty, cancel
+    if (!trimmedValue || currentBaseName === newBaseName) {
       handleCancelEdit();
       return;
     }
     
     setSavingRename(true);
     try {
-      // POST through our API route to avoid CORS issues
-      const response = await fetch("/api/panels/rename", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Find ALL devices across ALL panels that share the same base name
+      // This allows renaming both Direct and Link versions together
+      const devicesToRename: Array<{ ip: string; type: "relay" | "curtain"; index: number; newName: string }> = [];
+      
+      if (livePanelStates) {
+        livePanelStates.forEach((panelState, panelIp) => {
+          if (!panelState.fullState) return;
+          
+          if (editingDevice.type === "relay") {
+            // Check all relays in this panel
+            for (const relay of panelState.fullState.relays) {
+              const relayBaseName = getBaseDeviceName(relay.name);
+              if (relayBaseName === currentBaseName) {
+                // Determine new name: preserve Link suffix if original had it
+                const isLink = isLinkDevice(relay.name);
+                const newName = isLink ? `${trimmedValue}-Link` : trimmedValue;
+                devicesToRename.push({
+                  ip: panelIp,
+                  type: "relay",
+                  index: relay.index,
+                  newName,
+                });
+              }
+            }
+          } else if (editingDevice.type === "curtain") {
+            // Check all curtains in this panel
+            for (const curtain of panelState.fullState.curtains) {
+              const curtainBaseName = getBaseDeviceName(curtain.name);
+              if (curtainBaseName === currentBaseName) {
+                // Determine new name: preserve Link suffix if original had it
+                const isLink = isLinkDevice(curtain.name);
+                const newName = isLink ? `${trimmedValue}-Link` : trimmedValue;
+                devicesToRename.push({
+                  ip: panelIp,
+                  type: "curtain",
+                  index: curtain.index,
+                  newName,
+                });
+              }
+            }
+          }
+        });
+      }
+      
+      // If no devices found (fallback), just rename the original device
+      if (devicesToRename.length === 0) {
+        const isLink = isLinkDevice(editingDevice.currentName);
+        const newName = isLink ? `${trimmedValue}-Link` : trimmedValue;
+        devicesToRename.push({
           ip: editingDevice.ip,
           type: editingDevice.type,
           index: editingDevice.index,
-          name: trimmedValue,
-        }),
+          newName,
+        });
+      }
+      
+      console.log(`[Rename] Renaming ${devicesToRename.length} associated device(s) from base "${currentBaseName}" to "${trimmedValue}"`);
+      
+      // POST rename requests for all associated devices
+      const renamePromises = devicesToRename.map(async (device) => {
+        try {
+          const response = await fetch("/api/panels/rename", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ip: device.ip,
+              type: device.type,
+              index: device.index,
+              name: device.newName,
+            }),
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error(`Failed to rename ${device.type} ${device.index} on ${device.ip}: ${response.status}`, errorData);
+            return false;
+          }
+          console.log(`Renamed ${device.type} ${device.index} on ${device.ip} to "${device.newName}"`);
+          return true;
+        } catch (error) {
+          console.error(`Error renaming ${device.type} ${device.index} on ${device.ip}:`, error);
+          return false;
+        }
       });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(`Failed to rename device: ${response.status}`, errorData);
-      } else {
-        console.log(`Renamed ${editingDevice.type} ${editingDevice.index} to "${trimmedValue}"`);
-      }
-      // The panel will broadcast the update via WebSocket, which will update livePanelStates
+      const results = await Promise.all(renamePromises);
+      const successCount = results.filter(Boolean).length;
+      console.log(`[Rename] Completed: ${successCount}/${devicesToRename.length} successful`);
+      
+      // The panels will broadcast updates via WebSocket, which will update livePanelStates
     } catch (error) {
-      console.error("Error renaming device:", error);
+      console.error("Error renaming devices:", error);
     } finally {
       setSavingRename(false);
       handleCancelEdit();
     }
-  }, [editingDevice, editValue, savingRename, handleCancelEdit]);
+  }, [editingDevice, editValue, savingRename, handleCancelEdit, livePanelStates]);
 
   const handleEditKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
