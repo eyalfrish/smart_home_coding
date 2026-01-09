@@ -545,9 +545,9 @@ export default function FavoritesSection({
   const currentGroupSwitches = effectiveActiveGroup 
     ? (favoritesData.groups || {})[effectiveActiveGroup] ?? []
     : [];
-  const currentGroupActions = effectiveActiveGroup 
+  const currentGroupActions = useMemo(() => effectiveActiveGroup 
     ? (smartSwitchesData.groups || {})[effectiveActiveGroup] ?? []
-    : [];
+    : [], [effectiveActiveGroup, smartSwitchesData.groups]);
 
   // Validation
   const validation = useMemo(() => {

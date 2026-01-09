@@ -527,7 +527,7 @@ export default function BatchOperationsView({
 
     await Promise.all(promises);
     setIsRunning(false);
-  }, [onSendCommand, livePanelStates]);
+  }, [onSendCommand, livePanelStates, panelResults]);
 
   // Check if operation is a settings operation
   const isSettingsOperation = useCallback((id: BatchOperationType) => {

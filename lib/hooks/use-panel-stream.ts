@@ -445,7 +445,7 @@ export function usePanelStream(
       }
       disconnect();
     };
-  }, [enabled, ipsKey, sessionId, connect, disconnect, debouncedReconnect]);
+  }, [enabled, ips, ipsKey, sessionId, connect, disconnect, debouncedReconnect]);
 
   return {
     isConnected,

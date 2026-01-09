@@ -538,7 +538,7 @@ export default function DiscoveryDashboard() {
         setIsLoading(false);
       }
     },
-    []
+    [formValues.thoroughMode, formValues.thoroughSettings]
   );
 
   const handleFormSubmit = () => {
