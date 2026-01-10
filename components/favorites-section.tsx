@@ -5,6 +5,33 @@ import styles from './discovery-dashboard.module.css';
 import type { LivePanelState, DiscoveryResult } from '@/lib/discovery/types';
 import { getRelayDeviceType, getCurtainDeviceType, type DeviceType } from '@/lib/discovery/types';
 
+// Import shared types for SmartActions (used by both client and server)
+import type {
+  SmartAction,
+  ActionStage,
+  StageAction,
+  ActionScheduling,
+  ActionStep,
+  StageActionType,
+  SchedulingType,
+  SmartSwitchesData,
+  ActionExecutionProgress as ServerActionExecutionProgress,
+  StartActionResponse,
+  StopActionResponse,
+} from '@/lib/types/smart-actions';
+
+// Re-export types for backward compatibility with other components
+export type {
+  SmartAction,
+  ActionStage,
+  StageAction,
+  ActionScheduling,
+  ActionStep,
+  StageActionType,
+  SchedulingType,
+  SmartSwitchesData,
+};
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -39,99 +66,35 @@ export interface FavoritesData {
 }
 
 /**
- * A single step in a smart action sequence (legacy format - for backward compatibility)
+ * Action execution state (client-side compatible)
  */
-export interface ActionStep {
-  /** ID of the switch to control (format: "ip:type:index") */
-  switchId: string;
-  /** Action to perform: "on", "off", "toggle", "open", "close", "stop" */
-  action: 'on' | 'off' | 'toggle' | 'open' | 'close' | 'stop';
-  /** Delay in milliseconds before executing this step */
-  delayMs: number;
-}
+export type ActionExecutionState = 'idle' | 'running' | 'waiting' | 'paused' | 'stopped' | 'completed' | 'failed';
 
 /**
- * Action type for a switch in an action stage
- */
-export type StageActionType = 'on' | 'off' | 'toggle' | 'open' | 'close' | 'stop';
-
-/**
- * A single switch action within an action stage
- */
-export interface StageAction {
-  /** ID of the switch to control (format: "ip:type:index") */
-  switchId: string;
-  /** Action to perform */
-  action: StageActionType;
-}
-
-/**
- * A stage in a smart action - one or more switch actions executed simultaneously
- */
-export interface ActionStage {
-  /** Actions to execute in this stage (all run in parallel) */
-  actions: StageAction[];
-}
-
-/**
- * Scheduling type between stages
- */
-export type SchedulingType = 'delay' | 'waitForCurtains';
-
-/**
- * Scheduling configuration between action stages
- */
-export interface ActionScheduling {
-  /** Type of scheduling: fixed delay or wait for curtains to finish */
-  type: SchedulingType;
-  /** Delay in milliseconds (only used when type is 'delay') */
-  delayMs?: number;
-}
-
-/**
- * A smart action - a user-programmed sequence with stages and scheduling.
- * New format: stages[] with scheduling[] between them
- */
-export interface SmartAction {
-  /** Display name for this smart action */
-  name: string;
-  /** Action stages - each contains 1+ switch actions executed together */
-  stages: ActionStage[];
-  /** Scheduling between stages - scheduling[i] is between stages[i] and stages[i+1] */
-  scheduling: ActionScheduling[];
-  /** Legacy steps format (for backward compatibility) - deprecated */
-  steps?: ActionStep[];
-}
-
-/**
- * Action execution state
- */
-export type ActionExecutionState = 'idle' | 'running' | 'paused' | 'stopped' | 'completed';
-
-/**
- * Current action execution progress
+ * Current action execution progress (client-side view)
+ * Compatible with server-side ActionExecutionProgress
  */
 export interface ActionExecutionProgress {
+  /** Execution ID from server (if running on server) */
+  executionId?: string;
   /** Current execution state */
   state: ActionExecutionState;
+  /** Total number of stages */
+  totalStages?: number;
   /** Currently executing stage index (-1 if not started) */
   currentStage: number;
   /** Whether waiting for scheduling (delay/curtains) */
   isWaiting: boolean;
+  /** Type of wait if waiting */
+  waitType?: 'delay' | 'curtains';
   /** Remaining delay time in ms (if waiting on delay) */
   remainingDelayMs?: number;
   /** Started at timestamp */
   startedAt?: number;
+  /** Completed at timestamp */
+  completedAt?: number;
   /** Error message if any */
   error?: string;
-}
-
-/**
- * Smart switches data structure with groups.
- * Stored in profile.smart_switches.groups
- */
-export interface SmartSwitchesData {
-  groups: Record<string, SmartAction[]>;
 }
 
 /**
@@ -446,16 +409,27 @@ export default function FavoritesSection({
   const [groupRenameValue, setGroupRenameValue] = useState('');
   const groupContextMenuRef = useRef<HTMLDivElement>(null);
   
-  // Action execution state
+  // Action execution state (now server-driven)
   const [executingAction, setExecutingAction] = useState<SmartAction | null>(null);
   const [executionProgress, setExecutionProgress] = useState<ActionExecutionProgress>({
     state: 'idle',
     currentStage: -1,
     isWaiting: false,
   });
-  const executionAbortRef = useRef<boolean>(false);
-  const executionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentStageActionsRef = useRef<StageAction[]>([]); // Track current stage's actions for stop
+  // Current execution ID from server (for stopping)
+  const currentExecutionIdRef = useRef<string | null>(null);
+  // EventSource for SSE streaming
+  const executionEventSourceRef = useRef<EventSource | null>(null);
+
+  // Cleanup SSE connection on unmount
+  useEffect(() => {
+    return () => {
+      if (executionEventSourceRef.current) {
+        executionEventSourceRef.current.close();
+        executionEventSourceRef.current = null;
+      }
+    };
+  }, []);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -1500,249 +1474,177 @@ export default function FavoritesSection({
     return '🪞';
   }, []);
 
-  // Execute a single action (send command to panel)
-  const executeActionAction = useCallback(async (action: StageAction): Promise<boolean> => {
-    const [ip, type, indexStr] = action.switchId.split(':');
-    const index = parseInt(indexStr, 10);
-    
-    if (type === 'light') {
-      // Light actions: on, off, toggle
-      if (action.action === 'toggle') {
-        return sendPanelCommand(ip, 'toggle_relay', { index });
-      } else {
-        return sendPanelCommand(ip, 'set_relay', { index, state: action.action === 'on' });
-      }
-    } else {
-      // Shade/Venetian actions: open, close, stop
-      const curtainAction = action.action as 'open' | 'close' | 'stop';
-      return sendPanelCommand(ip, 'curtain', { index, action: curtainAction });
-    }
-  }, []);
-  
-  // Check if any curtain in the given actions is still moving
-  const areCurtainsStillMoving = useCallback((actions: StageAction[]): boolean => {
-    for (const action of actions) {
-      const [ip, type, indexStr] = action.switchId.split(':');
-      if (type === 'shade' || type === 'venetian') {
-        const index = parseInt(indexStr, 10);
-        const liveState = livePanelStates.get(ip);
-        const curtain = liveState?.fullState?.curtains.find(c => c.index === index);
-        if (curtain?.state === 'opening' || curtain?.state === 'closing') {
-          return true;
-        }
-      }
-    }
-    return false;
-  }, [livePanelStates]);
-  
-  // Run an action
+  // Run an action (now server-driven - action continues even if browser closes)
   const handleRunAction = useCallback(async (smartAction: SmartAction) => {
     if (executingAction) {
       console.log('[FavoritesSection] Action already running');
       return;
     }
     
-    console.log('[FavoritesSection] Starting action:', smartAction.name);
+    console.log('[FavoritesSection] Starting server-side action:', smartAction.name);
     setExecutingAction(smartAction);
-    executionAbortRef.current = false;
     
+    // Set initial progress
     setExecutionProgress({
       state: 'running',
       currentStage: 0,
+      totalStages: smartAction.stages.length,
       isWaiting: false,
       startedAt: Date.now(),
     });
     
     try {
-      for (let stageIdx = 0; stageIdx < smartAction.stages.length; stageIdx++) {
-        // Check for abort
-        if (executionAbortRef.current) {
-          console.log('[FavoritesSection] Action aborted at stage', stageIdx);
-          setExecutionProgress(prev => ({ ...prev, state: 'stopped' }));
-          break;
-        }
-        
-        const stage = smartAction.stages[stageIdx];
-        console.log(`[FavoritesSection] Executing stage ${stageIdx + 1}/${smartAction.stages.length}:`, 
-          stage.actions.map(a => `${a.switchId} → ${a.action}`).join(', '));
-        
-        // Track current stage actions for stop functionality
-        currentStageActionsRef.current = stage.actions;
-        
+      // Call server API to start the action
+      const response = await fetch('/api/actions/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profileId: profile?.id ?? 0,
+          action: smartAction,
+        }),
+      });
+      
+      const result = await response.json() as StartActionResponse;
+      
+      if (!result.success || !result.executionId) {
+        console.error('[FavoritesSection] Failed to start action:', result.error);
         setExecutionProgress(prev => ({
           ...prev,
-          currentStage: stageIdx,
-          isWaiting: false,
+          state: 'failed',
+          error: result.error || 'Failed to start action',
         }));
-        
-        // Execute all actions in this stage concurrently
-        await Promise.all(stage.actions.map(action => executeActionAction(action)));
-        
-        // Check for abort after executing actions
-        if (executionAbortRef.current) {
-          console.log('[FavoritesSection] Action aborted after stage execution');
-          break;
-        }
-        
-        // Wait for scheduling if not the last stage
-        if (stageIdx < smartAction.stages.length - 1 && smartAction.scheduling[stageIdx]) {
-          const sched = smartAction.scheduling[stageIdx];
-          
-          if (sched.type === 'delay' && sched.delayMs && sched.delayMs > 0) {
-            // Delay scheduling
-            console.log(`[FavoritesSection] Waiting ${sched.delayMs}ms...`);
-            setExecutionProgress(prev => ({
-              ...prev,
-              isWaiting: true,
-              remainingDelayMs: sched.delayMs,
-            }));
-            
-            // Count down delay with updates
-            const delayMs = sched.delayMs;
-            const startTime = Date.now();
-            const updateInterval = 100; // Update every 100ms
-            
-            await new Promise<void>((resolve) => {
-              const checkDelay = () => {
-                if (executionAbortRef.current) {
-                  resolve();
-                  return;
-                }
-                const elapsed = Date.now() - startTime;
-                const remaining = Math.max(0, delayMs - elapsed);
-                
-                setExecutionProgress(prev => ({
-                  ...prev,
-                  remainingDelayMs: remaining,
-                }));
-                
-                if (remaining <= 0) {
-                  resolve();
-                } else {
-                  executionTimeoutRef.current = setTimeout(checkDelay, updateInterval);
-                }
-              };
-              executionTimeoutRef.current = setTimeout(checkDelay, updateInterval);
-            });
-          } else if (sched.type === 'waitForCurtains') {
-            // Wait for curtains/shades to finish their operation
-            console.log('[FavoritesSection] Waiting for continuous operations to complete...');
-            setExecutionProgress(prev => ({
-              ...prev,
-              isWaiting: true,
-              remainingDelayMs: undefined,
-            }));
-            
-            // Poll until curtains stop moving (max 5 minutes for slow curtains)
-            const maxWait = 300000; // 5 minutes
-            const startTime = Date.now();
-            const pollInterval = 500; // Check every 500ms
-            
-            // Small initial delay to let the curtain state update
-            await new Promise(r => setTimeout(r, 1000));
-            
-            await new Promise<void>((resolve) => {
-              const checkCurtains = () => {
-                if (executionAbortRef.current) {
-                  console.log('[FavoritesSection] Aborted while waiting for curtains');
-                  resolve();
-                  return;
-                }
-                
-                const elapsed = Date.now() - startTime;
-                const stillMoving = areCurtainsStillMoving(stage.actions);
-                
-                console.log(`[FavoritesSection] Checking curtains: stillMoving=${stillMoving}, elapsed=${elapsed}ms`);
-                
-                if (elapsed >= maxWait) {
-                  console.log('[FavoritesSection] Max wait time reached, continuing action');
-                  resolve();
-                } else if (!stillMoving) {
-                  console.log('[FavoritesSection] Curtains stopped, continuing action');
-                  resolve();
-                } else {
-                  executionTimeoutRef.current = setTimeout(checkCurtains, pollInterval);
-                }
-              };
-              // Start checking
-              checkCurtains();
-            });
-          }
-        }
+        setTimeout(() => {
+          setExecutingAction(null);
+          setExecutionProgress({ state: 'idle', currentStage: -1, isWaiting: false });
+        }, 3000);
+        return;
       }
       
-      // Completed
-      if (!executionAbortRef.current) {
-        console.log('[FavoritesSection] Action completed:', smartAction.name);
-        setExecutionProgress(prev => ({
-          ...prev,
-          state: 'completed',
-          currentStage: smartAction.stages.length,
-          isWaiting: false,
-        }));
-      }
+      const executionId = result.executionId;
+      console.log('[FavoritesSection] Action started with ID:', executionId);
+      currentExecutionIdRef.current = executionId;
+      
+      // Subscribe to SSE stream for progress updates
+      const eventSource = new EventSource(`/api/actions/${executionId}/stream`);
+      executionEventSourceRef.current = eventSource;
+      
+      eventSource.addEventListener('progress', (event) => {
+        try {
+          const progress = JSON.parse(event.data) as ServerActionExecutionProgress;
+          setExecutionProgress({
+            executionId: progress.executionId,
+            state: progress.state,
+            totalStages: progress.totalStages,
+            currentStage: progress.currentStage,
+            isWaiting: progress.isWaiting,
+            waitType: progress.waitType,
+            remainingDelayMs: progress.remainingDelayMs,
+            startedAt: progress.startedAt,
+            completedAt: progress.completedAt,
+            error: progress.error,
+          });
+        } catch (e) {
+          console.error('[FavoritesSection] Error parsing progress:', e);
+        }
+      });
+      
+      eventSource.addEventListener('complete', (event) => {
+        try {
+          const progress = JSON.parse(event.data) as ServerActionExecutionProgress;
+          console.log('[FavoritesSection] Action completed/stopped:', progress.state);
+          setExecutionProgress({
+            executionId: progress.executionId,
+            state: progress.state,
+            totalStages: progress.totalStages,
+            currentStage: progress.currentStage,
+            isWaiting: false,
+            completedAt: progress.completedAt,
+            error: progress.error,
+          });
+          
+          // Cleanup
+          eventSource.close();
+          executionEventSourceRef.current = null;
+          currentExecutionIdRef.current = null;
+          
+          // Clear UI after showing completion state
+          setTimeout(() => {
+            setExecutingAction(null);
+            setExecutionProgress({ state: 'idle', currentStage: -1, isWaiting: false });
+          }, 2000);
+        } catch (e) {
+          console.error('[FavoritesSection] Error parsing complete:', e);
+        }
+      });
+      
+      eventSource.onerror = () => {
+        // Connection lost - but action continues on server!
+        console.log('[FavoritesSection] SSE connection lost (action continues on server)');
+        eventSource.close();
+        executionEventSourceRef.current = null;
+        // Don't clear executing state - action might still be running
+        // User can check status via GET /api/actions/:id if needed
+      };
+      
     } catch (error) {
-      console.error('[FavoritesSection] Action error:', error);
+      console.error('[FavoritesSection] Error starting action:', error);
       setExecutionProgress(prev => ({
         ...prev,
-        state: 'stopped',
+        state: 'failed',
         error: (error as Error).message,
       }));
+      setTimeout(() => {
+        setExecutingAction(null);
+        setExecutionProgress({ state: 'idle', currentStage: -1, isWaiting: false });
+      }, 3000);
+    }
+  }, [executingAction, profile?.id]);
+  
+  // Stop the running action - server handles stopping curtains
+  const handleStopAction = useCallback(async () => {
+    const executionId = currentExecutionIdRef.current;
+    if (!executionId) {
+      console.log('[FavoritesSection] No action to stop');
+      return;
     }
     
-    // Clear executing action after a delay to show completion state
+    console.log('[FavoritesSection] Stopping action:', executionId);
+    
+    try {
+      // Close SSE connection
+      if (executionEventSourceRef.current) {
+        executionEventSourceRef.current.close();
+        executionEventSourceRef.current = null;
+      }
+      
+      // Call server API to stop the action
+      const response = await fetch(`/api/actions/${executionId}?stopCurtains=true`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json() as StopActionResponse;
+      
+      if (result.success) {
+        console.log('[FavoritesSection] Action stopped successfully');
+        setExecutionProgress(prev => ({
+          ...prev,
+          state: 'stopped',
+        }));
+      } else {
+        console.error('[FavoritesSection] Failed to stop action:', result.error);
+      }
+      
+    } catch (error) {
+      console.error('[FavoritesSection] Error stopping action:', error);
+    }
+    
+    // Clear state
+    currentExecutionIdRef.current = null;
+    
     setTimeout(() => {
       setExecutingAction(null);
-      setExecutionProgress({
-        state: 'idle',
-        currentStage: -1,
-        isWaiting: false,
-      });
-    }, 2000);
-  }, [executingAction, executeActionAction, areCurtainsStillMoving]);
-  
-  // Stop the running action - also stops any shades in progress
-  const handleStopAction = useCallback(async () => {
-    console.log('[FavoritesSection] Stopping action immediately...');
-    executionAbortRef.current = true;
-    
-    // Clear any pending timeout
-    if (executionTimeoutRef.current) {
-      clearTimeout(executionTimeoutRef.current);
-      executionTimeoutRef.current = null;
-    }
-    
-    // Stop all shades/curtains from the current stage
-    const currentActions = currentStageActionsRef.current;
-    if (currentActions.length > 0) {
-      console.log('[FavoritesSection] Stopping all shades from current stage...');
-      const stopPromises: Promise<boolean>[] = [];
-      
-      for (const action of currentActions) {
-        const [ip, type, indexStr] = action.switchId.split(':');
-        if (type === 'shade' || type === 'venetian') {
-          const index = parseInt(indexStr, 10);
-          console.log(`[FavoritesSection] Sending stop to ${action.switchId}`);
-          stopPromises.push(sendPanelCommand(ip, 'curtain', { index, action: 'stop' }));
-        }
-      }
-      
-      // Wait for stop commands to be sent (don't wait too long)
-      if (stopPromises.length > 0) {
-        await Promise.race([
-          Promise.all(stopPromises),
-          new Promise(r => setTimeout(r, 2000)) // Max 2 seconds
-        ]);
-      }
-    }
-    
-    setExecutionProgress(prev => ({
-      ...prev,
-      state: 'stopped',
-    }));
-    
-    // Clear current actions
-    currentStageActionsRef.current = [];
+      setExecutionProgress({ state: 'idle', currentStage: -1, isWaiting: false });
+    }, 1000);
   }, []);
 
   // =============================================================================
