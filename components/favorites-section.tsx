@@ -437,6 +437,15 @@ export default function FavoritesSection({
   const [actionRenameValue, setActionRenameValue] = useState('');
   const actionContextMenuRef = useRef<HTMLDivElement>(null);
   
+  // Group context menu state for renaming groups
+  const [groupContextMenu, setGroupContextMenu] = useState<{
+    x: number;
+    y: number;
+    groupName: string;
+  } | null>(null);
+  const [groupRenameValue, setGroupRenameValue] = useState('');
+  const groupContextMenuRef = useRef<HTMLDivElement>(null);
+  
   // Action execution state
   const [executingAction, setExecutingAction] = useState<SmartAction | null>(null);
   const [executionProgress, setExecutionProgress] = useState<ActionExecutionProgress>({
@@ -474,6 +483,19 @@ export default function FavoritesSection({
     }
   }, [actionContextMenu]);
   
+  // Close group context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (groupContextMenuRef.current && !groupContextMenuRef.current.contains(e.target as Node)) {
+        setGroupContextMenu(null);
+      }
+    };
+    if (groupContextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [groupContextMenu]);
+  
   // ESC key handler for all modals/popups
   useEffect(() => {
     const handleEscKey = (e: KeyboardEvent) => {
@@ -483,6 +505,8 @@ export default function FavoritesSection({
           setDeleteConfirm(null);
         } else if (actionContextMenu) {
           setActionContextMenu(null);
+        } else if (groupContextMenu) {
+          setGroupContextMenu(null);
         } else if (editingAction) {
           setEditingAction(null);
           setEditingActionData(null);
@@ -504,7 +528,7 @@ export default function FavoritesSection({
     
     document.addEventListener('keydown', handleEscKey);
     return () => document.removeEventListener('keydown', handleEscKey);
-  }, [deleteConfirm, actionContextMenu, editingAction, contextMenu, showSwitchPicker, showActionCreator, showNewGroupInput]);
+  }, [deleteConfirm, actionContextMenu, groupContextMenu, editingAction, contextMenu, showSwitchPicker, showActionCreator, showNewGroupInput]);
 
   // Reset warning dismissed state when profile changes
   useEffect(() => {
@@ -669,6 +693,56 @@ export default function FavoritesSection({
       return { curtainState: curtain?.state };
     }
   }, [livePanelStates]);
+
+  // Sync original names when panel switches are renamed
+  // This keeps the originalName in sync with the actual panel while preserving user aliases
+  useEffect(() => {
+    if (!profile || !discoveryCompleted || availableDevices.length === 0) return;
+    
+    // Build a map of current switch names from discovered panels: ip:type:index -> currentName
+    const currentNameMap = new Map<string, string>();
+    for (const device of availableDevices) {
+      currentNameMap.set(`${device.ip}:${device.type}:${device.index}`, device.name);
+    }
+    
+    // Check if any favorites need their originalName updated
+    let needsUpdate = false;
+    const newGroups: Record<string, FavoriteSwitch[]> = {};
+    
+    for (const [groupName, switches] of Object.entries(favoritesData.groups || {})) {
+      const updatedSwitches: FavoriteSwitch[] = [];
+      
+      for (const sw of switches) {
+        const switchKey = `${sw.ip}:${sw.type}:${sw.index}`;
+        const currentName = currentNameMap.get(switchKey);
+        
+        if (currentName && currentName !== sw.originalName) {
+          // The real switch name has changed
+          needsUpdate = true;
+          
+          // If alias equals originalName (user hasn't customized), update both
+          // If alias differs (user has customized), only update originalName
+          const aliasWasDefault = sw.alias === sw.originalName;
+          
+          updatedSwitches.push({
+            ...sw,
+            originalName: currentName,
+            alias: aliasWasDefault ? currentName : sw.alias,
+          });
+        } else {
+          updatedSwitches.push(sw);
+        }
+      }
+      
+      newGroups[groupName] = updatedSwitches;
+    }
+    
+    // Only trigger update if something changed
+    if (needsUpdate) {
+      console.log('[FavoritesSection] Syncing original names with panel data');
+      onFavoritesUpdate?.(profile.id, { groups: newGroups });
+    }
+  }, [profile, discoveryCompleted, availableDevices, favoritesData.groups, onFavoritesUpdate]);
 
   // =============================================================================
   // Handlers
@@ -922,6 +996,66 @@ export default function FavoritesSection({
       setActiveGroup(remaining.length > 0 ? remaining[0] : null);
     }
   }, [profile, favoritesData.groups, smartSwitchesData.groups, activeGroup, allGroups, onFavoritesUpdate, onSmartSwitchesUpdate]);
+
+  // Group context menu handler for renaming
+  const handleGroupContextMenu = useCallback((e: React.MouseEvent, groupName: string) => {
+    e.preventDefault();
+    setGroupContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      groupName,
+    });
+    setGroupRenameValue(groupName);
+  }, []);
+
+  // Rename group handler
+  const handleRenameGroup = useCallback(() => {
+    if (!groupContextMenu || !profile || !groupRenameValue.trim()) return;
+    
+    const oldName = groupContextMenu.groupName;
+    const newName = groupRenameValue.trim();
+    
+    // Don't rename if the name didn't change
+    if (oldName === newName) {
+      setGroupContextMenu(null);
+      return;
+    }
+    
+    // Don't allow duplicate names
+    if (allGroups.includes(newName)) {
+      return;
+    }
+    
+    // Create new groups with renamed key for favorites
+    const newFavoritesGroups: Record<string, FavoriteSwitch[]> = {};
+    for (const [key, value] of Object.entries(favoritesData.groups || {})) {
+      if (key === oldName) {
+        newFavoritesGroups[newName] = value;
+      } else {
+        newFavoritesGroups[key] = value;
+      }
+    }
+    
+    // Create new groups with renamed key for smart switches
+    const newSmartSwitchesGroups: Record<string, SmartAction[]> = {};
+    for (const [key, value] of Object.entries(smartSwitchesData.groups || {})) {
+      if (key === oldName) {
+        newSmartSwitchesGroups[newName] = value;
+      } else {
+        newSmartSwitchesGroups[key] = value;
+      }
+    }
+    
+    onFavoritesUpdate?.(profile.id, { groups: newFavoritesGroups });
+    onSmartSwitchesUpdate?.(profile.id, { groups: newSmartSwitchesGroups });
+    
+    // Update active group if it was the one renamed
+    if (activeGroup === oldName) {
+      setActiveGroup(newName);
+    }
+    
+    setGroupContextMenu(null);
+  }, [groupContextMenu, profile, groupRenameValue, allGroups, favoritesData.groups, smartSwitchesData.groups, activeGroup, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
   // Group drag and drop handlers
   const handleGroupDragStart = useCallback((e: React.DragEvent, index: number, groupName: string) => {
@@ -1834,9 +1968,27 @@ export default function FavoritesSection({
                       onDragOver={(e) => handleGroupDragOver(e, idx)}
                       onDragLeave={handleGroupDragLeave}
                       onDrop={(e) => handleGroupDrop(e, idx)}
+                      onContextMenu={(e) => handleGroupContextMenu(e, groupName)}
                     >
                       <span className={styles.groupTabDragHandle} title="Drag to reorder">⋮⋮</span>
                       {groupName}
+                      <span
+                        className={styles.favoritesGroupTabEdit}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Position context menu below the button
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setGroupContextMenu({
+                            x: rect.left,
+                            y: rect.bottom + 4,
+                            groupName,
+                          });
+                          setGroupRenameValue(groupName);
+                        }}
+                        title="Rename group"
+                      >
+                        ✏️
+                      </span>
                       <span
                         className={styles.favoritesGroupTabDelete}
                         onClick={(e) => {
@@ -1891,19 +2043,22 @@ export default function FavoritesSection({
                     </span>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    className={`${styles.favoritesGroupTab} ${styles.favoritesGroupTabAdd}`}
-                    onClick={() => setShowNewGroupInput(true)}
-                  >
-                    + Add Group
-                  </button>
+                  // Only show "Add Group" button when groups already exist
+                  allGroups.length > 0 && (
+                    <button
+                      type="button"
+                      className={`${styles.favoritesGroupTab} ${styles.favoritesGroupTabAdd}`}
+                      onClick={() => setShowNewGroupInput(true)}
+                    >
+                      + Add Group
+                    </button>
+                  )
                 )}
               </div>
             </div>
 
-            {/* No groups empty state */}
-            {allGroups.length === 0 && (
+            {/* No groups empty state - shown when no groups exist */}
+            {allGroups.length === 0 && !showNewGroupInput && (
               <div className={styles.favoritesEmptyState}>
                 <div className={styles.favoritesEmptyIcon}>🏠</div>
                 <p>No groups yet. Create a group to organize your switches.</p>
@@ -2416,6 +2571,32 @@ export default function FavoritesSection({
           <div className={styles.contextMenuButtons}>
             <button onClick={handleSaveActionRenameFromContext} disabled={!actionRenameValue.trim()}>Save</button>
             <button onClick={() => setActionContextMenu(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      
+      {/* Group Context Menu (right-click on group tabs) - rename group */}
+      {groupContextMenu && (
+        <div
+          ref={groupContextMenuRef}
+          className={styles.contextMenu}
+          style={{ left: groupContextMenu.x, top: groupContextMenu.y }}
+        >
+          <div className={styles.contextMenuTitle}>Rename Group</div>
+          <input
+            type="text"
+            value={groupRenameValue}
+            onChange={(e) => setGroupRenameValue(e.target.value)}
+            className={styles.contextMenuInput}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRenameGroup();
+              if (e.key === 'Escape') setGroupContextMenu(null);
+            }}
+          />
+          <div className={styles.contextMenuButtons}>
+            <button onClick={handleRenameGroup} disabled={!groupRenameValue.trim() || allGroups.includes(groupRenameValue.trim()) && groupRenameValue.trim() !== groupContextMenu.groupName}>Save</button>
+            <button onClick={() => setGroupContextMenu(null)}>Cancel</button>
           </div>
         </div>
       )}
