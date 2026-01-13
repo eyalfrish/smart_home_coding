@@ -4374,6 +4374,16 @@
     margin-bottom: 1rem;
   }
   
+  /* Fix: Remove height constraints on mobile when expanded */
+  /* The max-height:5000px was limiting container growth, cutting off panels */
+  .collapsibleSectionExpanded {
+    overflow: visible;
+  }
+  
+  .collapsibleSectionExpanded .collapsibleSectionContent {
+    max-height: none; /* Remove the 5000px limit on mobile */
+  }
+  
   .collapsibleSectionHeader {
     padding: 0.875rem 1rem;
     flex-wrap: wrap;

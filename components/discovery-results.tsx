@@ -157,8 +157,11 @@ export default function DiscoveryResults({
 
   // Swipe-to-toggle handlers for checkboxes
   const handleSwipeStart = useCallback((ip: string, currentlySelected: boolean, e: React.MouseEvent | React.TouchEvent) => {
-    // Prevent text selection during drag
-    e.preventDefault();
+    // Only prevent default for mouse events (to prevent text selection during drag)
+    // Do NOT preventDefault on touch events - it blocks native scroll on mobile!
+    if (e.type === 'mousedown') {
+      e.preventDefault();
+    }
     
     swipeProcessedIps.current = new Set([ip]);
     setIsSwipeSelecting(true);
