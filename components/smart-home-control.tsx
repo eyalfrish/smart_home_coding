@@ -255,6 +255,13 @@ const ZapIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const EditIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
 // =============================================================================
 // Main Component
 // =============================================================================
@@ -569,6 +576,17 @@ export default function SmartHomeControl({
             </button>
           ))}
         </div>
+        <button 
+          className={styles.modifyZoneButton}
+          onClick={() => {
+            triggerHaptic('light');
+            onSwitchToSetup();
+          }}
+          aria-label="Modify zone"
+        >
+          <EditIcon className={styles.modifyZoneIcon} />
+          <span className={styles.modifyZoneText}>Edit</span>
+        </button>
       </nav>
 
       {/* Main Content */}
@@ -750,15 +768,25 @@ export default function SmartHomeControl({
         {/* Empty zone state */}
         {currentGroupSwitches.length === 0 && currentGroupActions.length === 0 && (
           <div className={styles.emptyZone}>
-            <p>This zone is empty</p>
-            <button 
-              className={styles.addDevicesButton}
-              onClick={onSwitchToSetup}
-            >
-              Add devices
-            </button>
+            <div className={styles.emptyZoneIcon}>📦</div>
+            <p className={styles.emptyZoneText}>This zone is empty</p>
+            <p className={styles.emptyZoneHint}>Add devices and actions in Setup mode</p>
           </div>
         )}
+
+        {/* Always visible Modify Zone button */}
+        <div className={styles.modifyZoneFooter}>
+          <button 
+            className={styles.modifyButton}
+            onClick={() => {
+              triggerHaptic('light');
+              onSwitchToSetup();
+            }}
+          >
+            <EditIcon className={styles.modifyButtonIcon} />
+            <span>Modify Zone</span>
+          </button>
+        </div>
       </main>
 
       {/* Loading overlay */}

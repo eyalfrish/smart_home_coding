@@ -116,6 +116,9 @@
    ============================================ */
 
 .zoneTabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 0 var(--shc-spacing);
   margin-bottom: 8px;
 }
@@ -129,6 +132,7 @@
   -ms-overflow-style: none;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
+  flex: 1;
 }
 
 .zoneTabsScroll::-webkit-scrollbar {
@@ -169,6 +173,53 @@
 .zoneTabActive:hover {
   background: linear-gradient(135deg, var(--shc-accent-light) 0%, #a78bfa 100%);
   color: white;
+}
+
+/* Modify Zone Button */
+.modifyZoneButton {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.modifyZoneButton:hover {
+  background: var(--card-hover);
+  border-color: var(--shc-accent);
+  color: var(--shc-accent);
+}
+
+.modifyZoneButton:active {
+  transform: scale(0.95);
+}
+
+.modifyZoneIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.modifyZoneText {
+  /* Hide text on small screens */
+}
+
+@media (max-width: 480px) {
+  .modifyZoneText {
+    display: none;
+  }
+  
+  .modifyZoneButton {
+    padding: 10px;
+  }
 }
 
 /* ============================================
@@ -622,37 +673,68 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 60px 24px;
   text-align: center;
   color: var(--muted);
 }
 
-.emptyZone p {
-  margin: 0 0 20px;
-  font-size: 1rem;
+.emptyZoneIcon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.6;
 }
 
-.addDevicesButton {
-  padding: 12px 24px;
+.emptyZoneText {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.emptyZoneHint {
+  margin: 8px 0 24px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* Modify Zone Footer */
+.modifyZoneFooter {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0 32px;
+  margin-top: auto;
+}
+
+.modifyButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
   background: var(--surface);
   color: var(--foreground);
   font-size: 0.95rem;
   font-weight: 600;
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border);
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.addDevicesButton:hover {
+.modifyButton:hover {
   background: var(--card-hover);
   border-color: var(--shc-accent);
   color: var(--shc-accent);
+  border-style: solid;
 }
 
-.addDevicesButton:active {
+.modifyButton:active {
   transform: scale(0.96);
+}
+
+.modifyButtonIcon {
+  width: 18px;
+  height: 18px;
 }
 
 /* ============================================
@@ -801,7 +883,8 @@
   .settingsButton,
   .shadeControlButton,
   .setupButton,
-  .addDevicesButton,
+  .modifyButton,
+  .modifyZoneButton,
   .actionButton,
   .lightButton {
     transition: none;
