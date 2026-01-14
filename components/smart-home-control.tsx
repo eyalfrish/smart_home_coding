@@ -159,53 +159,23 @@ const LightBulbIcon = ({ on, className }: { on: boolean; className?: string }) =
   <svg 
     viewBox="0 0 24 24" 
     fill="none" 
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
     className={className}
-    style={{ width: '100%', height: '100%' }}
   >
     {on ? (
       <>
-        {/* Glow effect */}
-        <circle cx="12" cy="9" r="8" fill="url(#lightGlow)" opacity="0.3" />
-        {/* Bulb body - filled */}
-        <path 
-          d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" 
-          fill="url(#lightFill)"
-        />
-        {/* Base */}
-        <path d="M9 21v-1h6v1c0 .55-.45 1-1 1h-4c-.55 0-1-.45-1-1z" fill="#78716C" />
-        <rect x="9" y="18" width="6" height="2" rx="0.5" fill="#A8A29E" />
-        {/* Light rays */}
-        <g stroke="#FCD34D" strokeWidth="2" strokeLinecap="round" opacity="0.8">
-          <line x1="12" y1="-1" x2="12" y2="-3" />
-          <line x1="4" y1="9" x2="2" y2="9" />
-          <line x1="22" y1="9" x2="20" y2="9" />
-          <line x1="5.6" y1="3.6" x2="4.2" y2="2.2" />
-          <line x1="18.4" y1="3.6" x2="19.8" y2="2.2" />
-        </g>
-        <defs>
-          <radialGradient id="lightGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#FCD34D" />
-            <stop offset="100%" stopColor="#FCD34D" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id="lightFill" x1="50%" y1="0%" x2="50%" y2="100%">
-            <stop offset="0%" stopColor="#FEF3C7" />
-            <stop offset="50%" stopColor="#FCD34D" />
-            <stop offset="100%" stopColor="#F59E0B" />
-          </linearGradient>
-        </defs>
+        <path d="M9 18h6" />
+        <path d="M10 22h4" />
+        <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0018 8 6 6 0 006 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 018.91 14" fill="currentColor" />
       </>
     ) : (
       <>
-        {/* Bulb body - outline only */}
-        <path 
-          d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" 
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        />
-        {/* Base */}
-        <path d="M9 21v-1h6v1c0 .55-.45 1-1 1h-4c-.55 0-1-.45-1-1z" fill="currentColor" opacity="0.5" />
-        <rect x="9" y="18" width="6" height="2" rx="0.5" fill="currentColor" opacity="0.4" />
+        <path d="M9 18h6" />
+        <path d="M10 22h4" />
+        <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0018 8 6 6 0 006 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 018.91 14" />
       </>
     )}
   </svg>
@@ -376,15 +346,25 @@ export default function SmartHomeControl({
 
   // Handlers
   const handleLightToggle = useCallback(async (sw: FavoriteSwitch) => {
-    if (sw.type !== 'light') return;
+    console.log('[SmartHomeControl] Light toggle clicked:', sw.alias, sw.ip, sw.index);
+    if (sw.type !== 'light') {
+      console.log('[SmartHomeControl] Not a light, ignoring');
+      return;
+    }
     triggerHaptic('medium');
-    await sendPanelCommand(sw.ip, 'toggle_relay', { index: sw.index });
+    const result = await sendPanelCommand(sw.ip, 'toggle_relay', { index: sw.index });
+    console.log('[SmartHomeControl] Toggle result:', result);
   }, [triggerHaptic]);
 
   const handleShadeAction = useCallback(async (sw: FavoriteSwitch, action: 'open' | 'close' | 'stop') => {
-    if (sw.type !== 'shade' && sw.type !== 'venetian') return;
+    console.log('[SmartHomeControl] Shade action clicked:', sw.alias, action, sw.ip, sw.index);
+    if (sw.type !== 'shade' && sw.type !== 'venetian') {
+      console.log('[SmartHomeControl] Not a shade/venetian, ignoring');
+      return;
+    }
     triggerHaptic('light');
-    await sendPanelCommand(sw.ip, 'curtain', { index: sw.index, action });
+    const result = await sendPanelCommand(sw.ip, 'curtain', { index: sw.index, action });
+    console.log('[SmartHomeControl] Shade action result:', result);
   }, [triggerHaptic]);
 
   // Action execution
@@ -588,36 +568,72 @@ export default function SmartHomeControl({
               <ZapIcon className={styles.sectionIcon} />
               Quick Actions
             </h3>
-            <div className={styles.actionsGrid}>
+            <div className={styles.cardsGrid}>
               {currentGroupActions.map((action, idx) => {
                 const isExecuting = executingActionName === action.name;
                 const progress = isExecuting ? executionProgress : null;
+                const stageCount = action.stages?.length || 0;
+                const isCompleted = progress?.state === 'completed';
+                const isStopped = progress?.state === 'stopped';
                 
                 return (
                   <button
                     key={`${action.name}-${idx}`}
-                    className={`${styles.actionCard} ${isExecuting ? styles.actionCardExecuting : ''}`}
+                    className={`${styles.card} ${styles.actionCard} ${isExecuting ? styles.actionCardExecuting : ''} ${isCompleted ? styles.actionCardCompleted : ''} ${isStopped ? styles.actionCardStopped : ''}`}
                     onClick={() => isExecuting ? handleStopAction() : handleRunAction(action)}
                     disabled={executingActionName !== null && !isExecuting}
                   >
-                    <div className={styles.actionIcon}>
-                      {isExecuting ? (
-                        <StopIcon className={styles.actionIconSvg} />
-                      ) : (
-                        <PlayIcon className={styles.actionIconSvg} />
-                      )}
+                    <div className={styles.cardHeader}>
+                      <span className={styles.cardIcon}>
+                        {isExecuting ? '⏳' : isCompleted ? '✅' : isStopped ? '⏹️' : '⚡'}
+                      </span>
+                      <span className={styles.cardName}>{action.name}</span>
                     </div>
-                    <span className={styles.actionName}>{action.name}</span>
+                    
+                    {/* Progress when executing */}
                     {isExecuting && progress && (
-                      <div className={styles.actionProgress}>
-                        <div 
-                          className={styles.actionProgressBar}
-                          style={{ 
-                            width: `${((progress.currentStage + 1) / (progress.totalStages || 1)) * 100}%` 
-                          }}
-                        />
+                      <div className={styles.actionProgressSection}>
+                        <div className={styles.actionProgressBar}>
+                          <div 
+                            className={styles.actionProgressFill}
+                            style={{ 
+                              width: `${((progress.currentStage + 1) / (progress.totalStages || 1)) * 100}%` 
+                            }}
+                          />
+                        </div>
+                        <span className={styles.actionProgressText}>
+                          Stage {progress.currentStage + 1}/{progress.totalStages || stageCount}
+                          {progress.isWaiting && progress.remainingDelayMs !== undefined && (
+                            <span className={styles.actionWaiting}> ⏱️ {(progress.remainingDelayMs / 1000).toFixed(1)}s</span>
+                          )}
+                          {progress.isWaiting && progress.waitType === 'curtains' && (
+                            <span className={styles.actionWaiting}> 🔄 Moving...</span>
+                          )}
+                        </span>
                       </div>
                     )}
+                    
+                    {/* Meta info when not executing */}
+                    {!isExecuting && (
+                      <div className={styles.cardMeta}>
+                        <span>{stageCount} stage{stageCount !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
+                    
+                    {/* Action button */}
+                    <div className={styles.actionButton}>
+                      {isExecuting ? (
+                        <>
+                          <StopIcon className={styles.actionButtonIcon} />
+                          <span>Stop</span>
+                        </>
+                      ) : (
+                        <>
+                          <PlayIcon className={styles.actionButtonIcon} />
+                          <span>Run</span>
+                        </>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -632,7 +648,7 @@ export default function SmartHomeControl({
               <LightBulbIcon on={false} className={styles.sectionIcon} />
               Devices
             </h3>
-            <div className={styles.switchesGrid}>
+            <div className={styles.cardsGrid}>
               {currentGroupSwitches.map((sw, idx) => {
                 const state = getSwitchState(sw);
                 const isReachable = isSwitchReachable(sw);
@@ -642,61 +658,73 @@ export default function SmartHomeControl({
                   return (
                     <button
                       key={`${sw.ip}-${sw.type}-${sw.index}-${idx}`}
-                      className={`${styles.lightCard} ${isOn ? styles.lightCardOn : ''} ${!isReachable ? styles.cardUnreachable : ''}`}
+                      className={`${styles.card} ${styles.lightCard} ${isOn ? styles.lightCardOn : ''} ${!isReachable ? styles.cardUnreachable : ''}`}
                       onClick={() => handleLightToggle(sw)}
                       disabled={!isReachable}
                     >
-                      <div className={styles.lightIconWrapper}>
-                        <LightBulbIcon on={isOn} className={styles.lightIcon} />
+                      <div className={styles.cardHeader}>
+                        <span className={styles.cardIcon}>💡</span>
+                        <span className={styles.cardName}>{sw.alias}</span>
                       </div>
-                      <span className={styles.switchName}>{sw.alias}</span>
-                      <span className={styles.switchStatus}>
-                        {!isReachable ? 'Offline' : isOn ? 'On' : 'Off'}
-                      </span>
+                      <div className={styles.cardMeta}>
+                        <span className={`${styles.statusIndicator} ${isOn ? styles.statusOn : styles.statusOff}`}>
+                          {!isReachable ? '⚫ Offline' : isOn ? '🟢 On' : '⚪ Off'}
+                        </span>
+                      </div>
+                      <div className={styles.lightButton}>
+                        <LightBulbIcon on={isOn} className={styles.lightButtonIcon} />
+                        <span>{isOn ? 'Turn Off' : 'Turn On'}</span>
+                      </div>
                     </button>
                   );
                 } else {
                   // Shade or Venetian
+                  const curtainState = state.curtainState || 'stopped';
                   return (
                     <div 
                       key={`${sw.ip}-${sw.type}-${sw.index}-${idx}`}
-                      className={`${styles.shadeCard} ${!isReachable ? styles.cardUnreachable : ''}`}
+                      className={`${styles.card} ${styles.shadeCard} ${!isReachable ? styles.cardUnreachable : ''}`}
                     >
-                      <div className={styles.shadeHeader}>
-                        <div className={styles.shadeIconWrapper}>
-                          <ShadeIcon state={state.curtainState} className={styles.shadeIcon} />
-                        </div>
-                        <div className={styles.shadeInfo}>
-                          <span className={styles.switchName}>{sw.alias}</span>
-                          <span className={styles.switchStatus}>
-                            {!isReachable ? 'Offline' : state.curtainState || 'Unknown'}
-                          </span>
-                        </div>
+                      <div className={styles.cardHeader}>
+                        <span className={styles.cardIcon}>{sw.type === 'venetian' ? '🪟' : '🪞'}</span>
+                        <span className={styles.cardName}>{sw.alias}</span>
+                      </div>
+                      <div className={styles.cardMeta}>
+                        <span className={styles.statusIndicator}>
+                          {!isReachable ? '⚫ Offline' : 
+                            curtainState === 'opening' ? '⬆️ Opening' :
+                            curtainState === 'closing' ? '⬇️ Closing' :
+                            curtainState === 'open' ? '🔼 Open' :
+                            curtainState === 'closed' ? '🔽 Closed' : '⏸️ Stopped'}
+                        </span>
                       </div>
                       <div className={styles.shadeControls}>
                         <button
-                          className={styles.shadeButton}
+                          className={styles.shadeControlButton}
                           onClick={() => handleShadeAction(sw, 'open')}
                           disabled={!isReachable}
                           aria-label="Open"
                         >
-                          <ChevronUpIcon className={styles.shadeButtonIcon} />
+                          <ChevronUpIcon className={styles.shadeControlIcon} />
+                          <span>Up</span>
                         </button>
                         <button
-                          className={`${styles.shadeButton} ${styles.shadeButtonStop}`}
+                          className={`${styles.shadeControlButton} ${styles.shadeControlStop}`}
                           onClick={() => handleShadeAction(sw, 'stop')}
                           disabled={!isReachable}
                           aria-label="Stop"
                         >
-                          <StopIcon className={styles.shadeButtonIcon} />
+                          <StopIcon className={styles.shadeControlIcon} />
+                          <span>Stop</span>
                         </button>
                         <button
-                          className={styles.shadeButton}
+                          className={styles.shadeControlButton}
                           onClick={() => handleShadeAction(sw, 'close')}
                           disabled={!isReachable}
                           aria-label="Close"
                         >
-                          <ChevronDownIcon className={styles.shadeButtonIcon} />
+                          <ChevronDownIcon className={styles.shadeControlIcon} />
+                          <span>Down</span>
                         </button>
                       </div>
                     </div>

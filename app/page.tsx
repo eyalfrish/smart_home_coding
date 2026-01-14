@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import styles from "./page.module.css";
 import DiscoveryDashboard from "@/components/discovery-dashboard";
 import SmartHomeControl from "@/components/smart-home-control";
 import { ThemeToggle } from "@/components/theme-toggle";
-import type { LivePanelState } from "@/lib/discovery/types";
+import { usePanelStream } from "@/lib/hooks/use-panel-stream";
 import type { FavoritesData, SmartSwitchesData } from "@/components/favorites-section";
 
 // =============================================================================
@@ -61,16 +61,29 @@ export default function Home() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   
   // Discovery state (for control mode)
-  const [discoveredPanelIps, setDiscoveredPanelIps] = useState<Set<string>>(new Set());
-  const [livePanelStates, setLivePanelStates] = useState<Map<string, LivePanelState>>(new Map());
+  const [discoveredPanelIps, setDiscoveredPanelIps] = useState<string[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveryCompleted, setDiscoveryCompleted] = useState(false);
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
   
+  // Discovery trigger - increments to force re-discovery
+  const [discoveryTrigger, setDiscoveryTrigger] = useState(0);
+  
   // Refs
   const hasAutoDiscoveredRef = useRef(false);
-  const panelStreamRef = useRef<EventSource | null>(null);
   const discoverySourcesRef = useRef<EventSource[]>([]);
+  
+  // Panel streaming using the hook (for control mode)
+  const shouldConnectToPanels = mode === 'control' && discoveredPanelIps.length > 0 && !!serverSessionId;
+  
+  const { panelStates: livePanelStates } = usePanelStream({
+    ips: shouldConnectToPanels ? discoveredPanelIps : [],
+    sessionId: serverSessionId || '',
+    enabled: shouldConnectToPanels,
+  });
+  
+  // Convert discovered IPs to Set for SmartHomeControl
+  const discoveredPanelIpsSet = useMemo(() => new Set(discoveredPanelIps), [discoveredPanelIps]);
 
   // =============================================================================
   // Initialization
@@ -103,9 +116,6 @@ export default function Home() {
     
     // Cleanup on unmount
     return () => {
-      if (panelStreamRef.current) {
-        panelStreamRef.current.close();
-      }
       for (const es of discoverySourcesRef.current) {
         es.close();
       }
@@ -180,7 +190,7 @@ export default function Home() {
     
     const startDiscovery = async () => {
       setIsDiscovering(true);
-      setDiscoveredPanelIps(new Set());
+      setDiscoveredPanelIps([]);
       setDiscoveryCompleted(false);
       
       // Close existing discovery connections
@@ -199,7 +209,7 @@ export default function Home() {
           return;
         }
         
-        const foundPanels = new Set<string>();
+        const foundPanels: string[] = [];
         let completedStreams = 0;
         
         for (const req of requests) {
@@ -212,8 +222,11 @@ export default function Home() {
               const message = JSON.parse(event.data);
               
               if (message.type === 'result' && message.data?.status === 'panel') {
-                foundPanels.add(message.data.ip);
-                setDiscoveredPanelIps(new Set(foundPanels));
+                const panelIp = message.data.ip;
+                if (!foundPanels.includes(panelIp)) {
+                  foundPanels.push(panelIp);
+                  setDiscoveredPanelIps([...foundPanels]);
+                }
               }
             } catch {
               // Ignore parse errors
@@ -239,48 +252,7 @@ export default function Home() {
     };
     
     startDiscovery();
-  }, [hasMounted, selectedProfile, isLoadingProfile, mode]);
-
-  // =============================================================================
-  // Panel streaming (for control mode)
-  // =============================================================================
-  
-  useEffect(() => {
-    if (!serverSessionId || discoveredPanelIps.size === 0 || mode !== 'control') {
-      return;
-    }
-    
-    // Close existing connection
-    if (panelStreamRef.current) {
-      panelStreamRef.current.close();
-    }
-    
-    const ipsParam = Array.from(discoveredPanelIps).join(',');
-    const url = `/api/panels/stream?ips=${encodeURIComponent(ipsParam)}&sessionId=${serverSessionId}`;
-    const eventSource = new EventSource(url);
-    panelStreamRef.current = eventSource;
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'state' && data.ip) {
-          setLivePanelStates((prev) => {
-            const newMap = new Map(prev);
-            newMap.set(data.ip, data.state);
-            return newMap;
-          });
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    };
-    
-    return () => {
-      eventSource.close();
-      panelStreamRef.current = null;
-    };
-  }, [serverSessionId, discoveredPanelIps, mode]);
+  }, [hasMounted, selectedProfile, isLoadingProfile, mode, discoveryTrigger]);
 
   // =============================================================================
   // Mode switching
@@ -289,13 +261,27 @@ export default function Home() {
   const handleSwitchToSetup = useCallback(() => {
     setMode('setup');
     localStorage.setItem(STORAGE_KEY_MODE, 'setup');
+    
+    // Close any open discovery connections when leaving control mode
+    for (const es of discoverySourcesRef.current) {
+      es.close();
+    }
+    discoverySourcesRef.current = [];
   }, []);
 
   const handleSwitchToControl = useCallback(() => {
+    // Reset all discovery state
+    setDiscoveredPanelIps([]);
+    setDiscoveryCompleted(false);
+    setIsDiscovering(false);
+    hasAutoDiscoveredRef.current = false;
+    
+    // Increment trigger to force re-discovery
+    setDiscoveryTrigger(t => t + 1);
+    
+    // Then switch mode - this will trigger re-discovery
     setMode('control');
     localStorage.setItem(STORAGE_KEY_MODE, 'control');
-    // Reset auto-discovery to trigger re-fetch when switching back
-    hasAutoDiscoveredRef.current = false;
   }, []);
 
   // =============================================================================
@@ -324,7 +310,7 @@ export default function Home() {
           smart_switches: selectedProfile.smart_switches,
         } : null}
         livePanelStates={livePanelStates}
-        discoveredPanelIps={discoveredPanelIps}
+        discoveredPanelIps={discoveredPanelIpsSet}
         discoveryCompleted={discoveryCompleted}
         isLoading={isDiscovering || isLoadingProfile}
         onSwitchToSetup={handleSwitchToSetup}

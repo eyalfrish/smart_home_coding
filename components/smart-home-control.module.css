@@ -206,358 +206,335 @@
 }
 
 /* ============================================
-   Quick Actions Section
+   Unified Cards Grid
    ============================================ */
 
-.actionsSection {
-  /* No special styles needed */
-}
-
-.actionsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
-}
-
-.actionCard {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 20px 16px;
-  background: linear-gradient(145deg, var(--shc-card-bg) 0%, var(--surface) 100%);
-  border: 1px solid var(--shc-card-border);
-  border-radius: var(--shc-radius-sm);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  -webkit-tap-highlight-color: transparent;
-  overflow: hidden;
-}
-
-.actionCard:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shc-elevated-shadow);
-  border-color: var(--shc-accent);
-}
-
-.actionCard:active {
-  transform: scale(0.97);
-}
-
-.actionCard:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.actionCardExecuting {
-  background: linear-gradient(145deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
-  border-color: var(--shc-accent);
-  box-shadow: 0 0 24px var(--shc-accent-glow);
-}
-
-.actionIcon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--shc-accent) 0%, #8b5cf6 100%);
-  border-radius: 12px;
-  color: white;
-  transition: all 0.2s ease;
-}
-
-.actionCardExecuting .actionIcon {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.actionIconSvg {
-  width: 20px;
-  height: 20px;
-}
-
-.actionName {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--foreground);
-  text-align: center;
-  line-height: 1.3;
-}
-
-.actionProgress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: rgba(99, 102, 241, 0.2);
-  overflow: hidden;
-}
-
-.actionProgressBar {
-  height: 100%;
-  background: linear-gradient(90deg, var(--shc-accent) 0%, #a855f7 100%);
-  transition: width 0.3s ease-out;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
-  }
-}
-
-/* ============================================
-   Switches Section
-   ============================================ */
-
+.actionsSection,
 .switchesSection {
   /* No special styles needed */
 }
 
-.switchesGrid {
+.cardsGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
 /* Single column on very small screens */
-@media (max-width: 340px) {
-  .switchesGrid {
+@media (max-width: 380px) {
+  .cardsGrid {
     grid-template-columns: 1fr;
   }
 }
 
 /* Three columns on tablets */
 @media (min-width: 600px) {
-  .switchesGrid {
+  .cardsGrid {
     grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-  
-  .actionsGrid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 16px;
+    gap: 14px;
   }
 }
 
 /* Four columns on larger screens */
 @media (min-width: 900px) {
-  .switchesGrid {
+  .cardsGrid {
     grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
   }
 }
 
 /* ============================================
-   Light Switch Card
+   Base Card Styles
    ============================================ */
 
-.lightCard {
+.card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 16px 20px;
+  gap: 10px;
+  padding: 14px;
+  min-height: 140px;
   background: var(--surface);
   border: 1px solid var(--shc-card-border);
-  border-radius: var(--shc-radius);
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--shc-radius-sm);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-tap-highlight-color: transparent;
 }
 
-.lightCard:hover {
-  transform: translateY(-4px);
+.card:hover {
+  transform: translateY(-2px);
   box-shadow: var(--shc-elevated-shadow);
+  border-color: var(--shc-accent);
 }
 
-.lightCard:active {
-  transform: scale(0.96);
+.card:active {
+  transform: scale(0.98);
+}
+
+/* Card Header */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cardIcon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.cardName {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--foreground);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Card Meta */
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex: 1;
+}
+
+.statusIndicator {
+  font-size: 0.75rem;
+}
+
+.statusOn {
+  color: var(--shc-success);
+}
+
+.statusOff {
+  color: var(--muted);
+}
+
+/* ============================================
+   Action Card Styles
+   ============================================ */
+
+.actionCard {
+  cursor: pointer;
+  background: linear-gradient(145deg, var(--shc-card-bg) 0%, var(--surface) 100%);
+}
+
+.actionCard:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.actionCardExecuting {
+  background: linear-gradient(145deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
+  border-color: var(--shc-accent);
+  box-shadow: 0 0 20px var(--shc-accent-glow);
+  animation: cardPulse 2s ease-in-out infinite;
+}
+
+.actionCardCompleted {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.08) 100%);
+  border-color: var(--shc-success);
+}
+
+.actionCardStopped {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.08) 100%);
+  border-color: var(--shc-warning);
+}
+
+@keyframes cardPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--shc-accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 30px var(--shc-accent-glow);
+  }
+}
+
+/* Action Progress */
+.actionProgressSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.actionProgressBar {
+  height: 6px;
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.actionProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--shc-accent) 0%, #a855f7 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease-out;
+}
+
+.actionProgressText {
+  font-size: 0.7rem;
+  color: var(--shc-accent);
+  font-weight: 600;
+}
+
+.actionWaiting {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Action Button */
+.actionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, var(--shc-accent) 0%, #8b5cf6 100%);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 10px;
+  margin-top: auto;
+}
+
+.actionCardExecuting .actionButton {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.actionButtonIcon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ============================================
+   Light Card Styles
+   ============================================ */
+
+.lightCard {
+  cursor: pointer;
 }
 
 .lightCardOn {
   background: var(--shc-light-on-bg);
   border-color: #fbbf24;
-  box-shadow: 0 8px 32px var(--shc-light-on-glow);
+  box-shadow: 0 4px 20px var(--shc-light-on-glow);
 }
 
 .lightCardOn:hover {
-  box-shadow: 0 12px 40px var(--shc-light-on-glow);
+  box-shadow: 0 8px 28px var(--shc-light-on-glow);
 }
 
-.lightIconWrapper {
-  width: 56px;
-  height: 56px;
+.lightCardOn .cardName,
+.lightCardOn .cardMeta,
+.lightCardOn .statusIndicator {
+  color: #78350f;
+}
+
+/* Light Button */
+.lightButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s ease;
-}
-
-.lightCard:active .lightIconWrapper {
-  transform: scale(0.9);
-}
-
-.lightIcon {
-  width: 100%;
-  height: 100%;
-  color: var(--muted);
-  transition: all 0.3s ease;
-}
-
-.lightCardOn .lightIcon {
-  color: #78350f;
-  filter: drop-shadow(0 4px 12px rgba(251, 191, 36, 0.5));
-}
-
-.switchName {
-  font-size: 0.95rem;
-  font-weight: 600;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
   color: var(--foreground);
-  text-align: center;
-  line-height: 1.2;
-  word-break: break-word;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 10px;
+  margin-top: auto;
 }
 
-.lightCardOn .switchName {
+.lightCardOn .lightButton {
+  background: rgba(120, 53, 15, 0.15);
+  border-color: rgba(120, 53, 15, 0.3);
   color: #78350f;
 }
 
-.switchStatus {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.lightCardOn .switchStatus {
-  color: #92400e;
+.lightButtonIcon {
+  width: 18px;
+  height: 18px;
 }
 
 /* ============================================
-   Shade Card
+   Shade Card Styles
    ============================================ */
 
 .shadeCard {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px 16px;
-  background: var(--surface);
-  border: 1px solid var(--shc-card-border);
-  border-radius: var(--shc-radius);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.shadeCard:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shc-elevated-shadow);
-}
-
-.shadeHeader {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.shadeIconWrapper {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--card);
-  border-radius: 12px;
-  color: var(--muted);
-}
-
-.shadeIcon {
-  width: 28px;
-  height: 28px;
-}
-
-.shadeInfo {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.shadeInfo .switchName {
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.shadeInfo .switchStatus {
-  text-align: left;
+  /* Uses base .card styles */
 }
 
 .shadeControls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  margin-top: auto;
 }
 
-.shadeButton {
+.shadeControlButton {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  gap: 2px;
+  padding: 10px 8px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--foreground);
+  font-size: 0.7rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.shadeButton:hover {
+.shadeControlButton:hover {
   background: var(--card-hover);
   border-color: var(--shc-accent);
   color: var(--shc-accent);
 }
 
-.shadeButton:active {
+.shadeControlButton:active {
   transform: scale(0.93);
   background: var(--shc-accent);
   color: white;
 }
 
-.shadeButton:disabled {
+.shadeControlButton:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  transform: none !important;
 }
 
-.shadeButtonStop {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
+.shadeControlStop {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
   color: #ef4444;
 }
 
-.shadeButtonStop:hover {
-  background: rgba(239, 68, 68, 0.15);
+.shadeControlStop:hover {
+  background: rgba(239, 68, 68, 0.12);
   border-color: #ef4444;
 }
 
-.shadeButtonStop:active {
+.shadeControlStop:active {
   background: #ef4444;
   color: white;
 }
 
-.shadeButtonIcon {
-  width: 20px;
-  height: 20px;
+.shadeControlIcon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ============================================
@@ -753,40 +730,44 @@
     margin-bottom: 20px;
   }
 
-  .lightCard {
-    padding: 32px 20px 28px;
+  /* Unified card sizing for desktop */
+  .card {
+    min-height: 160px;
+    padding: 18px;
   }
 
-  .lightIconWrapper {
-    width: 72px;
-    height: 72px;
+  .cardIcon {
+    font-size: 1.4rem;
   }
 
-  .switchName {
-    font-size: 1.05rem;
+  .cardName {
+    font-size: 0.95rem;
   }
 
-  .shadeCard {
-    padding: 24px 20px;
+  .cardMeta {
+    font-size: 0.8rem;
   }
 
-  .actionCard {
-    padding: 28px 20px;
+  .actionButton,
+  .lightButton {
+    padding: 12px 16px;
+    font-size: 0.85rem;
   }
 
-  .actionIcon {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+  .actionButtonIcon,
+  .lightButtonIcon {
+    width: 18px;
+    height: 18px;
   }
 
-  .actionIconSvg {
-    width: 24px;
-    height: 24px;
+  .shadeControlButton {
+    padding: 12px 10px;
+    font-size: 0.75rem;
   }
 
-  .actionName {
-    font-size: 1rem;
+  .shadeControlIcon {
+    width: 18px;
+    height: 18px;
   }
 }
 
@@ -795,14 +776,17 @@
    ============================================ */
 
 @media (prefers-reduced-motion: reduce) {
+  .card,
   .lightCard,
   .shadeCard,
   .actionCard,
   .zoneTab,
   .settingsButton,
-  .shadeButton,
+  .shadeControlButton,
   .setupButton,
-  .addDevicesButton {
+  .addDevicesButton,
+  .actionButton,
+  .lightButton {
     transition: none;
   }
 
@@ -810,7 +794,7 @@
     animation: none;
   }
 
-  .actionCardExecuting .actionIcon {
+  .actionCardExecuting {
     animation: none;
   }
 }
