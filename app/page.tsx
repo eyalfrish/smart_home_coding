@@ -66,11 +66,10 @@ export default function Home() {
   const [discoveryCompleted, setDiscoveryCompleted] = useState(false);
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
   
-  // Discovery trigger - increments to force re-discovery
-  const [discoveryTrigger, setDiscoveryTrigger] = useState(0);
+  // Track if we've completed discovery for the current profile
+  const lastDiscoveredProfileIdRef = useRef<number | null>(null);
   
   // Refs
-  const hasAutoDiscoveredRef = useRef(false);
   const discoverySourcesRef = useRef<EventSource[]>([]);
   
   // Panel streaming using the hook (for control mode)
@@ -181,12 +180,18 @@ export default function Home() {
       return;
     }
     
-    if (hasAutoDiscoveredRef.current) return;
+    // Skip if we've already discovered for this profile
+    if (lastDiscoveredProfileIdRef.current === selectedProfile.id && discoveryCompleted) {
+      return;
+    }
     
     const ipRanges = selectedProfile.ip_ranges || [];
-    if (ipRanges.length === 0) return;
-    
-    hasAutoDiscoveredRef.current = true;
+    if (ipRanges.length === 0) {
+      // No IP ranges, mark as completed
+      setDiscoveryCompleted(true);
+      lastDiscoveredProfileIdRef.current = selectedProfile.id;
+      return;
+    }
     
     const startDiscovery = async () => {
       setIsDiscovering(true);
@@ -206,6 +211,8 @@ export default function Home() {
         
         if (requests.length === 0) {
           setIsDiscovering(false);
+          setDiscoveryCompleted(true);
+          lastDiscoveredProfileIdRef.current = selectedProfile.id;
           return;
         }
         
@@ -239,6 +246,7 @@ export default function Home() {
             if (completedStreams >= requests.length) {
               setIsDiscovering(false);
               setDiscoveryCompleted(true);
+              lastDiscoveredProfileIdRef.current = selectedProfile.id;
             }
           };
           
@@ -252,7 +260,7 @@ export default function Home() {
     };
     
     startDiscovery();
-  }, [hasMounted, selectedProfile, isLoadingProfile, mode, discoveryTrigger]);
+  }, [hasMounted, selectedProfile, isLoadingProfile, mode, discoveryCompleted]);
 
   // =============================================================================
   // Mode switching
@@ -270,16 +278,8 @@ export default function Home() {
   }, []);
 
   const handleSwitchToControl = useCallback(() => {
-    // Reset all discovery state
-    setDiscoveredPanelIps([]);
-    setDiscoveryCompleted(false);
-    setIsDiscovering(false);
-    hasAutoDiscoveredRef.current = false;
-    
-    // Increment trigger to force re-discovery
-    setDiscoveryTrigger(t => t + 1);
-    
-    // Then switch mode - this will trigger re-discovery
+    // Switch mode without resetting discovery state
+    // Discovery will only re-run if it hasn't happened yet for this profile
     setMode('control');
     localStorage.setItem(STORAGE_KEY_MODE, 'control');
   }, []);

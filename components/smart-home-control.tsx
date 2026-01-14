@@ -470,7 +470,19 @@ export default function SmartHomeControl({
     };
   }, []);
 
-  // Empty state
+  // Loading state - show when loading profile or during discovery
+  if (isLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loadingState}>
+          <div className={styles.loadingSpinner} />
+          <p className={styles.loadingText}>Loading your smart home...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state - only show after loading completes and there's no profile
   if (!profile) {
     return (
       <div className={styles.container}>
