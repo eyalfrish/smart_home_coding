@@ -28,6 +28,60 @@
 }
 
 /* ============================================
+   Discovery Progress Banner
+   ============================================ */
+.discoveryProgressBanner {
+  background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary, var(--accent-primary)) 100%);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  animation: discoveryBannerPulse 2s ease-in-out infinite;
+}
+
+@keyframes discoveryBannerPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.discoveryProgressBannerContent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.discoveryProgressSpinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.discoveryProgressText {
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.discoveryProgressText strong {
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .discoveryProgressBanner {
+    border-radius: 0;
+    margin: calc(var(--mobile-spacing) * -1);
+    margin-bottom: 16px;
+    padding: 10px var(--mobile-spacing);
+  }
+}
+
+/* ============================================
    Desktop/Mobile Text Toggle
    ============================================ */
 .desktopText {

@@ -12,6 +12,7 @@ import type {
   DiscoveryRequest,
   DiscoveryResponse,
   DiscoveryResult,
+  DiscoverySummary,
   PanelInfo,
   LivePanelState,
   PanelCommand,
@@ -60,7 +61,40 @@ function buildPlaceholderResponse(requests: DiscoveryRequest[]): DiscoveryRespon
   };
 }
 
-export default function DiscoveryDashboard() {
+interface ControlModeDiscoverySummary {
+  totalChecked: number;
+  panelsFound: number;
+  noResponse: number;
+  notPanels: number;
+  errors: number;
+}
+
+interface DiscoveryDashboardProps {
+  initialFavoritesFullscreen?: boolean;
+  onFavoritesFullscreenConsumed?: () => void;
+  skipAutoDiscovery?: boolean;
+  /** Panel IPs discovered in Control mode - used to populate discovery results */
+  controlModeDiscoveredIps?: string[];
+  /** Discovery summary from Control mode - includes counts for no-response, etc. */
+  controlModeDiscoverySummary?: ControlModeDiscoverySummary | null;
+  /** Live panel states from Control mode - used to get panel names */
+  controlModePanelStates?: Map<string, LivePanelState>;
+  /** Callback when discovery completes - to sync state with page.tsx */
+  onDiscoveryComplete?: (discoveredIps: string[], summary: DiscoverySummary, forProfileId: number) => void;
+  /** Callback when a profile is made default - to cache discovery results */
+  onProfileMadeDefault?: (profileId: number | null) => void;
+}
+
+export default function DiscoveryDashboard({ 
+  initialFavoritesFullscreen = false,
+  onFavoritesFullscreenConsumed,
+  skipAutoDiscovery = false,
+  controlModeDiscoveredIps = [],
+  controlModeDiscoverySummary,
+  controlModePanelStates,
+  onDiscoveryComplete,
+  onProfileMadeDefault,
+}: DiscoveryDashboardProps = {}) {
   const [response, setResponse] = useState<DiscoveryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +122,10 @@ export default function DiscoveryDashboard() {
   const [sectionOrder, setSectionOrder] = useState<DashboardSection[]>([...DEFAULT_SECTION_ORDER]);
   
   // Fullscreen section state - when set, only profile and this section are visible
-  const [fullscreenSection, setFullscreenSection] = useState<FullscreenSection>(null);
+  const [fullscreenSection, setFullscreenSection] = useState<FullscreenSection>(
+    initialFavoritesFullscreen ? 'favorites' : null
+  );
+  
   
   // Drag state
   const [draggedSection, setDraggedSection] = useState<DashboardSection | null>(null);
@@ -119,15 +156,33 @@ export default function DiscoveryDashboard() {
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Reset panel registry on mount and check server session
-  // This ensures clean slate when page loads or server restarts
+  // Handle initial favorites fullscreen prop - use a longer-lived flag
+  const initialFullscreenAppliedRef = useRef(false);
+  
   useEffect(() => {
-    // ALWAYS clear discovery state on mount - this handles Fast Refresh preserving state
-    console.log('[Dashboard] Mount: clearing discovery state');
-    setResponse(null);
-    setPanelInfoMap({});
-    setSelectedPanelIps(new Set());
-    setServerSessionId(null); // Clear session until we get a new one
+    if (initialFavoritesFullscreen && !initialFullscreenAppliedRef.current) {
+      console.log('[Dashboard] Setting fullscreen to favorites from initial prop');
+      setFullscreenSection('favorites');
+      initialFullscreenAppliedRef.current = true;
+      // Notify parent that we've consumed the prop
+      onFavoritesFullscreenConsumed?.();
+    }
+  }, [initialFavoritesFullscreen, onFavoritesFullscreenConsumed]);
+
+  // Reset panel registry on mount and check server session
+  // Only reset discovery if NOT coming from Control mode (skipAutoDiscovery indicates we came from Control)
+  useEffect(() => {
+    // Only clear discovery state on fresh page load, not when switching from Control mode
+    if (!skipAutoDiscovery) {
+      console.log('[Dashboard] Mount: clearing discovery state (fresh load)');
+      setResponse(null);
+      setPanelInfoMap({});
+      setSelectedPanelIps(new Set());
+    } else {
+      console.log('[Dashboard] Mount: preserving discovery state (came from Control mode)');
+    }
+    
+    setServerSessionId(null); // Always refresh session
     
     const checkServerAndReset = async () => {
       try {
@@ -140,10 +195,12 @@ export default function DiscoveryDashboard() {
         setServerSessionId(sessionId);
         console.log('[Dashboard] Server session:', sessionId);
         
-        // Reset registry
-        const resetRes = await fetch('/api/panels/reset', { method: 'POST' });
-        const resetData = await resetRes.json();
-        console.log('[Dashboard] Registry reset:', resetData.message);
+        // Only reset registry on fresh load
+        if (!skipAutoDiscovery) {
+          const resetRes = await fetch('/api/panels/reset', { method: 'POST' });
+          const resetData = await resetRes.json();
+          console.log('[Dashboard] Registry reset:', resetData.message);
+        }
         setRegistryReady(true);
       } catch (err) {
         console.error('[Dashboard] Failed to check session/reset registry:', err);
@@ -152,7 +209,81 @@ export default function DiscoveryDashboard() {
     };
     
     checkServerAndReset();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
+  // Track what IPs we've populated from control mode to detect changes
+  const lastPopulatedIpsRef = useRef<string>('');
+  
+  // Populate discovery results from Control mode data
+  useEffect(() => {
+    if (!skipAutoDiscovery || controlModeDiscoveredIps.length === 0) {
+      return;
+    }
+    
+    // Create a fingerprint of the current control mode IPs to detect changes
+    const currentIpsFingerprint = controlModeDiscoveredIps.slice().sort().join(',');
+    
+    // Skip if we've already populated with this exact set of IPs
+    if (lastPopulatedIpsRef.current === currentIpsFingerprint) {
+      return;
+    }
+    
+    console.log('[Dashboard] Populating discovery from Control mode:', controlModeDiscoveredIps.length, 'panels', 'summary:', controlModeDiscoverySummary);
+    lastPopulatedIpsRef.current = currentIpsFingerprint;
+    
+    // Create discovery results from the discovered IPs
+    const results: DiscoveryResult[] = controlModeDiscoveredIps.map(ip => {
+      const liveState = controlModePanelStates?.get(ip);
+      const panelName = liveState?.fullState?.mqttDeviceName || null;
+      return {
+        ip,
+        status: 'panel' as const,
+        name: panelName,
+      };
+    });
+    
+    // Use the summary from Control mode if available, otherwise create a basic one
+    const summary = controlModeDiscoverySummary ? {
+      baseIp: '',
+      start: 0,
+      end: 0,
+      totalChecked: controlModeDiscoverySummary.totalChecked,
+      panelsFound: controlModeDiscoverySummary.panelsFound,
+      notPanels: controlModeDiscoverySummary.notPanels,
+      noResponse: controlModeDiscoverySummary.noResponse,
+      errors: controlModeDiscoverySummary.errors,
+    } : {
+      baseIp: '',
+      start: 0,
+      end: 0,
+      totalChecked: controlModeDiscoveredIps.length,
+      panelsFound: controlModeDiscoveredIps.length,
+      notPanels: 0,
+      noResponse: 0,
+      errors: 0,
+    };
+    
+    // Create a discovery response with summary
+    const newResponse: DiscoveryResponse = {
+      summary,
+      results,
+    };
+    setResponse(newResponse);
+    setDiscoveryCompleted(true);
+    
+    // Also populate panel info map for live updates
+    const newPanelInfoMap: Record<string, PanelInfo> = {};
+    for (const ip of controlModeDiscoveredIps) {
+      const liveState = controlModePanelStates?.get(ip);
+      newPanelInfoMap[ip] = {
+        ip,
+        isCubixx: true,
+        name: liveState?.fullState?.mqttDeviceName,
+      };
+    }
+    setPanelInfoMap(newPanelInfoMap);
+  }, [skipAutoDiscovery, controlModeDiscoveredIps, controlModeDiscoverySummary, controlModePanelStates]);
 
   // Poll for progress during discovery and update table with partial results
   useEffect(() => {
@@ -416,6 +547,34 @@ export default function DiscoveryDashboard() {
           updateResponseFromMap(true); // Force final update
           setIsLoading(false);
           setDiscoveryCompleted(true); // Mark discovery as completed for validation
+          
+          // Notify parent of discovered panel IPs and summary - this syncs state with page.tsx
+          // IMPORTANT: Use discoveryProfileIdRef.current instead of selectedProfile?.id
+          // because selectedProfile state might be stale due to async updates
+          let panels = 0, notPanels = 0, noResp = 0, errs = 0;
+          const discoveredPanelIps: string[] = [];
+          for (const result of resultsMap.values()) {
+            if (result.status === 'panel') { panels++; discoveredPanelIps.push(result.ip); }
+            else if (result.status === 'not-panel') notPanels++;
+            else if (result.status === 'no-response' || result.status === 'pending') noResp++;
+            else if (result.status === 'error') errs++;
+          }
+          const completeSummary: DiscoverySummary = {
+            baseIp: firstReq.baseIp,
+            start: firstReq.start,
+            end: requests[requests.length - 1].end,
+            totalChecked: allIps.length,
+            panelsFound: panels,
+            notPanels: notPanels,
+            noResponse: noResp,
+            errors: errs,
+          };
+          const profileIdForCallback = discoveryProfileIdRef.current ?? selectedProfile?.id;
+          
+          console.log('[Dashboard] Discovery complete, notifying parent:', discoveredPanelIps.length, 'panels', 'summary:', completeSummary, 'for profile:', profileIdForCallback);
+          if (profileIdForCallback) {
+            onDiscoveryComplete?.(discoveredPanelIps, completeSummary, profileIdForCallback);
+          }
         }
       };
 
@@ -541,20 +700,30 @@ export default function DiscoveryDashboard() {
         setIsLoading(false);
       }
     },
-    [formValues.thoroughMode, formValues.thoroughSettings]
+    [formValues.thoroughMode, formValues.thoroughSettings, onDiscoveryComplete, selectedProfile]
   );
 
   const handleFormSubmit = () => {
     // Convert form ranges to discovery requests
     const requests: DiscoveryRequest[] = formValues.ranges.map(rangeToRequest);
     
+    // Set the discovery profile ID ref to current selected profile
+    // (This handles manual form submit, not profile switch)
+    discoveryProfileIdRef.current = selectedProfile?.id ?? null;
+    
     // Stay collapsed during discovery - user can expand if they want
     // State clearing is now done inside executeDiscovery to avoid race conditions
     executeDiscovery(requests);
   };
 
+  // Track the profile ID that discovery is running for (to avoid stale closure issues)
+  const discoveryProfileIdRef = useRef<number | null>(null);
+  
   // Handle profile selection - load IP ranges and trigger discovery
   const handleProfileSelect = useCallback((profileId: number, ranges: IpRange[], fullProfile: FullProfile) => {
+    // Store the profile ID in a ref for the discovery callback to use
+    discoveryProfileIdRef.current = profileId;
+    
     setSelectedProfile(fullProfile);
     setFormValues(prev => ({
       ...prev,
@@ -564,8 +733,12 @@ export default function DiscoveryDashboard() {
     if (fullProfile.section_order && fullProfile.section_order.length === DEFAULT_SECTION_ORDER.length) {
       setSectionOrder(fullProfile.section_order);
     }
-    // Load fullscreen section from profile
-    setFullscreenSection(fullProfile.fullscreen_section ?? null);
+    // Load fullscreen section from profile - but don't override if we applied initialFavoritesFullscreen
+    if (!initialFullscreenAppliedRef.current) {
+      setFullscreenSection(fullProfile.fullscreen_section ?? null);
+    } else {
+      console.log('[Dashboard] Preserving fullscreen from initialFavoritesFullscreen');
+    }
     // Collapse IP ranges section after loading profile
     setIsIpRangesExpanded(false);
   }, []);
@@ -848,6 +1021,19 @@ export default function DiscoveryDashboard() {
         />
       ) : (
         <>
+          {/* Discovery Progress Banner - show when discovering */}
+          {isLoading && (
+            <div className={styles.discoveryProgressBanner}>
+              <div className={styles.discoveryProgressBannerContent}>
+                <div className={styles.discoveryProgressSpinner} />
+                <span className={styles.discoveryProgressText}>
+                  Discovering... <strong>{liveProgress?.panelsFound ?? 0}</strong> panels found
+                  {liveProgress?.scannedCount ? ` (${liveProgress.scannedCount} IPs scanned)` : ''}
+                </span>
+              </div>
+            </div>
+          )}
+          
           {/* Render sections in the configured order */}
           {sectionOrder.map((section) => {
             // In fullscreen mode, only show 'profile' and the fullscreen section
@@ -910,6 +1096,8 @@ export default function DiscoveryDashboard() {
                     onShowToast={handleShowToast}
                     isLoading={isLoading}
                     disabled={isLoading}
+                    skipAutoDiscovery={skipAutoDiscovery}
+                    onProfileMadeDefault={onProfileMadeDefault}
                   />,
                   section
                 );

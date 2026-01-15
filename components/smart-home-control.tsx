@@ -54,7 +54,7 @@ interface SmartHomeControlProps {
   discoveredPanelIps: Set<string>;
   discoveryCompleted: boolean;
   isLoading: boolean;
-  onSwitchToSetup: () => void;
+  onSwitchToSetup: (openFavoritesFullscreen?: boolean) => void;
 }
 
 // =============================================================================
@@ -311,7 +311,18 @@ export default function SmartHomeControl({
     return [...new Set([...favoriteGroups, ...smartGroups])];
   }, [favoritesData.groups, smartSwitchesData.groups]);
 
-  // Set first group as active when data loads
+  // Reset activeGroup when profile changes, then set first group as active
+  const profileIdRef = useRef<number | null>(null);
+  
+  useEffect(() => {
+    // If profile changed, reset activeGroup
+    if (profile?.id !== profileIdRef.current) {
+      profileIdRef.current = profile?.id ?? null;
+      setActiveGroup(null);
+    }
+  }, [profile?.id]);
+  
+  // Set first group as active when data loads or profile changes
   useEffect(() => {
     if (allGroups.length > 0 && !activeGroup) {
       setActiveGroup(allGroups[0]);
@@ -479,11 +490,19 @@ export default function SmartHomeControl({
 
   // Loading state - show when loading profile or during discovery
   if (isLoading) {
+    const panelCount = discoveredPanelIps.size;
     return (
       <div className={styles.container}>
         <div className={styles.loadingState}>
           <div className={styles.loadingSpinner} />
-          <p className={styles.loadingText}>Loading your smart home...</p>
+          <p className={styles.loadingText}>
+            {panelCount === 0 
+              ? 'Discovering panels...' 
+              : `Found ${panelCount} panel${panelCount !== 1 ? 's' : ''}...`}
+          </p>
+          {panelCount > 0 && (
+            <p className={styles.loadingSubtext}>Connecting to devices</p>
+          )}
         </div>
       </div>
     );
@@ -501,7 +520,7 @@ export default function SmartHomeControl({
           </p>
           <button 
             className={styles.setupButton}
-            onClick={onSwitchToSetup}
+            onClick={() => onSwitchToSetup()}
           >
             <SettingsIcon className={styles.setupButtonIcon} />
             <span>Open Setup</span>
@@ -519,7 +538,7 @@ export default function SmartHomeControl({
             <span className={styles.profileBadge}>{profile.name}</span>
             <button 
               className={styles.settingsButton}
-              onClick={onSwitchToSetup}
+              onClick={() => onSwitchToSetup()}
               aria-label="Open setup"
             >
               <SettingsIcon className={styles.settingsIcon} />
@@ -534,7 +553,7 @@ export default function SmartHomeControl({
           </p>
           <button 
             className={styles.setupButton}
-            onClick={onSwitchToSetup}
+            onClick={() => onSwitchToSetup()}
           >
             <SettingsIcon className={styles.setupButtonIcon} />
             <span>Add Zones</span>
@@ -550,13 +569,26 @@ export default function SmartHomeControl({
       <header className={styles.header}>
         <div className={styles.headerContent}>
           <span className={styles.profileBadge}>{profile.name}</span>
-          <button 
-            className={styles.settingsButton}
-            onClick={onSwitchToSetup}
-            aria-label="Open setup"
-          >
-            <SettingsIcon className={styles.settingsIcon} />
-          </button>
+          <div className={styles.headerActions}>
+            <button 
+              className={styles.modifyZoneHeaderButton}
+              onClick={() => {
+                triggerHaptic('light');
+                onSwitchToSetup(true); // Open favorites fullscreen
+              }}
+              aria-label="Modify zones"
+            >
+              <EditIcon className={styles.modifyZoneHeaderIcon} />
+              <span>Modify</span>
+            </button>
+            <button 
+              className={styles.settingsButton}
+              onClick={() => onSwitchToSetup(false)}
+              aria-label="Open setup"
+            >
+              <SettingsIcon className={styles.settingsIcon} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -576,17 +608,6 @@ export default function SmartHomeControl({
             </button>
           ))}
         </div>
-        <button 
-          className={styles.modifyZoneButton}
-          onClick={() => {
-            triggerHaptic('light');
-            onSwitchToSetup();
-          }}
-          aria-label="Modify zone"
-        >
-          <EditIcon className={styles.modifyZoneIcon} />
-          <span className={styles.modifyZoneText}>Edit</span>
-        </button>
       </nav>
 
       {/* Main Content */}
@@ -770,23 +791,9 @@ export default function SmartHomeControl({
           <div className={styles.emptyZone}>
             <div className={styles.emptyZoneIcon}>📦</div>
             <p className={styles.emptyZoneText}>This zone is empty</p>
-            <p className={styles.emptyZoneHint}>Add devices and actions in Setup mode</p>
+            <p className={styles.emptyZoneHint}>Tap &ldquo;Modify&rdquo; above to add devices</p>
           </div>
         )}
-
-        {/* Always visible Modify Zone button */}
-        <div className={styles.modifyZoneFooter}>
-          <button 
-            className={styles.modifyButton}
-            onClick={() => {
-              triggerHaptic('light');
-              onSwitchToSetup();
-            }}
-          >
-            <EditIcon className={styles.modifyButtonIcon} />
-            <span>Modify Zone</span>
-          </button>
-        </div>
       </main>
 
       {/* Loading overlay */}

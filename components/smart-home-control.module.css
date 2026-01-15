@@ -82,6 +82,43 @@
   background-clip: text;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modifyZoneHeaderButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--foreground);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.modifyZoneHeaderButton:hover {
+  background: var(--card-hover);
+  border-color: var(--shc-accent);
+  color: var(--shc-accent);
+}
+
+.modifyZoneHeaderButton:active {
+  transform: scale(0.95);
+}
+
+.modifyZoneHeaderIcon {
+  width: 16px;
+  height: 16px;
+}
+
 .settingsButton {
   width: 44px;
   height: 44px;
@@ -175,52 +212,6 @@
   color: white;
 }
 
-/* Modify Zone Button */
-.modifyZoneButton {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.modifyZoneButton:hover {
-  background: var(--card-hover);
-  border-color: var(--shc-accent);
-  color: var(--shc-accent);
-}
-
-.modifyZoneButton:active {
-  transform: scale(0.95);
-}
-
-.modifyZoneIcon {
-  width: 16px;
-  height: 16px;
-}
-
-.modifyZoneText {
-  /* Hide text on small screens */
-}
-
-@media (max-width: 480px) {
-  .modifyZoneText {
-    display: none;
-  }
-  
-  .modifyZoneButton {
-    padding: 10px;
-  }
-}
 
 /* ============================================
    Main Content
@@ -697,14 +688,6 @@
   color: var(--muted);
 }
 
-/* Modify Zone Footer */
-.modifyZoneFooter {
-  display: flex;
-  justify-content: center;
-  padding: 24px 0 32px;
-  margin-top: auto;
-}
-
 .modifyButton {
   display: inline-flex;
   align-items: center;
@@ -776,10 +759,19 @@
 }
 
 .loadingText {
-  font-size: 1rem;
+  font-size: 1.1rem;
+  color: var(--foreground);
+  font-weight: 600;
+  text-align: center;
+  margin: 0;
+}
+
+.loadingSubtext {
+  font-size: 0.9rem;
   color: var(--muted);
   font-weight: 500;
   text-align: center;
+  margin: 8px 0 0;
 }
 
 @keyframes spin {
@@ -884,7 +876,7 @@
   .shadeControlButton,
   .setupButton,
   .modifyButton,
-  .modifyZoneButton,
+  .modifyZoneHeaderButton,
   .actionButton,
   .lightButton {
     transition: none;

@@ -63,6 +63,10 @@ interface ProfilePickerProps {
   isLoading: boolean;
   /** Disabled state */
   disabled?: boolean;
+  /** Skip auto-discovery on profile load (when switching from Control mode) */
+  skipAutoDiscovery?: boolean;
+  /** Called when a profile is made default - to sync discovery cache */
+  onProfileMadeDefault?: (profileId: number | null) => void;
 }
 
 // =============================================================================
@@ -123,6 +127,8 @@ export default function ProfilePicker({
   onShowToast,
   isLoading,
   disabled = false,
+  skipAutoDiscovery = false,
+  onProfileMadeDefault,
 }: ProfilePickerProps) {
   // State - initialize without localStorage to avoid hydration mismatch
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -236,15 +242,12 @@ export default function ProfilePicker({
       // Call parent handlers with full profile data
       onProfileSelect(profileId, parsedRanges, profile);
       
-      // Trigger discovery with the parsed ranges directly to avoid timing issues
-      onTriggerDiscovery(parsedRanges);
-      
-      return true;
+      return { success: true, parsedRanges };
     } catch (err) {
       console.error('[ProfilePicker] Load profile error:', err);
-      return false;
+      return { success: false, parsedRanges: [] };
     }
-  }, [onProfileSelect, onTriggerDiscovery]);
+  }, [onProfileSelect]);
 
   // =============================================================================
   // Auto-load default profile on mount
@@ -273,7 +276,12 @@ export default function ProfilePicker({
         if (profileExists) {
           console.log(`[ProfilePicker] Auto-loading default profile from localStorage: ${result.defaultProfileId}`);
           hasAutoLoadedRef.current = true;
-          await loadProfileById(result.defaultProfileId);
+          const loadResult = await loadProfileById(result.defaultProfileId);
+          
+          // Only trigger discovery if not skipping (e.g., when switching from Control mode)
+          if (loadResult.success && loadResult.parsedRanges.length > 0 && !skipAutoDiscovery) {
+            onTriggerDiscovery(loadResult.parsedRanges);
+          }
         }
       }
       
@@ -282,7 +290,7 @@ export default function ProfilePicker({
     };
     
     initializeAndAutoLoad();
-  }, [hasMounted, fetchProfiles, loadProfileById]);
+  }, [hasMounted, fetchProfiles, loadProfileById, skipAutoDiscovery, onTriggerDiscovery]);
 
   // =============================================================================
   // Handle profile selection
@@ -311,7 +319,12 @@ export default function ProfilePicker({
     if (isNaN(profileId)) return;
     
     setShowDeleteConfirm(false);
-    await loadProfileById(profileId);
+    const loadResult = await loadProfileById(profileId);
+    
+    // Manual profile selection always triggers discovery
+    if (loadResult.success && loadResult.parsedRanges.length > 0) {
+      onTriggerDiscovery(loadResult.parsedRanges);
+    }
   };
   
   // =============================================================================
@@ -328,6 +341,9 @@ export default function ProfilePicker({
     
     setDefaultProfileId(profileId);
     console.log(`[ProfilePicker] Set default profile to: ${profileId} (stored in browser localStorage)`);
+    
+    // Notify parent to update discovery cache
+    onProfileMadeDefault?.(profileId);
   };
   
   // =============================================================================
