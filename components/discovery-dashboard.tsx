@@ -77,10 +77,12 @@ interface DiscoveryDashboardProps {
   controlModeDiscoveredIps?: string[];
   /** Discovery summary from Control mode - includes counts for no-response, etc. */
   controlModeDiscoverySummary?: ControlModeDiscoverySummary | null;
+  /** Full discovery results from Control mode - includes settings (logging, longPressMs) */
+  controlModeDiscoveryResults?: DiscoveryResult[];
   /** Live panel states from Control mode - used to get panel names */
   controlModePanelStates?: Map<string, LivePanelState>;
   /** Callback when discovery completes - to sync state with page.tsx */
-  onDiscoveryComplete?: (discoveredIps: string[], summary: DiscoverySummary, forProfileId: number) => void;
+  onDiscoveryComplete?: (discoveredIps: string[], summary: DiscoverySummary, forProfileId: number, results?: DiscoveryResult[]) => void;
   /** Callback when a profile is made default - to cache discovery results */
   onProfileMadeDefault?: (profileId: number | null) => void;
 }
@@ -91,6 +93,7 @@ export default function DiscoveryDashboard({
   skipAutoDiscovery = false,
   controlModeDiscoveredIps = [],
   controlModeDiscoverySummary,
+  controlModeDiscoveryResults = [],
   controlModePanelStates,
   onDiscoveryComplete,
   onProfileMadeDefault,
@@ -229,13 +232,61 @@ export default function DiscoveryDashboard({
       return;
     }
     
-    console.log('[Dashboard] Populating discovery from Control mode:', controlModeDiscoveredIps.length, 'panels', 'summary:', controlModeDiscoverySummary);
+    // Check if we already have a response with settings data for these IPs
+    // This happens when we previously ran discovery in AdminView, then switched to Control and back
+    const existingResultsMap = new Map<string, DiscoveryResult>();
+    if (response?.results) {
+      for (const r of response.results) {
+        existingResultsMap.set(r.ip, r);
+      }
+    }
+    
+    // Check if existing results have settings - if so, preserve them
+    const existingHasSettings = response?.results?.some(r => r.settings?.logging !== undefined || r.settings?.longPressMs !== undefined);
+    const existingIpsMatch = controlModeDiscoveredIps.every(ip => existingResultsMap.has(ip) && existingResultsMap.get(ip)?.status === 'panel');
+    
+    if (existingHasSettings && existingIpsMatch) {
+      console.log('[Dashboard] Preserving existing discovery results with settings data');
+      lastPopulatedIpsRef.current = currentIpsFingerprint;
+      // Only update discovery completed state, keep existing response
+      setDiscoveryCompleted(true);
+      return;
+    }
+    
+    console.log('[Dashboard] Populating discovery from Control mode:', controlModeDiscoveredIps.length, 'panels', 'summary:', controlModeDiscoverySummary, 'results with settings from page.tsx:', controlModeDiscoveryResults.filter(r => r.settings).length);
     lastPopulatedIpsRef.current = currentIpsFingerprint;
     
+    // Build a map of passed results from page.tsx (these have settings!)
+    const passedResultsMap = new Map<string, DiscoveryResult>();
+    for (const r of controlModeDiscoveryResults) {
+      passedResultsMap.set(r.ip, r);
+    }
+    
     // Create discovery results from the discovered IPs
+    // Prefer passed results (from page.tsx), fall back to existing, then create minimal
     const results: DiscoveryResult[] = controlModeDiscoveredIps.map(ip => {
       const liveState = controlModePanelStates?.get(ip);
       const panelName = liveState?.fullState?.mqttDeviceName || null;
+      
+      // Try to get full result from passed results (best - has settings)
+      const passedResult = passedResultsMap.get(ip);
+      if (passedResult) {
+        return {
+          ...passedResult,
+          name: panelName || passedResult.name, // Prefer live name
+        };
+      }
+      
+      // Fall back to existing result (may have settings)
+      const existingResult = existingResultsMap.get(ip);
+      if (existingResult) {
+        return {
+          ...existingResult,
+          name: panelName || existingResult.name,
+        };
+      }
+      
+      // Create minimal result (no settings)
       return {
         ip,
         status: 'panel' as const,
@@ -283,7 +334,7 @@ export default function DiscoveryDashboard({
       };
     }
     setPanelInfoMap(newPanelInfoMap);
-  }, [skipAutoDiscovery, controlModeDiscoveredIps, controlModeDiscoverySummary, controlModePanelStates]);
+  }, [skipAutoDiscovery, controlModeDiscoveredIps, controlModeDiscoverySummary, controlModeDiscoveryResults, controlModePanelStates, response]);
 
   // Poll for progress during discovery and update table with partial results
   useEffect(() => {
@@ -571,9 +622,15 @@ export default function DiscoveryDashboard({
           };
           const profileIdForCallback = discoveryProfileIdRef.current ?? selectedProfile?.id;
           
-          console.log('[Dashboard] Discovery complete, notifying parent:', discoveredPanelIps.length, 'panels', 'summary:', completeSummary, 'for profile:', profileIdForCallback);
+          // Build final results array with settings
+          const finalResults: DiscoveryResult[] = [];
+          for (const result of resultsMap.values()) {
+            finalResults.push(result);
+          }
+          
+          console.log('[Dashboard] Discovery complete, notifying parent:', discoveredPanelIps.length, 'panels', 'summary:', completeSummary, 'results with settings:', finalResults.filter(r => r.settings).length, 'for profile:', profileIdForCallback);
           if (profileIdForCallback) {
-            onDiscoveryComplete?.(discoveredPanelIps, completeSummary, profileIdForCallback);
+            onDiscoveryComplete?.(discoveredPanelIps, completeSummary, profileIdForCallback, finalResults);
           }
         }
       };

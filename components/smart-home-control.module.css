@@ -863,6 +863,216 @@
 }
 
 /* ============================================
+   Active Devices Section
+   Shows ALL active devices across all panels
+   ============================================ */
+
+.activeDevicesSection {
+  margin-top: 24px;
+  border-radius: var(--shc-radius);
+  background: var(--shc-card-bg);
+  border: 1px solid var(--shc-card-border);
+  overflow: hidden;
+}
+
+.activeDevicesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px var(--shc-spacing);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(251, 146, 60, 0.05) 100%);
+  border-bottom: 1px solid var(--shc-card-border);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.activeDevicesHeader:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(251, 146, 60, 0.08) 100%);
+}
+
+.activeDevicesHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.activeDevicesToggle {
+  color: var(--foreground-muted);
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.activeDevicesToggleExpanded {
+  transform: rotate(90deg);
+}
+
+.activeDevicesSectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.activeDevicesSectionTitle .sectionIcon {
+  width: 18px;
+  height: 18px;
+  color: var(--shc-danger);
+}
+
+.activeDevicesCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--shc-danger);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.turnOffAllButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--shc-danger);
+  border: none;
+  border-radius: 999px;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.turnOffAllButton:hover {
+  background: #dc2626;
+  transform: scale(1.03);
+}
+
+.turnOffAllButton:active {
+  transform: scale(0.97);
+}
+
+.turnOffAllIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.activeDevicesList {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.activeDeviceItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--shc-radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--shc-warning);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+}
+
+.activeDeviceItem:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--shc-danger);
+}
+
+.activeDeviceItem:active {
+  transform: scale(0.98);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.activeDeviceIcon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.activeDeviceDetails {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.activeDeviceName {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activeDevicePanel {
+  font-size: 0.75rem;
+  color: var(--foreground-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dark mode adjustments for Active Devices */
+:root.dark .activeDevicesHeader,
+[data-theme="dark"] .activeDevicesHeader {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(251, 146, 60, 0.08) 100%);
+}
+
+:root.dark .activeDevicesHeader:hover,
+[data-theme="dark"] .activeDevicesHeader:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(251, 146, 60, 0.12) 100%);
+}
+
+/* Tablet/Desktop responsive for Active Devices */
+@media (min-width: 768px) {
+  .activeDevicesSection {
+    margin-top: 32px;
+  }
+
+  .activeDevicesHeader {
+    padding: 16px 20px;
+  }
+
+  .activeDevicesSectionTitle {
+    font-size: 1rem;
+  }
+
+  .activeDevicesList {
+    padding: 12px;
+    gap: 8px;
+    max-height: 400px;
+  }
+
+  .activeDeviceItem {
+    padding: 12px 16px;
+  }
+
+  .activeDeviceName {
+    font-size: 0.95rem;
+  }
+}
+
+/* ============================================
    Reduced Motion
    ============================================ */
 
@@ -878,7 +1088,11 @@
   .modifyButton,
   .modifyZoneHeaderButton,
   .actionButton,
-  .lightButton {
+  .lightButton,
+  .activeDevicesToggle,
+  .activeDeviceItem,
+  .turnOffAllButton,
+  .activeDeviceTurnOffButton {
     transition: none;
   }
 

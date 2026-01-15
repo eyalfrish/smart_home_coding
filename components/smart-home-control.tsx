@@ -48,6 +48,17 @@ export interface ActionExecutionProgress {
   error?: string;
 }
 
+/** Represents an active device from any discovered panel */
+export interface ActiveDevice {
+  panelIp: string;
+  panelName: string;
+  type: 'relay' | 'curtain';
+  index: number;
+  name: string;
+  isOn?: boolean;          // For relays
+  curtainState?: string;   // For curtains
+}
+
 interface SmartHomeControlProps {
   profile: ProfileData | null;
   livePanelStates: Map<string, LivePanelState>;
@@ -255,6 +266,13 @@ const ZapIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const PowerIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+    <line x1="12" y1="2" x2="12" y2="12" />
+  </svg>
+);
+
 const EditIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -340,6 +358,47 @@ export default function SmartHomeControl({
     ? (smartSwitchesData.groups || {})[effectiveActiveGroup] ?? []
     : [];
 
+  // Compute all active relays (lights) from ALL discovered panels (not just favorites)
+  // Only include direct devices, ignore linked devices (those with "-Link" in name)
+  const activeDevices = useMemo((): ActiveDevice[] => {
+    const devices: ActiveDevice[] = [];
+    
+    for (const [ip, panelState] of livePanelStates.entries()) {
+      if (!panelState.fullState) continue;
+      
+      const panelName = panelState.fullState.mqttDeviceName || 
+                        panelState.fullState.hostname || 
+                        ip;
+      
+      // Check relays that are ON (excluding linked devices)
+      for (const relay of panelState.fullState.relays) {
+        if (relay.state === true) {
+          const relayName = relay.name || `Relay ${relay.index + 1}`;
+          // Skip linked devices (contain "-Link" in name)
+          if (relayName.includes('-Link')) continue;
+          
+          devices.push({
+            panelIp: ip,
+            panelName,
+            type: 'relay',
+            index: relay.index,
+            name: relayName,
+            isOn: true,
+          });
+        }
+      }
+    }
+    
+    // Sort by panel name, then by name
+    return devices.sort((a, b) => {
+      if (a.panelName !== b.panelName) return a.panelName.localeCompare(b.panelName);
+      return a.name.localeCompare(b.name);
+    });
+  }, [livePanelStates]);
+
+  // Collapse state for Active Devices section - starts collapsed
+  const [isActiveDevicesExpanded, setIsActiveDevicesExpanded] = useState(false);
+
   // Get switch state
   const getSwitchState = useCallback((sw: FavoriteSwitch): { isOn?: boolean; curtainState?: string } => {
     const liveState = livePanelStates.get(sw.ip);
@@ -384,6 +443,29 @@ export default function SmartHomeControl({
     const result = await sendPanelCommand(sw.ip, 'curtain', { index: sw.index, action });
     console.log('[SmartHomeControl] Shade action result:', result);
   }, [triggerHaptic]);
+
+  // Turn off an active device (relay)
+  const handleTurnOffActiveDevice = useCallback(async (device: ActiveDevice) => {
+    console.log('[SmartHomeControl] Turning off active device:', device.name, device.panelIp);
+    triggerHaptic('medium');
+    
+    const result = await sendPanelCommand(device.panelIp, 'set_relay', { 
+      index: device.index, 
+      state: false 
+    });
+    console.log('[SmartHomeControl] Turn off relay result:', result);
+  }, [triggerHaptic]);
+
+  // Turn off all active devices
+  const handleTurnOffAllActive = useCallback(async () => {
+    if (activeDevices.length === 0) return;
+    
+    console.log('[SmartHomeControl] Turning off all active devices:', activeDevices.length);
+    triggerHaptic('heavy');
+    
+    // Turn off all in parallel
+    await Promise.all(activeDevices.map(device => handleTurnOffActiveDevice(device)));
+  }, [activeDevices, handleTurnOffActiveDevice, triggerHaptic]);
 
   // Action execution
   const handleRunAction = useCallback(async (action: SmartAction) => {
@@ -793,6 +875,57 @@ export default function SmartHomeControl({
             <p className={styles.emptyZoneText}>This zone is empty</p>
             <p className={styles.emptyZoneHint}>Tap &ldquo;Modify&rdquo; above to add devices</p>
           </div>
+        )}
+
+        {/* Active Devices Section - Shows ALL active devices across all discovered panels */}
+        {activeDevices.length > 0 && (
+          <section className={styles.activeDevicesSection}>
+            <div 
+              className={styles.activeDevicesHeader}
+              onClick={() => setIsActiveDevicesExpanded(!isActiveDevicesExpanded)}
+            >
+              <div className={styles.activeDevicesHeaderLeft}>
+                <span className={`${styles.activeDevicesToggle} ${isActiveDevicesExpanded ? styles.activeDevicesToggleExpanded : ''}`}>
+                  ▶
+                </span>
+                <h3 className={styles.activeDevicesSectionTitle}>
+                  <PowerIcon className={styles.sectionIcon} />
+                  Active Devices
+                  <span className={styles.activeDevicesCount}>{activeDevices.length}</span>
+                </h3>
+              </div>
+              <button
+                className={styles.turnOffAllButton}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTurnOffAllActive();
+                }}
+                title="Turn off all active devices"
+              >
+                <PowerIcon className={styles.turnOffAllIcon} />
+                <span>All Off</span>
+              </button>
+            </div>
+            
+            {isActiveDevicesExpanded && (
+              <div className={styles.activeDevicesList}>
+                {activeDevices.map((device, idx) => (
+                  <button 
+                    key={`${device.panelIp}-${device.type}-${device.index}-${idx}`}
+                    className={styles.activeDeviceItem}
+                    onClick={() => handleTurnOffActiveDevice(device)}
+                    title="Click to turn off"
+                  >
+                    <span className={styles.activeDeviceIcon}>💡</span>
+                    <div className={styles.activeDeviceDetails}>
+                      <span className={styles.activeDeviceName}>{device.name}</span>
+                      <span className={styles.activeDevicePanel}>{device.panelName}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         )}
       </main>
 

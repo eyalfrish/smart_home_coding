@@ -7,7 +7,7 @@ import SmartHomeControl from "@/components/smart-home-control";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { usePanelStream } from "@/lib/hooks/use-panel-stream";
 import type { FavoritesData, SmartSwitchesData } from "@/components/favorites-section";
-import type { DiscoverySummary } from "@/lib/discovery/types";
+import type { DiscoverySummary, DiscoveryResult } from "@/lib/discovery/types";
 
 // =============================================================================
 // Types
@@ -70,12 +70,14 @@ export default function Home() {
   // Default profile discovery (persistent, used by UserView)
   const [defaultDiscoveredPanelIps, setDefaultDiscoveredPanelIps] = useState<string[]>([]);
   const [defaultDiscoverySummary, setDefaultDiscoverySummary] = useState<DiscoverySummary | null>(null);
+  const [defaultDiscoveryResults, setDefaultDiscoveryResults] = useState<DiscoveryResult[]>([]);
   const [defaultDiscoveryCompleted, setDefaultDiscoveryCompleted] = useState(false);
   const [defaultProfileId, setDefaultProfileId] = useState<number | null>(null);
   
   // Current session discovery (may be draft for non-default profiles)
   const [discoveredPanelIps, setDiscoveredPanelIps] = useState<string[]>([]);
   const [discoverySummary, setDiscoverySummary] = useState<DiscoverySummary | null>(null);
+  const [discoveryResults, setDiscoveryResults] = useState<DiscoveryResult[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveryCompleted, setDiscoveryCompleted] = useState(false);
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
@@ -422,20 +424,27 @@ export default function Home() {
   }, [defaultProfileId, defaultDiscoveryCompleted, defaultDiscoveredPanelIps, defaultDiscoverySummary, discoveryCompleted, discoveredPanelIps, discoverySummary]);
 
   // Handle discovery completion from Setup mode - sync state
-  const handleSetupDiscoveryComplete = useCallback((newDiscoveredIps: string[], newSummary: DiscoverySummary, forProfileId: number) => {
-    console.log('[Home] Discovery completed in Setup mode for profile:', forProfileId, 'panels:', newDiscoveredIps.length, 'summary:', newSummary);
+  const handleSetupDiscoveryComplete = useCallback((
+    newDiscoveredIps: string[], 
+    newSummary: DiscoverySummary, 
+    forProfileId: number,
+    newResults?: DiscoveryResult[]
+  ) => {
+    console.log('[Home] Discovery completed in Setup mode for profile:', forProfileId, 'panels:', newDiscoveredIps.length, 'summary:', newSummary, 'results with settings:', newResults?.filter(r => r.settings).length ?? 0);
     // Update shared discovery state
     setDiscoveredPanelIps(newDiscoveredIps);
     setDiscoverySummary(newSummary); // Also store the summary!
+    setDiscoveryResults(newResults ?? []); // Store full results with settings!
     setDiscoveryCompleted(true);
     setIsDiscovering(false);
     lastDiscoveredProfileIdRef.current = forProfileId;
     
     // If this discovery is for the default profile, cache it
     if (forProfileId === defaultProfileId) {
-      console.log('[Home] Caching discovery for default profile (from Setup):', newDiscoveredIps.length, 'panels');
+      console.log('[Home] Caching discovery for default profile (from Setup):', newDiscoveredIps.length, 'panels', 'with settings:', newResults?.filter(r => r.settings).length ?? 0);
       setDefaultDiscoveredPanelIps(newDiscoveredIps);
       setDefaultDiscoverySummary(newSummary); // Also cache the summary!
+      setDefaultDiscoveryResults(newResults ?? []); // Cache full results!
       setDefaultDiscoveryCompleted(true);
     }
     
@@ -452,21 +461,24 @@ export default function Home() {
       // Cleared default - reset default discovery cache
       setDefaultDiscoveredPanelIps([]);
       setDefaultDiscoverySummary(null);
+      setDefaultDiscoveryResults([]);
       setDefaultDiscoveryCompleted(false);
     } else if (profileId === lastDiscoveredProfileIdRef.current && discoveryCompleted) {
       // The current discovery is for this profile - copy to default cache
-      console.log('[Home] Copying current discovery to default cache:', discoveredPanelIps.length, 'panels');
+      console.log('[Home] Copying current discovery to default cache:', discoveredPanelIps.length, 'panels', 'with settings:', discoveryResults.filter(r => r.settings).length);
       setDefaultDiscoveredPanelIps([...discoveredPanelIps]);
       setDefaultDiscoverySummary(discoverySummary); // Also copy the summary!
+      setDefaultDiscoveryResults([...discoveryResults]); // Also copy full results!
       setDefaultDiscoveryCompleted(true);
     } else {
       // Different profile - clear default cache, will discover when switching to UserView
       console.log('[Home] New default profile differs from current discovery, will discover on switch to UserView');
       setDefaultDiscoveredPanelIps([]);
       setDefaultDiscoverySummary(null);
+      setDefaultDiscoveryResults([]);
       setDefaultDiscoveryCompleted(false);
     }
-  }, [discoveryCompleted, discoveredPanelIps, discoverySummary]);
+  }, [discoveryCompleted, discoveredPanelIps, discoverySummary, discoveryResults]);
 
   // =============================================================================
   // Render
@@ -525,6 +537,7 @@ export default function Home() {
           skipAutoDiscovery={skipSetupAutoDiscovery}
           controlModeDiscoveredIps={discoveredPanelIps}
           controlModeDiscoverySummary={discoverySummary}
+          controlModeDiscoveryResults={discoveryResults}
           controlModePanelStates={livePanelStates}
           onDiscoveryComplete={handleSetupDiscoveryComplete}
           onProfileMadeDefault={handleProfileMadeDefault}
