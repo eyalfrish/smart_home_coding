@@ -153,9 +153,9 @@ export interface StopActionResponse {
 // =============================================================================
 
 /**
- * Smart switches data structure with groups.
- * Stored in profile.smart_switches.groups
+ * Smart switches data structure with zones.
+ * Stored in profile.smart_switches.zones
  */
 export interface SmartSwitchesData {
-  groups: Record<string, SmartAction[]>;
+  zones: Record<string, SmartAction[]>;
 }

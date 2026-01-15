@@ -5196,7 +5196,7 @@
   border-top: 1px solid var(--border);
 }
 
-.favoritesSummaryGroup {
+.favoritesSummaryZone {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -5207,12 +5207,12 @@
   font-size: 0.8rem;
 }
 
-.favoritesSummaryGroupName {
+.favoritesSummaryZoneName {
   color: var(--foreground);
   font-weight: 500;
 }
 
-.favoritesSummaryGroupCount {
+.favoritesSummaryZoneCount {
   color: var(--accent);
   font-weight: 700;
   background: var(--badge-accent-bg);
@@ -5239,7 +5239,7 @@
   border-top: 1px solid var(--border);
 }
 
-.favoritesCollapsedGroup {
+.favoritesCollapsedZone {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -5249,7 +5249,7 @@
   padding: 0.65rem 0.75rem;
 }
 
-.favoritesCollapsedGroupName {
+.favoritesCollapsedZoneName {
   font-size: 1.05rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -5437,9 +5437,9 @@
 }
 
 /* ===========================================
-   Group Navigation Row
+   Zone Navigation Row
    =========================================== */
-.favGroupNavRow {
+.favZoneNavRow {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -5449,7 +5449,7 @@
   flex-wrap: wrap;
 }
 
-.favoritesGroupTabs {
+.favoritesZoneTabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
@@ -5458,7 +5458,7 @@
   align-items: center;
 }
 
-.favoritesGroupTab {
+.favoritesZoneTab {
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: 10px;
@@ -5473,19 +5473,19 @@
   gap: 0.5rem;
 }
 
-.favoritesGroupTab:hover {
+.favoritesZoneTab:hover {
   background: var(--card-hover);
   border-color: var(--accent);
   color: var(--foreground);
 }
 
-.favoritesGroupTabActive {
+.favoritesZoneTabActive {
   background: var(--badge-accent-bg);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.favoritesGroupTabCount {
+.favoritesZoneTabCount {
   font-size: 0.7rem;
   font-weight: 700;
   background: var(--card);
@@ -5494,15 +5494,15 @@
   color: var(--muted);
 }
 
-.favoritesGroupTabActive .favoritesGroupTabCount {
+.favoritesZoneTabActive .favoritesZoneTabCount {
   background: var(--accent);
   color: #fff;
 }
 
 /* ===========================================
-   Group Content Wrapper - Two Sub-Areas
+   Zone Content Wrapper - Two Sub-Areas
    =========================================== */
-.favGroupContentWrapper {
+.favZoneContentWrapper {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -5702,8 +5702,8 @@
   font-weight: 600;
 }
 
-/* Group tab drag handle */
-.groupTabDragHandle {
+/* Zone tab drag handle */
+.zoneTabDragHandle {
   font-size: 0.75rem;
   color: var(--muted);
   opacity: 0.5;
@@ -5713,33 +5713,33 @@
   transition: opacity 0.15s ease;
 }
 
-.favoritesGroupTab:hover .groupTabDragHandle {
+.favoritesZoneTab:hover .zoneTabDragHandle {
   opacity: 0.8;
 }
 
-.groupTabDragHandle:active {
+.zoneTabDragHandle:active {
   cursor: grabbing;
 }
 
-/* Group tab dragging state */
-.groupTabDragging {
+/* Zone tab dragging state */
+.zoneTabDragging {
   opacity: 0.5;
   transform: scale(0.95);
 }
 
-/* Group tab drop indicators */
-.groupTabDropBefore {
+/* Zone tab drop indicators */
+.zoneTabDropBefore {
   box-shadow: -3px 0 0 0 var(--accent);
   margin-left: 6px;
 }
 
-.groupTabDropAfter {
+.zoneTabDropAfter {
   box-shadow: 3px 0 0 0 var(--accent);
   margin-right: 6px;
 }
 
-/* Group tab edit button (for renaming) */
-.favoritesGroupTabEdit {
+/* Zone tab edit button (for renaming) */
+.favoritesZoneTabEdit {
   display: inline-block;
   margin-left: 0.35rem;
   font-size: 0.65rem;
@@ -5751,16 +5751,16 @@
   opacity: 0;
 }
 
-.favoritesGroupTab:hover .favoritesGroupTabEdit {
+.favoritesZoneTab:hover .favoritesZoneTabEdit {
   opacity: 1;
 }
 
-.favoritesGroupTabEdit:hover {
+.favoritesZoneTabEdit:hover {
   color: var(--accent);
 }
 
-/* Group tab delete button */
-.favoritesGroupTabDelete {
+/* Zone tab delete button */
+.favoritesZoneTabDelete {
   display: inline-block;
   margin-left: 0.25rem;
   font-size: 0.7rem;
@@ -5771,24 +5771,24 @@
   transition: all 0.15s ease;
 }
 
-.favoritesGroupTabDelete:hover {
+.favoritesZoneTabDelete:hover {
   color: var(--warning);
 }
 
-/* Add Group tab style */
-.favoritesGroupTabAdd {
+/* Add Zone tab style */
+.favoritesZoneTabAdd {
   border-style: dashed;
   color: var(--accent);
   background: transparent;
 }
 
-.favoritesGroupTabAdd:hover {
+.favoritesZoneTabAdd:hover {
   background: var(--badge-accent-bg);
   border-style: solid;
 }
 
 /* New group input inline (styled like a group tab) */
-.newGroupInputInline {
+.newZoneInputInline {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -5798,7 +5798,7 @@
   border-radius: 999px;
 }
 
-.newGroupInputField {
+.newZoneInputField {
   border: none;
   background: transparent;
   color: var(--foreground);
@@ -5807,12 +5807,12 @@
   outline: none;
 }
 
-.newGroupInputField::placeholder {
+.newZoneInputField::placeholder {
   color: var(--muted);
 }
 
-.newGroupInputConfirm,
-.newGroupInputCancel {
+.newZoneInputConfirm,
+.newZoneInputCancel {
   font-size: 0.8rem;
   cursor: pointer;
   padding: 0.1rem 0.2rem;
@@ -5820,19 +5820,19 @@
   transition: all 0.15s ease;
 }
 
-.newGroupInputConfirm {
+.newZoneInputConfirm {
   color: var(--panel);
 }
 
-.newGroupInputConfirm:hover {
+.newZoneInputConfirm:hover {
   color: var(--accent);
 }
 
-.newGroupInputCancel {
+.newZoneInputCancel {
   color: var(--muted);
 }
 
-.newGroupInputCancel:hover {
+.newZoneInputCancel:hover {
   color: var(--warning);
 }
 
@@ -7846,7 +7846,7 @@
     gap: 0.4rem;
   }
 
-  .favoritesSummaryGroup {
+  .favoritesSummaryZone {
     padding: 0.3rem 0.5rem;
     font-size: 0.75rem;
   }
@@ -7857,12 +7857,12 @@
     gap: 0.6rem;
   }
 
-  .favoritesCollapsedGroup {
+  .favoritesCollapsedZone {
     padding: 0.6rem 0.65rem;
     border-radius: 8px;
   }
 
-  .favoritesCollapsedGroupName {
+  .favoritesCollapsedZoneName {
     font-size: 0.95rem;
     padding-bottom: 0.45rem;
     letter-spacing: 0.08em;
@@ -7905,15 +7905,15 @@
     width: 52px !important;
   }
 
-  /* Group nav row mobile - keep tabs layout with horizontal scroll */
-  .favGroupNavRow {
+  /* Zone nav row mobile - keep tabs layout with horizontal scroll */
+  .favZoneNavRow {
     display: block;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--border);
   }
 
-  .favoritesGroupTabs {
+  .favoritesZoneTabs {
     display: flex;
     flex-wrap: nowrap !important;
     gap: 0.5rem;
@@ -7928,22 +7928,22 @@
     scrollbar-color: var(--accent) var(--surface);
   }
 
-  .favoritesGroupTabs::-webkit-scrollbar {
+  .favoritesZoneTabs::-webkit-scrollbar {
     height: 6px;
     display: block;
   }
 
-  .favoritesGroupTabs::-webkit-scrollbar-track {
+  .favoritesZoneTabs::-webkit-scrollbar-track {
     background: var(--surface);
     border-radius: 3px;
   }
 
-  .favoritesGroupTabs::-webkit-scrollbar-thumb {
+  .favoritesZoneTabs::-webkit-scrollbar-thumb {
     background: var(--accent);
     border-radius: 3px;
   }
 
-  .favoritesGroupTab {
+  .favoritesZoneTab {
     padding: 0.6rem 1rem;
     font-size: 0.95rem;
     white-space: nowrap;
@@ -7953,12 +7953,12 @@
   }
   
   /* Hide drag handle on mobile for cleaner look */
-  .groupTabDragHandle {
+  .zoneTabDragHandle {
     display: none;
   }
 
-  /* Group content wrapper */
-  .favGroupContentWrapper {
+  /* Zone content wrapper */
+  .favZoneContentWrapper {
     gap: 1rem;
   }
 

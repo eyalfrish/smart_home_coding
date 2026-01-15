@@ -863,11 +863,11 @@
 }
 
 /* ============================================
-   Active Devices Section
-   Shows ALL active devices across all panels
+   Active Switches Section
+   Shows ALL active switches across all panels
    ============================================ */
 
-.activeDevicesSection {
+.activeSwitchesSection {
   margin-top: 24px;
   border-radius: var(--shc-radius);
   background: var(--shc-card-bg);
@@ -875,7 +875,7 @@
   overflow: hidden;
 }
 
-.activeDevicesHeader {
+.activeSwitchesHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -887,27 +887,27 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.activeDevicesHeader:hover {
+.activeSwitchesHeader:hover {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(251, 146, 60, 0.08) 100%);
 }
 
-.activeDevicesHeaderLeft {
+.activeSwitchesHeaderLeft {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.activeDevicesToggle {
+.activeSwitchesToggle {
   color: var(--foreground-muted);
   font-size: 0.75rem;
   transition: transform 0.2s ease;
 }
 
-.activeDevicesToggleExpanded {
+.activeSwitchesToggleExpanded {
   transform: rotate(90deg);
 }
 
-.activeDevicesSectionTitle {
+.activeSwitchesSectionTitle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -917,13 +917,13 @@
   color: var(--foreground);
 }
 
-.activeDevicesSectionTitle .sectionIcon {
+.activeSwitchesSectionTitle .sectionIcon {
   width: 18px;
   height: 18px;
   color: var(--shc-danger);
 }
 
-.activeDevicesCount {
+.activeSwitchesCount {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -967,7 +967,7 @@
   height: 14px;
 }
 
-.activeDevicesList {
+.activeSwitchesList {
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -976,7 +976,7 @@
   overflow-y: auto;
 }
 
-.activeDeviceItem {
+.activeSwitchItem {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -992,22 +992,22 @@
   text-align: left;
 }
 
-.activeDeviceItem:hover {
+.activeSwitchItem:hover {
   background: rgba(239, 68, 68, 0.08);
   border-color: var(--shc-danger);
 }
 
-.activeDeviceItem:active {
+.activeSwitchItem:active {
   transform: scale(0.98);
   background: rgba(239, 68, 68, 0.12);
 }
 
-.activeDeviceIcon {
+.activeSwitchIcon {
   font-size: 1.2rem;
   flex-shrink: 0;
 }
 
-.activeDeviceDetails {
+.activeSwitchDetails {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1015,7 +1015,7 @@
   min-width: 0;
 }
 
-.activeDeviceName {
+.activeSwitchName {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--foreground);
@@ -1024,7 +1024,7 @@
   text-overflow: ellipsis;
 }
 
-.activeDevicePanel {
+.activeSwitchPanel {
   font-size: 0.75rem;
   color: var(--foreground-muted);
   white-space: nowrap;
@@ -1032,42 +1032,42 @@
   text-overflow: ellipsis;
 }
 
-/* Dark mode adjustments for Active Devices */
-:root.dark .activeDevicesHeader,
-[data-theme="dark"] .activeDevicesHeader {
+/* Dark mode adjustments for Active Switches */
+:root.dark .activeSwitchesHeader,
+[data-theme="dark"] .activeSwitchesHeader {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(251, 146, 60, 0.08) 100%);
 }
 
-:root.dark .activeDevicesHeader:hover,
-[data-theme="dark"] .activeDevicesHeader:hover {
+:root.dark .activeSwitchesHeader:hover,
+[data-theme="dark"] .activeSwitchesHeader:hover {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(251, 146, 60, 0.12) 100%);
 }
 
-/* Tablet/Desktop responsive for Active Devices */
+/* Tablet/Desktop responsive for Active Switches */
 @media (min-width: 768px) {
-  .activeDevicesSection {
+  .activeSwitchesSection {
     margin-top: 32px;
   }
 
-  .activeDevicesHeader {
+  .activeSwitchesHeader {
     padding: 16px 20px;
   }
 
-  .activeDevicesSectionTitle {
+  .activeSwitchesSectionTitle {
     font-size: 1rem;
   }
 
-  .activeDevicesList {
+  .activeSwitchesList {
     padding: 12px;
     gap: 8px;
     max-height: 400px;
   }
 
-  .activeDeviceItem {
+  .activeSwitchItem {
     padding: 12px 16px;
   }
 
-  .activeDeviceName {
+  .activeSwitchName {
     font-size: 0.95rem;
   }
 }
@@ -1089,10 +1089,10 @@
   .modifyZoneHeaderButton,
   .actionButton,
   .lightButton,
-  .activeDevicesToggle,
-  .activeDeviceItem,
+  .activeSwitchesToggle,
+  .activeSwitchItem,
   .turnOffAllButton,
-  .activeDeviceTurnOffButton {
+  .activeSwitchTurnOffButton {
     transition: none;
   }
 

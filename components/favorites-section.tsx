@@ -58,11 +58,11 @@ export interface FavoriteSwitch {
 }
 
 /**
- * Favorites data structure with groups.
- * Stored in profile.favorites.groups
+ * Favorites data structure with zones.
+ * Stored in profile.favorites.zones
  */
 export interface FavoritesData {
-  groups: Record<string, FavoriteSwitch[]>;
+  zones: Record<string, FavoriteSwitch[]>;
 }
 
 /**
@@ -146,16 +146,17 @@ interface FavoritesSectionProps {
 
 function parseFavorites(favorites: unknown): FavoritesData {
   if (!favorites || typeof favorites !== 'object') {
-    return { groups: {} };
+    return { zones: {} };
   }
   const favObj = favorites as Record<string, unknown>;
-  const groupsData = favObj.groups;
-  if (groupsData && typeof groupsData === 'object') {
+  // Support both old 'groups' and new 'zones' property names
+  const zonesData = favObj.zones || favObj.groups;
+  if (zonesData && typeof zonesData === 'object') {
     // Migrate old format (relayIndex) to new format (index, type)
-    const groups = groupsData as Record<string, unknown[]>;
-    const migratedGroups: Record<string, FavoriteSwitch[]> = {};
-    for (const [groupName, switches] of Object.entries(groups)) {
-      migratedGroups[groupName] = (switches || []).map((sw: unknown) => {
+    const zones = zonesData as Record<string, unknown[]>;
+    const migratedZones: Record<string, FavoriteSwitch[]> = {};
+    for (const [zoneName, switches] of Object.entries(zones)) {
+      migratedZones[zoneName] = (switches || []).map((sw: unknown) => {
         const swObj = sw as Record<string, unknown>;
         // Handle old format with relayIndex
         if ('relayIndex' in swObj && !('index' in swObj)) {
@@ -176,24 +177,25 @@ function parseFavorites(favorites: unknown): FavoritesData {
         };
       });
     }
-    return { groups: migratedGroups };
+    return { zones: migratedZones };
   }
-  return { groups: {} };
+  return { zones: {} };
 }
 
 function parseSmartSwitches(smartSwitches: unknown): SmartSwitchesData {
   if (!smartSwitches || typeof smartSwitches !== 'object') {
-    return { groups: {} };
+    return { zones: {} };
   }
   const ssObj = smartSwitches as Record<string, unknown>;
-  const groupsData = ssObj.groups;
-  if (groupsData && typeof groupsData === 'object') {
+  // Support both old 'groups' and new 'zones' property names
+  const zonesData = ssObj.zones || ssObj.groups;
+  if (zonesData && typeof zonesData === 'object') {
     // Migrate old format (steps-based) to new format (stages-based)
-    const groups = groupsData as Record<string, unknown[]>;
-    const migratedGroups: Record<string, SmartAction[]> = {};
+    const zones = zonesData as Record<string, unknown[]>;
+    const migratedZones: Record<string, SmartAction[]> = {};
     
-    for (const [groupName, actionsArr] of Object.entries(groups)) {
-      migratedGroups[groupName] = (actionsArr || []).map((actionItem: unknown) => {
+    for (const [zoneName, actionsArr] of Object.entries(zones)) {
+      migratedZones[zoneName] = (actionsArr || []).map((actionItem: unknown) => {
         const actionObj = actionItem as Record<string, unknown>;
         
         // Check if already in new format (has stages array)
@@ -239,9 +241,9 @@ function parseSmartSwitches(smartSwitches: unknown): SmartSwitchesData {
       });
     }
     
-    return { groups: migratedGroups };
+    return { zones: migratedZones };
   }
-  return { groups: {} };
+  return { zones: {} };
 }
 
 function validateSwitchesAndActions(
@@ -264,7 +266,7 @@ function validateSwitchesAndActions(
     return !state || state.connectionStatus === 'connected' || state.connectionStatus === 'connecting';
   };
 
-  for (const [_groupName, switches] of Object.entries(favoritesData.groups || {})) {
+  for (const [_zoneName, switches] of Object.entries(favoritesData.zones || {})) {
     for (const sw of switches) {
       const switchId = `${sw.ip}:${sw.type}:${sw.index}`;
       if (!isPanelReachable(sw.ip)) {
@@ -273,7 +275,7 @@ function validateSwitchesAndActions(
     }
   }
 
-  for (const [_groupName, actionsArr] of Object.entries(smartSwitchesData.groups || {})) {
+  for (const [_zoneName, actionsArr] of Object.entries(smartSwitchesData.zones || {})) {
     for (const smartAction of actionsArr) {
       const invalidStageIndices: number[] = [];
       // Check each stage's actions for unreachable switches
@@ -343,12 +345,12 @@ export default function FavoritesSection({
 }: FavoritesSectionProps) {
   // State
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [activeZone, setActiveZone] = useState<string | null>(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
   
   // Inline editing states
-  const [showNewGroupInput, setShowNewGroupInput] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
+  const [showNewZoneInput, setShowNewZoneInput] = useState(false);
+  const [newZoneName, setNewZoneName] = useState('');
   const [showSwitchPicker, setShowSwitchPicker] = useState(false);
   const [switchPickerSearch, setSwitchPickerSearch] = useState('');
   const [showActionCreator, setShowActionCreator] = useState(false);
@@ -366,7 +368,7 @@ export default function FavoritesSection({
   
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'group' | 'switch' | 'action';
+    type: 'zone' | 'switch' | 'action';
     name: string;
     onConfirm: () => void;
   } | null>(null);
@@ -379,12 +381,12 @@ export default function FavoritesSection({
   const [draggedAction, setDraggedAction] = useState<{ index: number; action: SmartAction } | null>(null);
   const [actionDropIndicator, setActionDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
   
-  // Drag and drop state for groups
-  const [draggedGroup, setDraggedGroup] = useState<{ index: number; name: string } | null>(null);
-  const [groupDropIndicator, setGroupDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
+  // Drag and drop state for zones
+  const [draggedZone, setDraggedZone] = useState<{ index: number; name: string } | null>(null);
+  const [zoneDropIndicator, setZoneDropIndicator] = useState<{ index: number; position: 'before' | 'after' } | null>(null);
   
   // Action builder state
-  const [editingAction, setEditingAction] = useState<{ groupName: string; actionIndex: number } | null>(null);
+  const [editingAction, setEditingAction] = useState<{ zoneName: string; actionIndex: number } | null>(null);
   const [editingActionData, setEditingActionData] = useState<SmartAction | null>(null);
   const [isEditingActionName, setIsEditingActionName] = useState(false);
   const [editingActionNameValue, setEditingActionNameValue] = useState('');
@@ -393,21 +395,21 @@ export default function FavoritesSection({
   const [actionContextMenu, setActionContextMenu] = useState<{
     x: number;
     y: number;
-    groupName: string;
+    zoneName: string;
     actionIndex: number;
     actionName: string;
   } | null>(null);
   const [actionRenameValue, setActionRenameValue] = useState('');
   const actionContextMenuRef = useRef<HTMLDivElement>(null);
   
-  // Group context menu state for renaming groups
-  const [groupContextMenu, setGroupContextMenu] = useState<{
+  // Zone context menu state for renaming zones
+  const [zoneContextMenu, setZoneContextMenu] = useState<{
     x: number;
     y: number;
-    groupName: string;
+    zoneName: string;
   } | null>(null);
-  const [groupRenameValue, setGroupRenameValue] = useState('');
-  const groupContextMenuRef = useRef<HTMLDivElement>(null);
+  const [zoneRenameValue, setZoneRenameValue] = useState('');
+  const zoneContextMenuRef = useRef<HTMLDivElement>(null);
   
   // Action execution state (now server-driven)
   const [executingAction, setExecutingAction] = useState<SmartAction | null>(null);
@@ -457,18 +459,18 @@ export default function FavoritesSection({
     }
   }, [actionContextMenu]);
   
-  // Close group context menu on click outside
+  // Close zone context menu on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (groupContextMenuRef.current && !groupContextMenuRef.current.contains(e.target as Node)) {
-        setGroupContextMenu(null);
+      if (zoneContextMenuRef.current && !zoneContextMenuRef.current.contains(e.target as Node)) {
+        setZoneContextMenu(null);
       }
     };
-    if (groupContextMenu) {
+    if (zoneContextMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [groupContextMenu]);
+  }, [zoneContextMenu]);
   
   // ESC key handler for all modals/popups
   useEffect(() => {
@@ -479,8 +481,8 @@ export default function FavoritesSection({
           setDeleteConfirm(null);
         } else if (actionContextMenu) {
           setActionContextMenu(null);
-        } else if (groupContextMenu) {
-          setGroupContextMenu(null);
+        } else if (zoneContextMenu) {
+          setZoneContextMenu(null);
         } else if (editingAction) {
           setEditingAction(null);
           setEditingActionData(null);
@@ -493,16 +495,16 @@ export default function FavoritesSection({
         } else if (showActionCreator) {
           setShowActionCreator(false);
           setNewActionName('');
-        } else if (showNewGroupInput) {
-          setShowNewGroupInput(false);
-          setNewGroupName('');
+        } else if (showNewZoneInput) {
+          setShowNewZoneInput(false);
+          setNewZoneName('');
         }
       }
     };
     
     document.addEventListener('keydown', handleEscKey);
     return () => document.removeEventListener('keydown', handleEscKey);
-  }, [deleteConfirm, actionContextMenu, groupContextMenu, editingAction, contextMenu, showSwitchPicker, showActionCreator, showNewGroupInput]);
+  }, [deleteConfirm, actionContextMenu, zoneContextMenu, editingAction, contextMenu, showSwitchPicker, showActionCreator, showNewZoneInput]);
 
   // Reset warning dismissed state when profile changes
   useEffect(() => {
@@ -511,41 +513,41 @@ export default function FavoritesSection({
 
   // Parse favorites from profile (no placeholders)
   const favoritesData = useMemo(() => {
-    if (!profile) return { groups: {} };
+    if (!profile) return { zones: {} };
     return parseFavorites(profile.favorites);
   }, [profile]);
 
   // Parse smart switches from profile (no placeholders)
   const smartSwitchesData = useMemo(() => {
-    if (!profile) return { groups: {} };
+    if (!profile) return { zones: {} };
     return parseSmartSwitches(profile.smart_switches);
   }, [profile]);
 
-  // Combine groups from both favorites and smart switches
-  const allGroups = useMemo(() => {
-    const favoriteGroups = new Set(Object.keys(favoritesData.groups || {}));
-    const smartGroups = new Set(Object.keys(smartSwitchesData.groups || {}));
-    return [...new Set([...favoriteGroups, ...smartGroups])];
-  }, [favoritesData.groups, smartSwitchesData.groups]);
+  // Combine zones from both favorites and smart switches
+  const allZones = useMemo(() => {
+    const favoriteZones = new Set(Object.keys(favoritesData.zones || {}));
+    const smartZones = new Set(Object.keys(smartSwitchesData.zones || {}));
+    return [...new Set([...favoriteZones, ...smartZones])];
+  }, [favoritesData.zones, smartSwitchesData.zones]);
 
-  const totalSwitches = Object.values(favoritesData.groups || {}).reduce(
+  const totalSwitches = Object.values(favoritesData.zones || {}).reduce(
     (sum, switches) => sum + switches.length, 0
   );
 
-  const totalActions = Object.values(smartSwitchesData.groups || {}).reduce(
+  const totalActions = Object.values(smartSwitchesData.zones || {}).reduce(
     (sum, actions) => sum + actions.length, 0
   );
 
-  // Set first group as active when expanded and no group is selected
-  const effectiveActiveGroup = activeGroup ?? (allGroups.length > 0 ? allGroups[0] : null);
+  // Set first zone as active when expanded and no zone is selected
+  const effectiveActiveZone = activeZone ?? (allZones.length > 0 ? allZones[0] : null);
 
-  // Get current group data
-  const currentGroupSwitches = effectiveActiveGroup 
-    ? (favoritesData.groups || {})[effectiveActiveGroup] ?? []
+  // Get current zone data
+  const currentZoneSwitches = effectiveActiveZone 
+    ? (favoritesData.zones || {})[effectiveActiveZone] ?? []
     : [];
-  const currentGroupActions = useMemo(() => effectiveActiveGroup 
-    ? (smartSwitchesData.groups || {})[effectiveActiveGroup] ?? []
-    : [], [effectiveActiveGroup, smartSwitchesData.groups]);
+  const currentZoneActions = useMemo(() => effectiveActiveZone 
+    ? (smartSwitchesData.zones || {})[effectiveActiveZone] ?? []
+    : [], [effectiveActiveZone, smartSwitchesData.zones]);
 
   // Validation
   const validation = useMemo(() => {
@@ -681,9 +683,9 @@ export default function FavoritesSection({
     
     // Check if any favorites need their originalName updated
     let needsUpdate = false;
-    const newGroups: Record<string, FavoriteSwitch[]> = {};
+    const newZones: Record<string, FavoriteSwitch[]> = {};
     
-    for (const [groupName, switches] of Object.entries(favoritesData.groups || {})) {
+    for (const [zoneName, switches] of Object.entries(favoritesData.zones || {})) {
       const updatedSwitches: FavoriteSwitch[] = [];
       
       for (const sw of switches) {
@@ -708,15 +710,15 @@ export default function FavoritesSection({
         }
       }
       
-      newGroups[groupName] = updatedSwitches;
+      newZones[zoneName] = updatedSwitches;
     }
     
     // Only trigger update if something changed
     if (needsUpdate) {
       console.log('[FavoritesSection] Syncing original names with panel data');
-      onFavoritesUpdate?.(profile.id, { groups: newGroups });
+      onFavoritesUpdate?.(profile.id, { zones: newZones });
     }
-  }, [profile, discoveryCompleted, availableDevices, favoritesData.groups, onFavoritesUpdate]);
+  }, [profile, discoveryCompleted, availableDevices, favoritesData.zones, onFavoritesUpdate]);
 
   // =============================================================================
   // Handlers
@@ -774,7 +776,7 @@ export default function FavoritesSection({
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (!draggedSwitch || !profile || !effectiveActiveGroup || !dropIndicator) return;
+    if (!draggedSwitch || !profile || !effectiveActiveZone || !dropIndicator) return;
     
     const { index: dragIndex } = draggedSwitch;
     let targetIndex = dropIndicator.index;
@@ -795,21 +797,21 @@ export default function FavoritesSection({
       return;
     }
     
-    const currentSwitches = [...((favoritesData.groups || {})[effectiveActiveGroup] || [])];
+    const currentSwitches = [...((favoritesData.zones || {})[effectiveActiveZone] || [])];
     const [removed] = currentSwitches.splice(dragIndex, 1);
     currentSwitches.splice(targetIndex, 0, removed);
     
     const newFavorites: FavoritesData = {
-      groups: {
-        ...(favoritesData.groups || {}),
-        [effectiveActiveGroup]: currentSwitches,
+      zones: {
+        ...(favoritesData.zones || {}),
+        [effectiveActiveZone]: currentSwitches,
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
     setDraggedSwitch(null);
     setDropIndicator(null);
-  }, [draggedSwitch, dropIndicator, profile, effectiveActiveGroup, favoritesData.groups, onFavoritesUpdate]);
+  }, [draggedSwitch, dropIndicator, profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
 
   // Action drag and drop handlers
   const handleActionDragStart = useCallback((e: React.DragEvent, index: number, smartAction: SmartAction) => {
@@ -851,7 +853,7 @@ export default function FavoritesSection({
 
   const handleActionDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (!draggedAction || !profile || !effectiveActiveGroup || !actionDropIndicator) return;
+    if (!draggedAction || !profile || !effectiveActiveZone || !actionDropIndicator) return;
     
     const { index: dragIndex } = draggedAction;
     let targetIndex = actionDropIndicator.index;
@@ -874,23 +876,23 @@ export default function FavoritesSection({
     }
     
     // Reorder actions
-    const currentActions = (smartSwitchesData.groups || {})[effectiveActiveGroup] || [];
+    const currentActions = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
     const newActions = [...currentActions];
     const [movedAction] = newActions.splice(dragIndex, 1);
     newActions.splice(targetIndex, 0, movedAction);
     
     const newSmartSwitches = {
       ...smartSwitchesData,
-      groups: {
-        ...(smartSwitchesData.groups || {}),
-        [effectiveActiveGroup]: newActions,
+      zones: {
+        ...(smartSwitchesData.zones || {}),
+        [effectiveActiveZone]: newActions,
       }
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
     setDraggedAction(null);
     setActionDropIndicator(null);
-  }, [draggedAction, actionDropIndicator, profile, effectiveActiveGroup, smartSwitchesData, onSmartSwitchesUpdate]);
+  }, [draggedAction, actionDropIndicator, profile, effectiveActiveZone, smartSwitchesData, onSmartSwitchesUpdate]);
 
   const handleShadeAction = useCallback(async (sw: FavoriteSwitch, action: 'open' | 'close' | 'stop') => {
     if (sw.type !== 'shade' && sw.type !== 'venetian') return;
@@ -910,12 +912,12 @@ export default function FavoritesSection({
   }, []);
 
   const handleRename = useCallback(() => {
-    if (!contextMenu || !profile || !effectiveActiveGroup || !renameValue.trim()) return;
+    if (!contextMenu || !profile || !effectiveActiveZone || !renameValue.trim()) return;
     
     const [ip, type, indexStr] = contextMenu.switchId.split(':');
     const index = parseInt(indexStr, 10);
     
-    const currentSwitches = (favoritesData.groups || {})[effectiveActiveGroup] || [];
+    const currentSwitches = (favoritesData.zones || {})[effectiveActiveZone] || [];
     const newSwitches = currentSwitches.map(sw => {
       if (sw.ip === ip && sw.type === type && sw.index === index) {
         return { ...sw, alias: renameValue.trim() };
@@ -924,165 +926,165 @@ export default function FavoritesSection({
     });
     
     const newFavorites: FavoritesData = {
-      groups: {
-        ...(favoritesData.groups || {}),
-        [effectiveActiveGroup]: newSwitches,
+      zones: {
+        ...(favoritesData.zones || {}),
+        [effectiveActiveZone]: newSwitches,
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
     setContextMenu(null);
-  }, [contextMenu, profile, effectiveActiveGroup, renameValue, favoritesData.groups, onFavoritesUpdate]);
+  }, [contextMenu, profile, effectiveActiveZone, renameValue, favoritesData.zones, onFavoritesUpdate]);
 
-  const handleAddGroup = useCallback(() => {
-    if (!newGroupName.trim() || !profile) return;
-    const groupName = newGroupName.trim();
+  const handleAddZone = useCallback(() => {
+    if (!newZoneName.trim() || !profile) return;
+    const zoneName = newZoneName.trim();
     
-    if (allGroups.includes(groupName)) return;
+    if (allZones.includes(zoneName)) return;
     
     const newFavorites: FavoritesData = {
-      groups: { ...(favoritesData.groups || {}), [groupName]: [] }
+      zones: { ...(favoritesData.zones || {}), [zoneName]: [] }
     };
     
     const newSmartSwitches: SmartSwitchesData = {
-      groups: { ...(smartSwitchesData.groups || {}), [groupName]: [] }
+      zones: { ...(smartSwitchesData.zones || {}), [zoneName]: [] }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
     
-    setActiveGroup(groupName);
-    setNewGroupName('');
-    setShowNewGroupInput(false);
-  }, [newGroupName, profile, allGroups, favoritesData.groups, smartSwitchesData.groups, onFavoritesUpdate, onSmartSwitchesUpdate]);
+    setActiveZone(zoneName);
+    setNewZoneName('');
+    setShowNewZoneInput(false);
+  }, [newZoneName, profile, allZones, favoritesData.zones, smartSwitchesData.zones, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
-  const handleDeleteGroup = useCallback((groupName: string) => {
+  const handleDeleteZone = useCallback((zoneName: string) => {
     if (!profile) return;
     
-    const { [groupName]: _, ...restFavorites } = favoritesData.groups || {};
-    const { [groupName]: __, ...restSmartSwitches } = smartSwitchesData.groups || {};
+    const { [zoneName]: _, ...restFavorites } = favoritesData.zones || {};
+    const { [zoneName]: __, ...restSmartSwitches } = smartSwitchesData.zones || {};
     
-    onFavoritesUpdate?.(profile.id, { groups: restFavorites });
-    onSmartSwitchesUpdate?.(profile.id, { groups: restSmartSwitches });
+    onFavoritesUpdate?.(profile.id, { zones: restFavorites });
+    onSmartSwitchesUpdate?.(profile.id, { zones: restSmartSwitches });
     
-    if (activeGroup === groupName) {
-      const remaining = allGroups.filter(z => z !== groupName);
-      setActiveGroup(remaining.length > 0 ? remaining[0] : null);
+    if (activeZone === zoneName) {
+      const remaining = allZones.filter(z => z !== zoneName);
+      setActiveZone(remaining.length > 0 ? remaining[0] : null);
     }
-  }, [profile, favoritesData.groups, smartSwitchesData.groups, activeGroup, allGroups, onFavoritesUpdate, onSmartSwitchesUpdate]);
+  }, [profile, favoritesData.zones, smartSwitchesData.zones, activeZone, allZones, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
-  // Group context menu handler for renaming
-  const handleGroupContextMenu = useCallback((e: React.MouseEvent, groupName: string) => {
+  // Zone context menu handler for renaming
+  const handleZoneContextMenu = useCallback((e: React.MouseEvent, zoneName: string) => {
     e.preventDefault();
-    setGroupContextMenu({
+    setZoneContextMenu({
       x: e.clientX,
       y: e.clientY,
-      groupName,
+      zoneName,
     });
-    setGroupRenameValue(groupName);
+    setZoneRenameValue(zoneName);
   }, []);
 
-  // Rename group handler
-  const handleRenameGroup = useCallback(() => {
-    if (!groupContextMenu || !profile || !groupRenameValue.trim()) return;
+  // Rename zone handler
+  const handleRenameZone = useCallback(() => {
+    if (!zoneContextMenu || !profile || !zoneRenameValue.trim()) return;
     
-    const oldName = groupContextMenu.groupName;
-    const newName = groupRenameValue.trim();
+    const oldName = zoneContextMenu.zoneName;
+    const newName = zoneRenameValue.trim();
     
     // Don't rename if the name didn't change
     if (oldName === newName) {
-      setGroupContextMenu(null);
+      setZoneContextMenu(null);
       return;
     }
     
     // Don't allow duplicate names
-    if (allGroups.includes(newName)) {
+    if (allZones.includes(newName)) {
       return;
     }
     
-    // Create new groups with renamed key for favorites
-    const newFavoritesGroups: Record<string, FavoriteSwitch[]> = {};
-    for (const [key, value] of Object.entries(favoritesData.groups || {})) {
+    // Create new zones with renamed key for favorites
+    const newFavoritesZones: Record<string, FavoriteSwitch[]> = {};
+    for (const [key, value] of Object.entries(favoritesData.zones || {})) {
       if (key === oldName) {
-        newFavoritesGroups[newName] = value;
+        newFavoritesZones[newName] = value;
       } else {
-        newFavoritesGroups[key] = value;
+        newFavoritesZones[key] = value;
       }
     }
     
-    // Create new groups with renamed key for smart switches
-    const newSmartSwitchesGroups: Record<string, SmartAction[]> = {};
-    for (const [key, value] of Object.entries(smartSwitchesData.groups || {})) {
+    // Create new zones with renamed key for smart switches
+    const newSmartSwitchesZones: Record<string, SmartAction[]> = {};
+    for (const [key, value] of Object.entries(smartSwitchesData.zones || {})) {
       if (key === oldName) {
-        newSmartSwitchesGroups[newName] = value;
+        newSmartSwitchesZones[newName] = value;
       } else {
-        newSmartSwitchesGroups[key] = value;
+        newSmartSwitchesZones[key] = value;
       }
     }
     
-    onFavoritesUpdate?.(profile.id, { groups: newFavoritesGroups });
-    onSmartSwitchesUpdate?.(profile.id, { groups: newSmartSwitchesGroups });
+    onFavoritesUpdate?.(profile.id, { zones: newFavoritesZones });
+    onSmartSwitchesUpdate?.(profile.id, { zones: newSmartSwitchesZones });
     
-    // Update active group if it was the one renamed
-    if (activeGroup === oldName) {
-      setActiveGroup(newName);
+    // Update active zone if it was the one renamed
+    if (activeZone === oldName) {
+      setActiveZone(newName);
     }
     
-    setGroupContextMenu(null);
-  }, [groupContextMenu, profile, groupRenameValue, allGroups, favoritesData.groups, smartSwitchesData.groups, activeGroup, onFavoritesUpdate, onSmartSwitchesUpdate]);
+    setZoneContextMenu(null);
+  }, [zoneContextMenu, profile, zoneRenameValue, allZones, favoritesData.zones, smartSwitchesData.zones, activeZone, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
-  // Group drag and drop handlers
-  const handleGroupDragStart = useCallback((e: React.DragEvent, index: number, groupName: string) => {
-    setDraggedGroup({ index, name: groupName });
+  // Zone drag and drop handlers
+  const handleZoneDragStart = useCallback((e: React.DragEvent, index: number, zoneName: string) => {
+    setDraggedZone({ index, name: zoneName });
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', groupName);
+    e.dataTransfer.setData('text/plain', zoneName);
     
     // Style the dragged element
     const target = e.currentTarget as HTMLElement;
-    setTimeout(() => target.classList.add(styles.groupTabDragging), 0);
+    setTimeout(() => target.classList.add(styles.zoneTabDragging), 0);
   }, []);
 
-  const handleGroupDragEnd = useCallback((e: React.DragEvent) => {
-    setDraggedGroup(null);
-    setGroupDropIndicator(null);
-    (e.currentTarget as HTMLElement).classList.remove(styles.groupTabDragging);
+  const handleZoneDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggedZone(null);
+    setZoneDropIndicator(null);
+    (e.currentTarget as HTMLElement).classList.remove(styles.zoneTabDragging);
   }, []);
 
-  const handleGroupDragOver = useCallback((e: React.DragEvent, index: number) => {
+  const handleZoneDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
-    if (!draggedGroup || draggedGroup.index === index) return;
+    if (!draggedZone || draggedZone.index === index) return;
     
     // Determine drop position (before/after) based on mouse position
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const midX = rect.left + rect.width / 2;
     const position: 'before' | 'after' = e.clientX < midX ? 'before' : 'after';
     
-    setGroupDropIndicator({ index, position });
-  }, [draggedGroup]);
+    setZoneDropIndicator({ index, position });
+  }, [draggedZone]);
 
-  const handleGroupDragLeave = useCallback((e: React.DragEvent) => {
+  const handleZoneDragLeave = useCallback((e: React.DragEvent) => {
     const relatedTarget = e.relatedTarget as HTMLElement;
     if (!e.currentTarget.contains(relatedTarget)) {
-      setGroupDropIndicator(null);
+      setZoneDropIndicator(null);
     }
   }, []);
 
-  const handleGroupDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
+  const handleZoneDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
     
-    if (!draggedGroup || !groupDropIndicator || !profile) {
-      setGroupDropIndicator(null);
-      setDraggedGroup(null);
+    if (!draggedZone || !zoneDropIndicator || !profile) {
+      setZoneDropIndicator(null);
+      setDraggedZone(null);
       return;
     }
     
-    const dragIndex = draggedGroup.index;
+    const dragIndex = draggedZone.index;
     let dropIndex = targetIndex;
     
     // Adjust drop index based on position
-    if (groupDropIndicator.position === 'after') {
+    if (zoneDropIndicator.position === 'after') {
       dropIndex += 1;
     }
     
@@ -1093,37 +1095,37 @@ export default function FavoritesSection({
     
     // No change needed
     if (dragIndex === dropIndex) {
-      setGroupDropIndicator(null);
-      setDraggedGroup(null);
+      setZoneDropIndicator(null);
+      setDraggedZone(null);
       return;
     }
     
-    // Reorder groups - create new ordered arrays
-    const newGroupOrder = [...allGroups];
-    const [removed] = newGroupOrder.splice(dragIndex, 1);
-    newGroupOrder.splice(dropIndex, 0, removed);
+    // Reorder zones - create new ordered arrays
+    const newZoneOrder = [...allZones];
+    const [removed] = newZoneOrder.splice(dragIndex, 1);
+    newZoneOrder.splice(dropIndex, 0, removed);
     
-    // Rebuild favorites groups with new order
-    const newFavoritesGroups: Record<string, FavoriteSwitch[]> = {};
-    for (const groupName of newGroupOrder) {
-      newFavoritesGroups[groupName] = (favoritesData.groups || {})[groupName] || [];
+    // Rebuild favorites zones with new order
+    const newFavoritesZones: Record<string, FavoriteSwitch[]> = {};
+    for (const zoneName of newZoneOrder) {
+      newFavoritesZones[zoneName] = (favoritesData.zones || {})[zoneName] || [];
     }
     
-    // Rebuild smart switches groups with new order
-    const newSmartSwitchesGroups: Record<string, SmartAction[]> = {};
-    for (const groupName of newGroupOrder) {
-      newSmartSwitchesGroups[groupName] = (smartSwitchesData.groups || {})[groupName] || [];
+    // Rebuild smart switches zones with new order
+    const newSmartSwitchesZones: Record<string, SmartAction[]> = {};
+    for (const zoneName of newZoneOrder) {
+      newSmartSwitchesZones[zoneName] = (smartSwitchesData.zones || {})[zoneName] || [];
     }
     
-    onFavoritesUpdate?.(profile.id, { groups: newFavoritesGroups });
-    onSmartSwitchesUpdate?.(profile.id, { groups: newSmartSwitchesGroups });
+    onFavoritesUpdate?.(profile.id, { zones: newFavoritesZones });
+    onSmartSwitchesUpdate?.(profile.id, { zones: newSmartSwitchesZones });
     
-    setGroupDropIndicator(null);
-    setDraggedGroup(null);
-  }, [draggedGroup, groupDropIndicator, profile, allGroups, favoritesData.groups, smartSwitchesData.groups, onFavoritesUpdate, onSmartSwitchesUpdate]);
+    setZoneDropIndicator(null);
+    setDraggedZone(null);
+  }, [draggedZone, zoneDropIndicator, profile, allZones, favoritesData.zones, smartSwitchesData.zones, onFavoritesUpdate, onSmartSwitchesUpdate]);
 
   const handleAddSwitch = useCallback((sw: typeof availableDevices[0]) => {
-    if (!profile || !effectiveActiveGroup) return;
+    if (!profile || !effectiveActiveZone) return;
     
     const newSwitch: FavoriteSwitch = {
       ip: sw.ip,
@@ -1133,7 +1135,7 @@ export default function FavoritesSection({
       alias: sw.name,
     };
     
-    const currentSwitches = (favoritesData.groups || {})[effectiveActiveGroup] || [];
+    const currentSwitches = (favoritesData.zones || {})[effectiveActiveZone] || [];
     
     // Check if already exists
     if (currentSwitches.some(s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type)) {
@@ -1141,35 +1143,35 @@ export default function FavoritesSection({
     }
     
     const newFavorites: FavoritesData = {
-      groups: {
-        ...(favoritesData.groups || {}),
-        [effectiveActiveGroup]: [...currentSwitches, newSwitch],
+      zones: {
+        ...(favoritesData.zones || {}),
+        [effectiveActiveZone]: [...currentSwitches, newSwitch],
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
-  }, [profile, effectiveActiveGroup, favoritesData.groups, onFavoritesUpdate]);
+  }, [profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
 
   const handleRemoveSwitch = useCallback((sw: FavoriteSwitch) => {
-    if (!profile || !effectiveActiveGroup) return;
+    if (!profile || !effectiveActiveZone) return;
     
-    const currentSwitches = (favoritesData.groups || {})[effectiveActiveGroup] || [];
+    const currentSwitches = (favoritesData.zones || {})[effectiveActiveZone] || [];
     const newSwitches = currentSwitches.filter(
       s => !(s.ip === sw.ip && s.index === sw.index && s.type === sw.type)
     );
     
     const newFavorites: FavoritesData = {
-      groups: {
-        ...(favoritesData.groups || {}),
-        [effectiveActiveGroup]: newSwitches,
+      zones: {
+        ...(favoritesData.zones || {}),
+        [effectiveActiveZone]: newSwitches,
       }
     };
     
     onFavoritesUpdate?.(profile.id, newFavorites);
-  }, [profile, effectiveActiveGroup, favoritesData.groups, onFavoritesUpdate]);
+  }, [profile, effectiveActiveZone, favoritesData.zones, onFavoritesUpdate]);
 
   const handleCreateAction = useCallback(() => {
-    if (!newActionName.trim() || !profile || !effectiveActiveGroup) return;
+    if (!newActionName.trim() || !profile || !effectiveActiveZone) return;
     
     const newSmartAction: SmartAction = {
       name: newActionName.trim(),
@@ -1177,12 +1179,12 @@ export default function FavoritesSection({
       scheduling: [],
     };
     
-    const currentActions = (smartSwitchesData.groups || {})[effectiveActiveGroup] || [];
+    const currentActions = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
     
     const newSmartSwitches: SmartSwitchesData = {
-      groups: {
-        ...(smartSwitchesData.groups || {}),
-        [effectiveActiveGroup]: [...currentActions, newSmartAction],
+      zones: {
+        ...(smartSwitchesData.zones || {}),
+        [effectiveActiveZone]: [...currentActions, newSmartAction],
       }
     };
     
@@ -1190,40 +1192,40 @@ export default function FavoritesSection({
     
     // Auto-open the action editor for the newly created action
     const newSmartActionIndex = currentActions.length;
-    setEditingAction({ groupName: effectiveActiveGroup, actionIndex: newSmartActionIndex });
+    setEditingAction({ zoneName: effectiveActiveZone, actionIndex: newSmartActionIndex });
     setEditingActionData(JSON.parse(JSON.stringify(newSmartAction)));
     
     setNewActionName('');
     setShowActionCreator(false);
-  }, [newActionName, profile, effectiveActiveGroup, smartSwitchesData.groups, onSmartSwitchesUpdate]);
+  }, [newActionName, profile, effectiveActiveZone, smartSwitchesData.zones, onSmartSwitchesUpdate]);
 
   const handleDeleteAction = useCallback((actionIndex: number) => {
-    if (!profile || !effectiveActiveGroup) return;
+    if (!profile || !effectiveActiveZone) return;
     
-    const currentActions = (smartSwitchesData.groups || {})[effectiveActiveGroup] || [];
+    const currentActions = (smartSwitchesData.zones || {})[effectiveActiveZone] || [];
     const newActions = currentActions.filter((_, i) => i !== actionIndex);
     
     const newSmartSwitches: SmartSwitchesData = {
-      groups: {
-        ...(smartSwitchesData.groups || {}),
-        [effectiveActiveGroup]: newActions,
+      zones: {
+        ...(smartSwitchesData.zones || {}),
+        [effectiveActiveZone]: newActions,
       }
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
-  }, [profile, effectiveActiveGroup, smartSwitchesData.groups, onSmartSwitchesUpdate]);
+  }, [profile, effectiveActiveZone, smartSwitchesData.zones, onSmartSwitchesUpdate]);
   
   // Open action editor
   const handleEditAction = useCallback((actionIndex: number) => {
-    if (!effectiveActiveGroup) return;
+    if (!effectiveActiveZone) return;
     
-    const actionToEdit = currentGroupActions[actionIndex];
+    const actionToEdit = currentZoneActions[actionIndex];
     if (!actionToEdit) return;
     
-    setEditingAction({ groupName: effectiveActiveGroup, actionIndex });
+    setEditingAction({ zoneName: effectiveActiveZone, actionIndex });
     // Deep copy the action data
     setEditingActionData(JSON.parse(JSON.stringify(actionToEdit)));
-  }, [effectiveActiveGroup, currentGroupActions]);
+  }, [effectiveActiveZone, currentZoneActions]);
   
   // Close action editor without saving
   const handleCancelEditAction = useCallback(() => {
@@ -1258,12 +1260,12 @@ export default function FavoritesSection({
   }, []);
   
   // Action context menu handler (right-click on action card) - directly starts renaming
-  const handleActionContextMenu = useCallback((e: React.MouseEvent, groupName: string, actionIndex: number, actionName: string) => {
+  const handleActionContextMenu = useCallback((e: React.MouseEvent, zoneName: string, actionIndex: number, actionName: string) => {
     e.preventDefault();
     setActionContextMenu({
       x: e.clientX,
       y: e.clientY,
-      groupName,
+      zoneName,
       actionIndex,
       actionName,
     });
@@ -1274,7 +1276,7 @@ export default function FavoritesSection({
   const handleSaveActionRenameFromContext = useCallback(() => {
     if (!actionContextMenu || !profile || !actionRenameValue.trim()) return;
     
-    const { groupName, actionIndex } = actionContextMenu;
+    const { zoneName, actionIndex } = actionContextMenu;
     const newName = actionRenameValue.trim();
     
     // Check if name changed
@@ -1283,7 +1285,7 @@ export default function FavoritesSection({
       return;
     }
     
-    const currentActions = (smartSwitchesData.groups || {})[groupName] || [];
+    const currentActions = (smartSwitchesData.zones || {})[zoneName] || [];
     const updatedActions = [...currentActions];
     
     if (updatedActions[actionIndex]) {
@@ -1294,9 +1296,9 @@ export default function FavoritesSection({
       
       onSmartSwitchesUpdate?.(profile.id, {
         ...smartSwitchesData,
-        groups: {
-          ...(smartSwitchesData.groups || {}),
-          [groupName]: updatedActions,
+        zones: {
+          ...(smartSwitchesData.zones || {}),
+          [zoneName]: updatedActions,
         },
       });
     }
@@ -1309,20 +1311,20 @@ export default function FavoritesSection({
   const handleDeleteActionFromContext = useCallback(() => {
     if (!actionContextMenu) return;
     
-    const { groupName, actionIndex, actionName } = actionContextMenu;
+    const { zoneName, actionIndex, actionName } = actionContextMenu;
     
     setDeleteConfirm({
       type: 'action',
       name: actionName,
       onConfirm: () => {
         if (!profile) return;
-        const currentActions = (smartSwitchesData.groups || {})[groupName] || [];
+        const currentActions = (smartSwitchesData.zones || {})[zoneName] || [];
         const newActions = currentActions.filter((_, i) => i !== actionIndex);
         
         const newSmartSwitches: SmartSwitchesData = {
-          groups: {
-            ...(smartSwitchesData.groups || {}),
-            [groupName]: newActions,
+          zones: {
+            ...(smartSwitchesData.zones || {}),
+            [zoneName]: newActions,
           }
         };
         
@@ -1331,27 +1333,27 @@ export default function FavoritesSection({
     });
     
     setActionContextMenu(null);
-  }, [actionContextMenu, profile, smartSwitchesData.groups, onSmartSwitchesUpdate]);
+  }, [actionContextMenu, profile, smartSwitchesData.zones, onSmartSwitchesUpdate]);
   
   // Save edited action
   const handleSaveEditAction = useCallback(() => {
     if (!profile || !editingAction || !editingActionData) return;
     
-    const currentActions = (smartSwitchesData.groups || {})[editingAction.groupName] || [];
+    const currentActions = (smartSwitchesData.zones || {})[editingAction.zoneName] || [];
     const newActions = [...currentActions];
     newActions[editingAction.actionIndex] = editingActionData;
     
     const newSmartSwitches: SmartSwitchesData = {
-      groups: {
-        ...(smartSwitchesData.groups || {}),
-        [editingAction.groupName]: newActions,
+      zones: {
+        ...(smartSwitchesData.zones || {}),
+        [editingAction.zoneName]: newActions,
       }
     };
     
     onSmartSwitchesUpdate?.(profile.id, newSmartSwitches);
     setEditingAction(null);
     setEditingActionData(null);
-  }, [profile, editingAction, editingActionData, smartSwitchesData.groups, onSmartSwitchesUpdate]);
+  }, [profile, editingAction, editingActionData, smartSwitchesData.zones, onSmartSwitchesUpdate]);
   
   // Add a new stage to the action
   const handleAddStage = useCallback(() => {
@@ -1668,9 +1670,9 @@ export default function FavoritesSection({
           </span>
           <h3 className={styles.collapsibleSectionTitle}>
             ⭐ Favorites &amp; Smart Actions
-            {profile && allGroups.length > 0 && (
+            {profile && allZones.length > 0 && (
               <span className={styles.favoritesBadge}>
-                {allGroups.length} group{allGroups.length !== 1 ? 's' : ''} · {totalSwitches} switch{totalSwitches !== 1 ? 'es' : ''}
+                {allZones.length} zone{allZones.length !== 1 ? 's' : ''} · {totalSwitches} switch{totalSwitches !== 1 ? 'es' : ''}
                 {totalActions > 0 && ` · ${totalActions} action${totalActions !== 1 ? 's' : ''}`}
               </span>
             )}
@@ -1698,19 +1700,19 @@ export default function FavoritesSection({
         </div>
       </div>
 
-      {/* Collapsed summary - clickable buttons grouped by group */}
-      {!effectivelyExpanded && profile && allGroups.length > 0 && (
+      {/* Collapsed summary - clickable buttons grouped by zone */}
+      {!effectivelyExpanded && profile && allZones.length > 0 && (
         <div className={styles.favoritesCollapsedView}>
-          {allGroups.map((groupName) => {
-            const groupSwitches = (favoritesData.groups || {})[groupName] || [];
-            const groupActions = (smartSwitchesData.groups || {})[groupName] || [];
-            if (groupSwitches.length === 0 && groupActions.length === 0) return null;
+          {allZones.map((zoneName) => {
+            const zoneSwitches = (favoritesData.zones || {})[zoneName] || [];
+            const zoneActions = (smartSwitchesData.zones || {})[zoneName] || [];
+            if (zoneSwitches.length === 0 && zoneActions.length === 0) return null;
             
             return (
-              <div key={groupName} className={styles.favoritesCollapsedGroup}>
-                <div className={styles.favoritesCollapsedGroupName}>{groupName}</div>
+              <div key={zoneName} className={styles.favoritesCollapsedZone}>
+                <div className={styles.favoritesCollapsedZoneName}>{zoneName}</div>
                 <div className={styles.favoritesCollapsedItems}>
-                  {groupSwitches.map((sw, idx) => {
+                  {zoneSwitches.map((sw, idx) => {
                     const isDiscovered = discoveredPanelIps.has(sw.ip);
                     const isUnreachable = isSwitchUnreachable(sw);
                     const isReachable = isDiscovered && !isUnreachable;
@@ -1780,7 +1782,7 @@ export default function FavoritesSection({
                       );
                     }
                   })}
-                  {groupActions.map((smartAction, idx) => {
+                  {zoneActions.map((smartAction, idx) => {
                     const actionHasInvalidSteps = hasInvalidSteps(smartAction);
                     // Only show invalid state AFTER discovery completes (not during loading)
                     const showInvalidState = !isLoading && discoveryCompleted && actionHasInvalidSteps;
@@ -1850,58 +1852,58 @@ export default function FavoritesSection({
         {/* Main content when profile exists */}
         {profile && (
           <>
-            {/* Group Navigation Row */}
-            <div className={styles.favGroupNavRow}>
-              <div className={styles.favoritesGroupTabs}>
-                {allGroups.map((groupName, idx) => {
-                  const isDragging = draggedGroup?.name === groupName;
-                  const showDropBefore = groupDropIndicator?.index === idx && groupDropIndicator?.position === 'before' && draggedGroup?.index !== idx;
-                  const showDropAfter = groupDropIndicator?.index === idx && groupDropIndicator?.position === 'after' && draggedGroup?.index !== idx;
+            {/* Zone Navigation Row */}
+            <div className={styles.favZoneNavRow}>
+              <div className={styles.favoritesZoneTabs}>
+                {allZones.map((zoneName, idx) => {
+                  const isDragging = draggedZone?.name === zoneName;
+                  const showDropBefore = zoneDropIndicator?.index === idx && zoneDropIndicator?.position === 'before' && draggedZone?.index !== idx;
+                  const showDropAfter = zoneDropIndicator?.index === idx && zoneDropIndicator?.position === 'after' && draggedZone?.index !== idx;
                   
                   return (
                     <button
-                      key={groupName}
+                      key={zoneName}
                       type="button"
-                      className={`${styles.favoritesGroupTab} ${effectiveActiveGroup === groupName ? styles.favoritesGroupTabActive : ''} ${isDragging ? styles.groupTabDragging : ''} ${showDropBefore ? styles.groupTabDropBefore : ''} ${showDropAfter ? styles.groupTabDropAfter : ''}`}
-                      onClick={() => setActiveGroup(groupName)}
+                      className={`${styles.favoritesZoneTab} ${effectiveActiveZone === zoneName ? styles.favoritesZoneTabActive : ''} ${isDragging ? styles.zoneTabDragging : ''} ${showDropBefore ? styles.zoneTabDropBefore : ''} ${showDropAfter ? styles.zoneTabDropAfter : ''}`}
+                      onClick={() => setActiveZone(zoneName)}
                       draggable
-                      onDragStart={(e) => handleGroupDragStart(e, idx, groupName)}
-                      onDragEnd={handleGroupDragEnd}
-                      onDragOver={(e) => handleGroupDragOver(e, idx)}
-                      onDragLeave={handleGroupDragLeave}
-                      onDrop={(e) => handleGroupDrop(e, idx)}
-                      onContextMenu={(e) => handleGroupContextMenu(e, groupName)}
+                      onDragStart={(e) => handleZoneDragStart(e, idx, zoneName)}
+                      onDragEnd={handleZoneDragEnd}
+                      onDragOver={(e) => handleZoneDragOver(e, idx)}
+                      onDragLeave={handleZoneDragLeave}
+                      onDrop={(e) => handleZoneDrop(e, idx)}
+                      onContextMenu={(e) => handleZoneContextMenu(e, zoneName)}
                     >
-                      <span className={styles.groupTabDragHandle} title="Drag to reorder">⋮⋮</span>
-                      {groupName}
+                      <span className={styles.zoneTabDragHandle} title="Drag to reorder">⋮⋮</span>
+                      {zoneName}
                       <span
-                        className={styles.favoritesGroupTabEdit}
+                        className={styles.favoritesZoneTabEdit}
                         onClick={(e) => {
                           e.stopPropagation();
                           // Position context menu below the button
                           const rect = e.currentTarget.getBoundingClientRect();
-                          setGroupContextMenu({
+                          setZoneContextMenu({
                             x: rect.left,
                             y: rect.bottom + 4,
-                            groupName,
+                            zoneName,
                           });
-                          setGroupRenameValue(groupName);
+                          setZoneRenameValue(zoneName);
                         }}
-                        title="Rename group"
+                        title="Rename zone"
                       >
                         ✏️
                       </span>
                       <span
-                        className={styles.favoritesGroupTabDelete}
+                        className={styles.favoritesZoneTabDelete}
                         onClick={(e) => {
                           e.stopPropagation();
                           setDeleteConfirm({
-                            type: 'group',
-                            name: groupName,
-                            onConfirm: () => handleDeleteGroup(groupName),
+                            type: 'zone',
+                            name: zoneName,
+                            onConfirm: () => handleDeleteZone(zoneName),
                           });
                         }}
-                        title="Delete group"
+                        title="Delete zone"
                       >
                         ✕
                       </span>
@@ -1909,75 +1911,75 @@ export default function FavoritesSection({
                   );
                 })}
                 
-                {/* Add Group - styled as a group tab */}
-                {showNewGroupInput ? (
-                  <div className={styles.newGroupInputInline}>
+                {/* Add Zone - styled as a zone tab */}
+                {showNewZoneInput ? (
+                  <div className={styles.newZoneInputInline}>
                     <input
                       type="text"
-                      value={newGroupName}
-                      onChange={(e) => setNewGroupName(e.target.value)}
-                      placeholder="Group name..."
-                      className={styles.newGroupInputField}
+                      value={newZoneName}
+                      onChange={(e) => setNewZoneName(e.target.value)}
+                      placeholder="Zone name..."
+                      className={styles.newZoneInputField}
                       autoFocus
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddGroup();
+                        if (e.key === 'Enter') handleAddZone();
                         if (e.key === 'Escape') {
-                          setShowNewGroupInput(false);
-                          setNewGroupName('');
+                          setShowNewZoneInput(false);
+                          setNewZoneName('');
                         }
                       }}
                     />
                     <span
-                      className={styles.newGroupInputConfirm}
-                      onClick={handleAddGroup}
-                      style={{ opacity: newGroupName.trim() ? 1 : 0.4 }}
+                      className={styles.newZoneInputConfirm}
+                      onClick={handleAddZone}
+                      style={{ opacity: newZoneName.trim() ? 1 : 0.4 }}
                     >
                       ✓
                     </span>
                     <span
-                      className={styles.newGroupInputCancel}
+                      className={styles.newZoneInputCancel}
                       onClick={() => {
-                        setShowNewGroupInput(false);
-                        setNewGroupName('');
+                        setShowNewZoneInput(false);
+                        setNewZoneName('');
                       }}
                     >
                       ✕
                     </span>
                   </div>
                 ) : (
-                  // Only show "Add Group" button when groups already exist
-                  allGroups.length > 0 && (
+                  // Only show "Add Zone" button when zones already exist
+                  allZones.length > 0 && (
                     <button
                       type="button"
-                      className={`${styles.favoritesGroupTab} ${styles.favoritesGroupTabAdd}`}
-                      onClick={() => setShowNewGroupInput(true)}
+                      className={`${styles.favoritesZoneTab} ${styles.favoritesZoneTabAdd}`}
+                      onClick={() => setShowNewZoneInput(true)}
                     >
-                      + Add Group
+                      + Add Zone
                     </button>
                   )
                 )}
               </div>
             </div>
 
-            {/* No groups empty state - shown when no groups exist */}
-            {allGroups.length === 0 && !showNewGroupInput && (
+            {/* No zones empty state - shown when no zones exist */}
+            {allZones.length === 0 && !showNewZoneInput && (
               <div className={styles.favoritesEmptyState}>
                 <div className={styles.favoritesEmptyIcon}>🏠</div>
-                <p>No groups yet. Create a group to organize your switches.</p>
+                <p>No zones yet. Create a zone to organize your switches.</p>
                 <button
                   type="button"
                   className={styles.favActionButton}
-                  onClick={() => setShowNewGroupInput(true)}
+                  onClick={() => setShowNewZoneInput(true)}
                   data-variant="primary"
                 >
-                  ➕ Create Your First Group
+                  ➕ Create Your First Zone
                 </button>
               </div>
             )}
 
-            {/* Active group content */}
-            {effectiveActiveGroup && allGroups.length > 0 && (
-              <div className={styles.favGroupContentWrapper}>
+            {/* Active zone content */}
+            {effectiveActiveZone && allZones.length > 0 && (
+              <div className={styles.favZoneContentWrapper}>
                 
                 {/* SWITCHES SECTION */}
                 <div className={styles.favSubSection}>
@@ -1985,14 +1987,14 @@ export default function FavoritesSection({
                     <h4 className={styles.favSubSectionTitle}>
                       <span className={styles.favSubSectionIcon}>💡</span>
                       Switches
-                      {currentGroupSwitches.length > 0 && (
-                        <span className={styles.favSubSectionCount}>{currentGroupSwitches.length}</span>
+                      {currentZoneSwitches.length > 0 && (
+                        <span className={styles.favSubSectionCount}>{currentZoneSwitches.length}</span>
                       )}
                     </h4>
                   </div>
 
                   <div className={styles.favoritesSwitchGrid} onDragLeave={handleGridDragLeave}>
-                    {currentGroupSwitches.map((sw, idx) => {
+                    {currentZoneSwitches.map((sw, idx) => {
                       const isDiscovered = discoveredPanelIps.has(sw.ip);
                       const isUnreachable = isSwitchUnreachable(sw);
                       const isReachable = isDiscovered && !isUnreachable;
@@ -2158,7 +2160,7 @@ export default function FavoritesSection({
                             </div>
                           ) : (
                             filteredAvailableSwitches.map(sw => {
-                              const alreadyAdded = currentGroupSwitches.some(
+                              const alreadyAdded = currentZoneSwitches.some(
                                 s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type
                               );
                               return (
@@ -2186,7 +2188,7 @@ export default function FavoritesSection({
                         type="button"
                         className={styles.favAddItemCard}
                         onClick={() => setShowSwitchPicker(true)}
-                        title="Add a switch to this group"
+                        title="Add a switch to this zone"
                       >
                         <span className={styles.favAddItemIcon}>➕</span>
                         <span className={styles.favAddItemText}>Add Switch</span>
@@ -2201,16 +2203,16 @@ export default function FavoritesSection({
                     <h4 className={styles.favSubSectionTitle}>
                       <span className={styles.favSubSectionIcon}>⚡</span>
                       Smart Actions
-                      {currentGroupActions.length > 0 && (
+                      {currentZoneActions.length > 0 && (
                         <span className={`${styles.favSubSectionCount} ${styles.favSubSectionCountPurple}`}>
-                          {currentGroupActions.length}
+                          {currentZoneActions.length}
                         </span>
                       )}
                     </h4>
                   </div>
 
                   <div className={styles.smartActionsGrid}>
-                    {currentGroupActions.map((smartAction, idx) => {
+                    {currentZoneActions.map((smartAction, idx) => {
                       const actionHasInvalidSteps = hasInvalidSteps(smartAction);
                       const invalidStepIndices = getInvalidStepIndices(smartAction);
                       // Only show invalid state AFTER discovery completes (not during loading)
@@ -2242,7 +2244,7 @@ export default function FavoritesSection({
                           onDragOver={(e) => handleActionDragOver(e, idx)}
                           onDragLeave={handleActionDragLeave}
                           onDrop={handleActionDrop}
-                          onContextMenu={(e) => !isThisActionExecuting && handleActionContextMenu(e, effectiveActiveGroup!, idx, smartAction.name)}
+                          onContextMenu={(e) => !isThisActionExecuting && handleActionContextMenu(e, effectiveActiveZone!, idx, smartAction.name)}
                         >
                           <div className={styles.smartActionCardHeader}>
                             <span className={styles.smartActionIcon}>
@@ -2282,7 +2284,7 @@ export default function FavoritesSection({
                                     setActionContextMenu({
                                       x: rect.left,
                                       y: rect.bottom + 4,
-                                      groupName: effectiveActiveGroup!,
+                                      zoneName: effectiveActiveZone!,
                                       actionIndex: idx,
                                       actionName: smartAction.name,
                                     });
@@ -2477,28 +2479,28 @@ export default function FavoritesSection({
         </div>
       )}
       
-      {/* Group Context Menu (right-click on group tabs) - rename group */}
-      {groupContextMenu && (
+      {/* Zone Context Menu (right-click on zone tabs) - rename zone */}
+      {zoneContextMenu && (
         <div
-          ref={groupContextMenuRef}
+          ref={zoneContextMenuRef}
           className={styles.contextMenu}
-          style={{ left: groupContextMenu.x, top: groupContextMenu.y }}
+          style={{ left: zoneContextMenu.x, top: zoneContextMenu.y }}
         >
-          <div className={styles.contextMenuTitle}>Rename Group</div>
+          <div className={styles.contextMenuTitle}>Rename Zone</div>
           <input
             type="text"
-            value={groupRenameValue}
-            onChange={(e) => setGroupRenameValue(e.target.value)}
+            value={zoneRenameValue}
+            onChange={(e) => setZoneRenameValue(e.target.value)}
             className={styles.contextMenuInput}
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === 'Enter') handleRenameGroup();
-              if (e.key === 'Escape') setGroupContextMenu(null);
+              if (e.key === 'Enter') handleRenameZone();
+              if (e.key === 'Escape') setZoneContextMenu(null);
             }}
           />
           <div className={styles.contextMenuButtons}>
-            <button onClick={handleRenameGroup} disabled={!groupRenameValue.trim() || allGroups.includes(groupRenameValue.trim()) && groupRenameValue.trim() !== groupContextMenu.groupName}>Save</button>
-            <button onClick={() => setGroupContextMenu(null)}>Cancel</button>
+            <button onClick={handleRenameZone} disabled={!zoneRenameValue.trim() || allZones.includes(zoneRenameValue.trim()) && zoneRenameValue.trim() !== zoneContextMenu.zoneName}>Save</button>
+            <button onClick={() => setZoneContextMenu(null)}>Cancel</button>
           </div>
         </div>
       )}
@@ -2513,7 +2515,7 @@ export default function FavoritesSection({
             </div>
             <div className={styles.deleteConfirmMessage}>
               &quot;{deleteConfirm.name}&quot;
-              {deleteConfirm.type === 'group' && (
+              {deleteConfirm.type === 'zone' && (
                 <><br /><small>All switches and actions will be removed</small></>
               )}
             </div>

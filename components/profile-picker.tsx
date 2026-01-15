@@ -639,7 +639,7 @@ export default function ProfilePicker({
           >
             <h3>Create New Profile</h3>
             <p>
-              This will save your current IP ranges, groups, and switches to a new profile.
+              This will save your current IP ranges, zones, and switches to a new profile.
             </p>
             
             <div className={styles.modalForm}>

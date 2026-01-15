@@ -25,7 +25,7 @@ export interface FavoriteSwitch {
 }
 
 export interface FavoritesData {
-  groups: Record<string, FavoriteSwitch[]>;
+  zones: Record<string, FavoriteSwitch[]>;
 }
 
 export interface ProfileData {
@@ -48,8 +48,8 @@ export interface ActionExecutionProgress {
   error?: string;
 }
 
-/** Represents an active device from any discovered panel */
-export interface ActiveDevice {
+/** Represents an active switch from any discovered panel */
+export interface ActiveSwitch {
   panelIp: string;
   panelName: string;
   type: 'relay' | 'curtain';
@@ -74,15 +74,16 @@ interface SmartHomeControlProps {
 
 function parseFavorites(favorites: unknown): FavoritesData {
   if (!favorites || typeof favorites !== 'object') {
-    return { groups: {} };
+    return { zones: {} };
   }
   const favObj = favorites as Record<string, unknown>;
-  const groupsData = favObj.groups;
-  if (groupsData && typeof groupsData === 'object') {
-    const groups = groupsData as Record<string, unknown[]>;
-    const migratedGroups: Record<string, FavoriteSwitch[]> = {};
-    for (const [groupName, switches] of Object.entries(groups)) {
-      migratedGroups[groupName] = (switches || []).map((sw: unknown) => {
+  // Support both old 'groups' and new 'zones' property names
+  const zonesData = favObj.zones || favObj.groups;
+  if (zonesData && typeof zonesData === 'object') {
+    const zones = zonesData as Record<string, unknown[]>;
+    const migratedZones: Record<string, FavoriteSwitch[]> = {};
+    for (const [zoneName, switches] of Object.entries(zones)) {
+      migratedZones[zoneName] = (switches || []).map((sw: unknown) => {
         const swObj = sw as Record<string, unknown>;
         if ('relayIndex' in swObj && !('index' in swObj)) {
           return {
@@ -102,22 +103,23 @@ function parseFavorites(favorites: unknown): FavoritesData {
         };
       });
     }
-    return { groups: migratedGroups };
+    return { zones: migratedZones };
   }
-  return { groups: {} };
+  return { zones: {} };
 }
 
 function parseSmartSwitches(smartSwitches: unknown): SmartSwitchesData {
   if (!smartSwitches || typeof smartSwitches !== 'object') {
-    return { groups: {} };
+    return { zones: {} };
   }
   const ssObj = smartSwitches as Record<string, unknown>;
-  const groupsData = ssObj.groups;
-  if (groupsData && typeof groupsData === 'object') {
-    const groups = groupsData as Record<string, unknown[]>;
-    const migratedGroups: Record<string, SmartAction[]> = {};
-    for (const [groupName, actionsArr] of Object.entries(groups)) {
-      migratedGroups[groupName] = (actionsArr || []).map((actionItem: unknown) => {
+  // Support both old 'groups' and new 'zones' property names
+  const zonesData = ssObj.zones || ssObj.groups;
+  if (zonesData && typeof zonesData === 'object') {
+    const zones = zonesData as Record<string, unknown[]>;
+    const migratedZones: Record<string, SmartAction[]> = {};
+    for (const [zoneName, actionsArr] of Object.entries(zones)) {
+      migratedZones[zoneName] = (actionsArr || []).map((actionItem: unknown) => {
         const actionObj = actionItem as Record<string, unknown>;
         if (Array.isArray(actionObj.stages)) {
           return {
@@ -133,9 +135,9 @@ function parseSmartSwitches(smartSwitches: unknown): SmartSwitchesData {
         } as SmartAction;
       });
     }
-    return { groups: migratedGroups };
+    return { zones: migratedZones };
   }
-  return { groups: {} };
+  return { zones: {} };
 }
 
 async function sendPanelCommand(
@@ -293,7 +295,7 @@ export default function SmartHomeControl({
   onSwitchToSetup,
 }: SmartHomeControlProps) {
   // State
-  const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [activeZone, setActiveZone] = useState<string | null>(null);
   const [executingActionName, setExecutingActionName] = useState<string | null>(null);
   const [executionProgress, setExecutionProgress] = useState<ActionExecutionProgress>({
     state: 'idle',
@@ -313,55 +315,55 @@ export default function SmartHomeControl({
 
   // Parse data
   const favoritesData = useMemo(() => {
-    if (!profile) return { groups: {} };
+    if (!profile) return { zones: {} };
     return parseFavorites(profile.favorites);
   }, [profile]);
 
   const smartSwitchesData = useMemo(() => {
-    if (!profile) return { groups: {} };
+    if (!profile) return { zones: {} };
     return parseSmartSwitches(profile.smart_switches);
   }, [profile]);
 
-  // Get all groups
-  const allGroups = useMemo(() => {
-    const favoriteGroups = new Set(Object.keys(favoritesData.groups || {}));
-    const smartGroups = new Set(Object.keys(smartSwitchesData.groups || {}));
-    return [...new Set([...favoriteGroups, ...smartGroups])];
-  }, [favoritesData.groups, smartSwitchesData.groups]);
+  // Get all zones
+  const allZones = useMemo(() => {
+    const favoriteZones = new Set(Object.keys(favoritesData.zones || {}));
+    const smartZones = new Set(Object.keys(smartSwitchesData.zones || {}));
+    return [...new Set([...favoriteZones, ...smartZones])];
+  }, [favoritesData.zones, smartSwitchesData.zones]);
 
-  // Reset activeGroup when profile changes, then set first group as active
+  // Reset activeZone when profile changes, then set first zone as active
   const profileIdRef = useRef<number | null>(null);
   
   useEffect(() => {
-    // If profile changed, reset activeGroup
+    // If profile changed, reset activeZone
     if (profile?.id !== profileIdRef.current) {
       profileIdRef.current = profile?.id ?? null;
-      setActiveGroup(null);
+      setActiveZone(null);
     }
   }, [profile?.id]);
   
-  // Set first group as active when data loads or profile changes
+  // Set first zone as active when data loads or profile changes
   useEffect(() => {
-    if (allGroups.length > 0 && !activeGroup) {
-      setActiveGroup(allGroups[0]);
+    if (allZones.length > 0 && !activeZone) {
+      setActiveZone(allZones[0]);
     }
-  }, [allGroups, activeGroup]);
+  }, [allZones, activeZone]);
 
-  const effectiveActiveGroup = activeGroup ?? (allGroups.length > 0 ? allGroups[0] : null);
+  const effectiveActiveZone = activeZone ?? (allZones.length > 0 ? allZones[0] : null);
 
-  // Get current group data
-  const currentGroupSwitches = effectiveActiveGroup 
-    ? (favoritesData.groups || {})[effectiveActiveGroup] ?? []
+  // Get current zone data
+  const currentZoneSwitches = effectiveActiveZone 
+    ? (favoritesData.zones || {})[effectiveActiveZone] ?? []
     : [];
   
-  const currentGroupActions = effectiveActiveGroup 
-    ? (smartSwitchesData.groups || {})[effectiveActiveGroup] ?? []
+  const currentZoneActions = effectiveActiveZone 
+    ? (smartSwitchesData.zones || {})[effectiveActiveZone] ?? []
     : [];
 
   // Compute all active relays (lights) from ALL discovered panels (not just favorites)
-  // Only include direct devices, ignore linked devices (those with "-Link" in name)
-  const activeDevices = useMemo((): ActiveDevice[] => {
-    const devices: ActiveDevice[] = [];
+  // Only include direct switches, ignore linked switches (those with "-Link" in name)
+  const activeSwitches = useMemo((): ActiveSwitch[] => {
+    const switches: ActiveSwitch[] = [];
     
     for (const [ip, panelState] of livePanelStates.entries()) {
       if (!panelState.fullState) continue;
@@ -370,14 +372,14 @@ export default function SmartHomeControl({
                         panelState.fullState.hostname || 
                         ip;
       
-      // Check relays that are ON (excluding linked devices)
+      // Check relays that are ON (excluding linked switches)
       for (const relay of panelState.fullState.relays) {
         if (relay.state === true) {
           const relayName = relay.name || `Relay ${relay.index + 1}`;
-          // Skip linked devices (contain "-Link" in name)
+          // Skip linked switches (contain "-Link" in name)
           if (relayName.includes('-Link')) continue;
           
-          devices.push({
+          switches.push({
             panelIp: ip,
             panelName,
             type: 'relay',
@@ -390,14 +392,14 @@ export default function SmartHomeControl({
     }
     
     // Sort by panel name, then by name
-    return devices.sort((a, b) => {
+    return switches.sort((a, b) => {
       if (a.panelName !== b.panelName) return a.panelName.localeCompare(b.panelName);
       return a.name.localeCompare(b.name);
     });
   }, [livePanelStates]);
 
-  // Collapse state for Active Devices section - starts collapsed
-  const [isActiveDevicesExpanded, setIsActiveDevicesExpanded] = useState(false);
+  // Collapse state for Active Switches section - starts collapsed
+  const [isActiveSwitchesExpanded, setIsActiveSwitchesExpanded] = useState(false);
 
   // Get switch state
   const getSwitchState = useCallback((sw: FavoriteSwitch): { isOn?: boolean; curtainState?: string } => {
@@ -444,28 +446,28 @@ export default function SmartHomeControl({
     console.log('[SmartHomeControl] Shade action result:', result);
   }, [triggerHaptic]);
 
-  // Turn off an active device (relay)
-  const handleTurnOffActiveDevice = useCallback(async (device: ActiveDevice) => {
-    console.log('[SmartHomeControl] Turning off active device:', device.name, device.panelIp);
+  // Turn off an active switch (relay)
+  const handleTurnOffActiveSwitch = useCallback(async (sw: ActiveSwitch) => {
+    console.log('[SmartHomeControl] Turning off active switch:', sw.name, sw.panelIp);
     triggerHaptic('medium');
     
-    const result = await sendPanelCommand(device.panelIp, 'set_relay', { 
-      index: device.index, 
+    const result = await sendPanelCommand(sw.panelIp, 'set_relay', { 
+      index: sw.index, 
       state: false 
     });
     console.log('[SmartHomeControl] Turn off relay result:', result);
   }, [triggerHaptic]);
 
-  // Turn off all active devices
+  // Turn off all active switches
   const handleTurnOffAllActive = useCallback(async () => {
-    if (activeDevices.length === 0) return;
+    if (activeSwitches.length === 0) return;
     
-    console.log('[SmartHomeControl] Turning off all active devices:', activeDevices.length);
+    console.log('[SmartHomeControl] Turning off all active switches:', activeSwitches.length);
     triggerHaptic('heavy');
     
     // Turn off all in parallel
-    await Promise.all(activeDevices.map(device => handleTurnOffActiveDevice(device)));
-  }, [activeDevices, handleTurnOffActiveDevice, triggerHaptic]);
+    await Promise.all(activeSwitches.map(sw => handleTurnOffActiveSwitch(sw)));
+  }, [activeSwitches, handleTurnOffActiveSwitch, triggerHaptic]);
 
   // Action execution
   const handleRunAction = useCallback(async (action: SmartAction) => {
@@ -583,7 +585,7 @@ export default function SmartHomeControl({
               : `Found ${panelCount} panel${panelCount !== 1 ? 's' : ''}...`}
           </p>
           {panelCount > 0 && (
-            <p className={styles.loadingSubtext}>Connecting to devices</p>
+            <p className={styles.loadingSubtext}>Connecting to switches</p>
           )}
         </div>
       </div>
@@ -598,7 +600,7 @@ export default function SmartHomeControl({
           <div className={styles.emptyStateIcon}>🏠</div>
           <h2 className={styles.emptyStateTitle}>Welcome to Your Smart Home</h2>
           <p className={styles.emptyStateText}>
-            Set up your profile, zones, and devices to get started
+            Set up your profile, zones, and switches to get started
           </p>
           <button 
             className={styles.setupButton}
@@ -612,7 +614,7 @@ export default function SmartHomeControl({
     );
   }
 
-  if (allGroups.length === 0) {
+  if (allZones.length === 0) {
     return (
       <div className={styles.container}>
         <header className={styles.header}>
@@ -631,7 +633,7 @@ export default function SmartHomeControl({
           <div className={styles.emptyStateIcon}>📍</div>
           <h2 className={styles.emptyStateTitle}>No Zones Yet</h2>
           <p className={styles.emptyStateText}>
-            Create zones like &ldquo;Living Room&rdquo; or &ldquo;Bedroom&rdquo; to organize your devices
+            Create zones like &ldquo;Living Room&rdquo; or &ldquo;Bedroom&rdquo; to organize your switches
           </p>
           <button 
             className={styles.setupButton}
@@ -677,16 +679,16 @@ export default function SmartHomeControl({
       {/* Zone Tabs */}
       <nav className={styles.zoneTabs}>
         <div className={styles.zoneTabsScroll}>
-          {allGroups.map((group) => (
+          {allZones.map((zone) => (
             <button
-              key={group}
-              className={`${styles.zoneTab} ${effectiveActiveGroup === group ? styles.zoneTabActive : ''}`}
+              key={zone}
+              className={`${styles.zoneTab} ${effectiveActiveZone === zone ? styles.zoneTabActive : ''}`}
               onClick={() => {
                 triggerHaptic('light');
-                setActiveGroup(group);
+                setActiveZone(zone);
               }}
             >
-              {group}
+              {zone}
             </button>
           ))}
         </div>
@@ -695,14 +697,14 @@ export default function SmartHomeControl({
       {/* Main Content */}
       <main className={styles.content}>
         {/* Quick Actions */}
-        {currentGroupActions.length > 0 && (
+        {currentZoneActions.length > 0 && (
           <section className={styles.actionsSection}>
             <h3 className={styles.sectionTitle}>
               <ZapIcon className={styles.sectionIcon} />
               Quick Actions
             </h3>
             <div className={styles.cardsGrid}>
-              {currentGroupActions.map((action, idx) => {
+              {currentZoneActions.map((action, idx) => {
                 const isExecuting = executingActionName === action.name;
                 const progress = isExecuting ? executionProgress : null;
                 const stageCount = action.stages?.length || 0;
@@ -775,14 +777,14 @@ export default function SmartHomeControl({
         )}
 
         {/* Switches */}
-        {currentGroupSwitches.length > 0 && (
+        {currentZoneSwitches.length > 0 && (
           <section className={styles.switchesSection}>
             <h3 className={styles.sectionTitle}>
               <LightBulbIcon on={false} className={styles.sectionIcon} />
-              Devices
+              Switches
             </h3>
             <div className={styles.cardsGrid}>
-              {currentGroupSwitches.map((sw, idx) => {
+              {currentZoneSwitches.map((sw, idx) => {
                 const state = getSwitchState(sw);
                 const isReachable = isSwitchReachable(sw);
                 
@@ -869,29 +871,29 @@ export default function SmartHomeControl({
         )}
 
         {/* Empty zone state */}
-        {currentGroupSwitches.length === 0 && currentGroupActions.length === 0 && (
+        {currentZoneSwitches.length === 0 && currentZoneActions.length === 0 && (
           <div className={styles.emptyZone}>
             <div className={styles.emptyZoneIcon}>📦</div>
             <p className={styles.emptyZoneText}>This zone is empty</p>
-            <p className={styles.emptyZoneHint}>Tap &ldquo;Modify&rdquo; above to add devices</p>
+            <p className={styles.emptyZoneHint}>Tap &ldquo;Modify&rdquo; above to add switches</p>
           </div>
         )}
 
-        {/* Active Devices Section - Shows ALL active devices across all discovered panels */}
-        {activeDevices.length > 0 && (
-          <section className={styles.activeDevicesSection}>
+        {/* Active Switches Section - Shows ALL active switches across all discovered panels */}
+        {activeSwitches.length > 0 && (
+          <section className={styles.activeSwitchesSection}>
             <div 
-              className={styles.activeDevicesHeader}
-              onClick={() => setIsActiveDevicesExpanded(!isActiveDevicesExpanded)}
+              className={styles.activeSwitchesHeader}
+              onClick={() => setIsActiveSwitchesExpanded(!isActiveSwitchesExpanded)}
             >
-              <div className={styles.activeDevicesHeaderLeft}>
-                <span className={`${styles.activeDevicesToggle} ${isActiveDevicesExpanded ? styles.activeDevicesToggleExpanded : ''}`}>
+              <div className={styles.activeSwitchesHeaderLeft}>
+                <span className={`${styles.activeSwitchesToggle} ${isActiveSwitchesExpanded ? styles.activeSwitchesToggleExpanded : ''}`}>
                   ▶
                 </span>
-                <h3 className={styles.activeDevicesSectionTitle}>
+                <h3 className={styles.activeSwitchesSectionTitle}>
                   <PowerIcon className={styles.sectionIcon} />
-                  Active Devices
-                  <span className={styles.activeDevicesCount}>{activeDevices.length}</span>
+                  Active Switches
+                  <span className={styles.activeSwitchesCount}>{activeSwitches.length}</span>
                 </h3>
               </div>
               <button
@@ -900,26 +902,26 @@ export default function SmartHomeControl({
                   e.stopPropagation();
                   handleTurnOffAllActive();
                 }}
-                title="Turn off all active devices"
+                title="Turn off all active switches"
               >
                 <PowerIcon className={styles.turnOffAllIcon} />
                 <span>All Off</span>
               </button>
             </div>
             
-            {isActiveDevicesExpanded && (
-              <div className={styles.activeDevicesList}>
-                {activeDevices.map((device, idx) => (
+            {isActiveSwitchesExpanded && (
+              <div className={styles.activeSwitchesList}>
+                {activeSwitches.map((sw, idx) => (
                   <button 
-                    key={`${device.panelIp}-${device.type}-${device.index}-${idx}`}
-                    className={styles.activeDeviceItem}
-                    onClick={() => handleTurnOffActiveDevice(device)}
+                    key={`${sw.panelIp}-${sw.type}-${sw.index}-${idx}`}
+                    className={styles.activeSwitchItem}
+                    onClick={() => handleTurnOffActiveSwitch(sw)}
                     title="Click to turn off"
                   >
-                    <span className={styles.activeDeviceIcon}>💡</span>
-                    <div className={styles.activeDeviceDetails}>
-                      <span className={styles.activeDeviceName}>{device.name}</span>
-                      <span className={styles.activeDevicePanel}>{device.panelName}</span>
+                    <span className={styles.activeSwitchIcon}>💡</span>
+                    <div className={styles.activeSwitchDetails}>
+                      <span className={styles.activeSwitchName}>{sw.name}</span>
+                      <span className={styles.activeSwitchPanel}>{sw.panelName}</span>
                     </div>
                   </button>
                 ))}
