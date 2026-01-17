@@ -5826,6 +5826,93 @@
   border-style: solid;
 }
 
+/* System zone (All) tab style - non-editable */
+.favoritesZoneTabSystem {
+  cursor: pointer;
+}
+
+.favoritesZoneTabSystem:hover {
+  cursor: pointer;
+}
+
+/* System zone star icon */
+.zoneTabSystemIcon {
+  font-size: 0.75rem;
+  margin-right: 0.1rem;
+}
+
+/* Info badge for "Auto" in Switches section header */
+.favSubSectionInfo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--badge-info-bg, rgba(59, 130, 246, 0.15));
+  color: var(--info, #3b82f6);
+  border-radius: 999px;
+}
+
+/* All zone search bar */
+.allZoneSearchWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.allZoneSearchInput {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.4rem 2rem 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--foreground);
+  width: 140px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.allZoneSearchInput:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--badge-accent-bg);
+}
+
+.allZoneSearchInput::placeholder {
+  color: var(--muted);
+}
+
+.allZoneSearchClear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.allZoneSearchClear:hover {
+  color: var(--foreground);
+}
+
+.allZoneNoResults {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+}
+
 /* New group input inline (styled like a group tab) */
 .newZoneInputInline {
   display: flex;

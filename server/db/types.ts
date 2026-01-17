@@ -12,6 +12,9 @@
  */
 export const CURRENT_SCHEMA_VERSION = 2;
 
+// Re-export from shared constants for backward compatibility
+export { ALL_ZONE_NAME } from '@/lib/constants';
+
 /**
  * Valid section identifiers for the dashboard.
  * Order determines vertical display order.

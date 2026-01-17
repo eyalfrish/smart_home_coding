@@ -24,7 +24,7 @@ export type {
   FullscreenSection,
 } from './types';
 
-export { CURRENT_SCHEMA_VERSION, DEFAULT_SECTION_ORDER } from './types';
+export { CURRENT_SCHEMA_VERSION, DEFAULT_SECTION_ORDER, ALL_ZONE_NAME } from './types';
 
 // Re-export all helper functions
 export {

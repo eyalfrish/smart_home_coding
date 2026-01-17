@@ -3,6 +3,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import styles from './smart-home-control.module.css';
 import type { LivePanelState } from '@/lib/discovery/types';
+import { getRelayDeviceType, getCurtainDeviceType } from '@/lib/discovery/types';
+import { ALL_ZONE_NAME } from '@/lib/constants';
 import type {
   SmartAction,
   ActionStage,
@@ -296,6 +298,7 @@ export default function SmartHomeControl({
 }: SmartHomeControlProps) {
   // State
   const [activeZone, setActiveZone] = useState<string | null>(null);
+  const [switchSearch, setSwitchSearch] = useState('');
   const [executingActionName, setExecutingActionName] = useState<string | null>(null);
   const [executionProgress, setExecutionProgress] = useState<ActionExecutionProgress>({
     state: 'idle',
@@ -324,12 +327,17 @@ export default function SmartHomeControl({
     return parseSmartSwitches(profile.smart_switches);
   }, [profile]);
 
-  // Get all zones
-  const allZones = useMemo(() => {
+  // Get user-defined zones (excluding the special "All" zone)
+  const userDefinedZones = useMemo(() => {
     const favoriteZones = new Set(Object.keys(favoritesData.zones || {}));
     const smartZones = new Set(Object.keys(smartSwitchesData.zones || {}));
-    return [...new Set([...favoriteZones, ...smartZones])];
+    return [...new Set([...favoriteZones, ...smartZones])].filter(z => z !== ALL_ZONE_NAME);
   }, [favoritesData.zones, smartSwitchesData.zones]);
+
+  // All zones including the special "All" zone at the beginning
+  const allZones = useMemo(() => {
+    return [ALL_ZONE_NAME, ...userDefinedZones];
+  }, [userDefinedZones]);
 
   // Reset activeZone when profile changes, then set first zone as active
   const profileIdRef = useRef<number | null>(null);
@@ -342,23 +350,105 @@ export default function SmartHomeControl({
     }
   }, [profile?.id]);
   
-  // Set first zone as active when data loads or profile changes
+  // Set first user-defined zone as active when data loads or profile changes
+  // If there are user-defined zones, prefer them over "All" as the default
   useEffect(() => {
     if (allZones.length > 0 && !activeZone) {
-      setActiveZone(allZones[0]);
+      // Prefer first user-defined zone (index 1) if available, otherwise "All" (index 0)
+      const defaultZone = userDefinedZones.length > 0 ? userDefinedZones[0] : allZones[0];
+      setActiveZone(defaultZone);
     }
-  }, [allZones, activeZone]);
+  }, [allZones, userDefinedZones, activeZone]);
 
-  const effectiveActiveZone = activeZone ?? (allZones.length > 0 ? allZones[0] : null);
+  // Default to first user-defined zone if available
+  const effectiveActiveZone = activeZone ?? (userDefinedZones.length > 0 ? userDefinedZones[0] : (allZones.length > 0 ? allZones[0] : null));
+
+  // Check if current zone is the special "All" zone
+  const isAllZone = effectiveActiveZone === ALL_ZONE_NAME;
 
   // Get current zone data
-  const currentZoneSwitches = effectiveActiveZone 
-    ? (favoritesData.zones || {})[effectiveActiveZone] ?? []
-    : [];
+  // For the "All" zone, generate FavoriteSwitch[] from all discovered panels
+  const currentZoneSwitches = useMemo((): FavoriteSwitch[] => {
+    if (!effectiveActiveZone) return [];
+    
+    // For the "All" zone, generate switches from all discovered panels
+    if (effectiveActiveZone === ALL_ZONE_NAME) {
+      const allSwitches: FavoriteSwitch[] = [];
+      
+      for (const [ip, panelState] of livePanelStates.entries()) {
+        if (!panelState.fullState) continue;
+        
+        const relays = panelState.fullState.relays || [];
+        const curtains = panelState.fullState.curtains || [];
+        
+        // Add relays (lights) - only direct switches, not hidden or linked
+        // Note: We pass undefined for relayPairs since it's not available in LivePanelState
+        // The function will use legacy name-based detection which works well enough
+        for (const relay of relays) {
+          const deviceType = getRelayDeviceType(relay.index, relay.name, undefined);
+          // Only show 'light' type relays (direct switches with proper names)
+          // Filter out any relay with "Link" suffix (linked relays)
+          const isLinkedRelay = relay.name && /[-_\s]?link$/i.test(relay.name.trim().toLowerCase());
+          if (deviceType === 'light' && relay.name && !isLinkedRelay) {
+            allSwitches.push({
+              ip,
+              index: relay.index,
+              type: 'light',
+              originalName: relay.name || `Light ${relay.index + 1}`,
+              alias: relay.name || `Light ${relay.index + 1}`,
+            });
+          }
+        }
+        
+        // Add curtains (shades/venetians) - only direct, not linked
+        for (const curtain of curtains) {
+          const deviceType = getCurtainDeviceType(curtain.index, curtain.name, undefined);
+          // Filter out any curtain with "Link" suffix (linked switches)
+          const isLinkedCurtain = curtain.name && /[-_\s]?link$/i.test(curtain.name.trim());
+          if ((deviceType === 'curtain' || deviceType === 'venetian') && curtain.name && !isLinkedCurtain) {
+            allSwitches.push({
+              ip,
+              index: curtain.index,
+              type: deviceType === 'venetian' ? 'venetian' : 'shade',
+              originalName: curtain.name || `Shade ${curtain.index + 1}`,
+              alias: curtain.name || `Shade ${curtain.index + 1}`,
+            });
+          }
+        }
+      }
+      
+      // Sort by IP address, then by index
+      allSwitches.sort((a, b) => {
+        const ipCompare = a.ip.localeCompare(b.ip, undefined, { numeric: true });
+        if (ipCompare !== 0) return ipCompare;
+        return a.index - b.index;
+      });
+      
+      return allSwitches;
+    }
+    
+    // For regular zones, return from favorites data
+    return (favoritesData.zones || {})[effectiveActiveZone] ?? [];
+  }, [effectiveActiveZone, livePanelStates, favoritesData.zones]);
   
-  const currentZoneActions = effectiveActiveZone 
-    ? (smartSwitchesData.zones || {})[effectiveActiveZone] ?? []
-    : [];
+  // Filter switches by search term
+  const filteredZoneSwitches = useMemo(() => {
+    if (!switchSearch.trim()) return currentZoneSwitches;
+    
+    const searchLower = switchSearch.toLowerCase().trim();
+    return currentZoneSwitches.filter(sw => 
+      sw.alias.toLowerCase().includes(searchLower) ||
+      sw.originalName.toLowerCase().includes(searchLower)
+    );
+  }, [currentZoneSwitches, switchSearch]);
+  
+  // The "All" zone doesn't have actions (only switches)
+  const currentZoneActions = useMemo(() => {
+    if (effectiveActiveZone === ALL_ZONE_NAME) return [];
+    return effectiveActiveZone 
+      ? (smartSwitchesData.zones || {})[effectiveActiveZone] ?? []
+      : [];
+  }, [effectiveActiveZone, smartSwitchesData.zones]);
 
   // Compute all active relays (lights) from ALL discovered panels (not just favorites)
   // Only include direct switches, ignore linked switches (those with "-Link" in name)
@@ -679,18 +769,22 @@ export default function SmartHomeControl({
       {/* Zone Tabs */}
       <nav className={styles.zoneTabs}>
         <div className={styles.zoneTabsScroll}>
-          {allZones.map((zone) => (
-            <button
-              key={zone}
-              className={`${styles.zoneTab} ${effectiveActiveZone === zone ? styles.zoneTabActive : ''}`}
-              onClick={() => {
-                triggerHaptic('light');
-                setActiveZone(zone);
-              }}
-            >
-              {zone}
-            </button>
-          ))}
+          {allZones.map((zone) => {
+            const isAllZoneTab = zone === ALL_ZONE_NAME;
+            return (
+              <button
+                key={zone}
+                className={`${styles.zoneTab} ${effectiveActiveZone === zone ? styles.zoneTabActive : ''} ${isAllZoneTab ? styles.zoneTabSystem : ''}`}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setActiveZone(zone);
+                }}
+              >
+                {isAllZoneTab && <span className={styles.zoneTabSystemIcon}>⭐</span>}
+                {zone}
+              </button>
+            );
+          })}
         </div>
       </nav>
 
@@ -777,14 +871,42 @@ export default function SmartHomeControl({
         )}
 
         {/* Switches */}
-        {currentZoneSwitches.length > 0 && (
+        {(currentZoneSwitches.length > 0 || switchSearch.trim()) && (
           <section className={styles.switchesSection}>
-            <h3 className={styles.sectionTitle}>
-              <LightBulbIcon on={false} className={styles.sectionIcon} />
-              Switches
-            </h3>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>
+                <LightBulbIcon on={false} className={styles.sectionIcon} />
+                Switches
+                {currentZoneSwitches.length > 0 && (
+                  <span className={styles.sectionCount}>{filteredZoneSwitches.length}/{currentZoneSwitches.length}</span>
+                )}
+              </h3>
+              <div className={styles.switchSearchWrapper}>
+                <input
+                  type="text"
+                  value={switchSearch}
+                  onChange={(e) => setSwitchSearch(e.target.value)}
+                  placeholder="Search..."
+                  className={styles.switchSearchInput}
+                />
+                {switchSearch && (
+                  <button
+                    type="button"
+                    className={styles.switchSearchClear}
+                    onClick={() => setSwitchSearch('')}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+            {filteredZoneSwitches.length === 0 ? (
+              <div className={styles.noSearchResults}>
+                <p>No switches matching &ldquo;{switchSearch}&rdquo;</p>
+              </div>
+            ) : (
             <div className={styles.cardsGrid}>
-              {currentZoneSwitches.map((sw, idx) => {
+              {filteredZoneSwitches.map((sw, idx) => {
                 const state = getSwitchState(sw);
                 const isReachable = isSwitchReachable(sw);
                 
@@ -867,15 +989,23 @@ export default function SmartHomeControl({
                 }
               })}
             </div>
+            )}
           </section>
         )}
 
         {/* Empty zone state */}
         {currentZoneSwitches.length === 0 && currentZoneActions.length === 0 && (
           <div className={styles.emptyZone}>
-            <div className={styles.emptyZoneIcon}>📦</div>
-            <p className={styles.emptyZoneText}>This zone is empty</p>
-            <p className={styles.emptyZoneHint}>Tap &ldquo;Modify&rdquo; above to add switches</p>
+            <div className={styles.emptyZoneIcon}>{isAllZone ? '🔍' : '📦'}</div>
+            <p className={styles.emptyZoneText}>
+              {isAllZone ? 'No switches discovered' : 'This zone is empty'}
+            </p>
+            <p className={styles.emptyZoneHint}>
+              {isAllZone 
+                ? 'Run discovery to find your panels and switches'
+                : 'Tap "Modify" above to add switches'
+              }
+            </p>
           </div>
         )}
 

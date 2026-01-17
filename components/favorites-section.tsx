@@ -545,6 +545,7 @@ export default function FavoritesSection({
   const currentZoneSwitches = effectiveActiveZone 
     ? (favoritesData.zones || {})[effectiveActiveZone] ?? []
     : [];
+
   const currentZoneActions = useMemo(() => effectiveActiveZone 
     ? (smartSwitchesData.zones || {})[effectiveActiveZone] ?? []
     : [], [effectiveActiveZone, smartSwitchesData.zones]);
@@ -1876,37 +1877,39 @@ export default function FavoritesSection({
                     >
                       <span className={styles.zoneTabDragHandle} title="Drag to reorder">⋮⋮</span>
                       {zoneName}
-                      <span
-                        className={styles.favoritesZoneTabEdit}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Position context menu below the button
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setZoneContextMenu({
-                            x: rect.left,
-                            y: rect.bottom + 4,
-                            zoneName,
-                          });
-                          setZoneRenameValue(zoneName);
-                        }}
-                        title="Rename zone"
-                      >
-                        ✏️
-                      </span>
-                      <span
-                        className={styles.favoritesZoneTabDelete}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirm({
-                            type: 'zone',
-                            name: zoneName,
-                            onConfirm: () => handleDeleteZone(zoneName),
-                          });
-                        }}
-                        title="Delete zone"
-                      >
-                        ✕
-                      </span>
+                      <>
+                          <span
+                            className={styles.favoritesZoneTabEdit}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Position context menu below the button
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setZoneContextMenu({
+                                x: rect.left,
+                                y: rect.bottom + 4,
+                                zoneName,
+                              });
+                              setZoneRenameValue(zoneName);
+                            }}
+                            title="Rename zone"
+                          >
+                            ✏️
+                          </span>
+                          <span
+                            className={styles.favoritesZoneTabDelete}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm({
+                                type: 'zone',
+                                name: zoneName,
+                                onConfirm: () => handleDeleteZone(zoneName),
+                              });
+                            }}
+                            title="Delete zone"
+                          >
+                            ✕
+                          </span>
+                      </>
                     </button>
                   );
                 })}
@@ -2125,75 +2128,75 @@ export default function FavoritesSection({
                     
                     {/* Add Switch */}
                     {showSwitchPicker ? (
-                      <div className={styles.switchPickerInline}>
-                        <div className={styles.switchPickerHeader}>
-                          <span>Add Switch</span>
-                          <button onClick={() => { setShowSwitchPicker(false); setSwitchPickerSearch(''); }}>✕</button>
+                        <div className={styles.switchPickerInline}>
+                          <div className={styles.switchPickerHeader}>
+                            <span>Add Switch</span>
+                            <button onClick={() => { setShowSwitchPicker(false); setSwitchPickerSearch(''); }}>✕</button>
+                          </div>
+                          <div className={styles.switchPickerSearchWrapper}>
+                            <input
+                              type="text"
+                              value={switchPickerSearch}
+                              onChange={(e) => setSwitchPickerSearch(e.target.value)}
+                              placeholder="Search... (e.g. Entr Spot)"
+                              className={styles.switchPickerSearchInput}
+                              autoFocus
+                            />
+                            {switchPickerSearch && (
+                              <button
+                                type="button"
+                                className={styles.switchPickerSearchClear}
+                                onClick={() => setSwitchPickerSearch('')}
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                          <div className={styles.switchPickerList}>
+                            {availableDevices.length === 0 ? (
+                              <div className={styles.switchPickerEmpty}>
+                                Run discovery to find panels
+                              </div>
+                            ) : filteredAvailableSwitches.length === 0 ? (
+                              <div className={styles.switchPickerEmpty}>
+                                No matches for &quot;{switchPickerSearch}&quot;
+                              </div>
+                            ) : (
+                              filteredAvailableSwitches.map(sw => {
+                                const alreadyAdded = currentZoneSwitches.some(
+                                  s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type
+                                );
+                                return (
+                                  <button
+                                    key={sw.id}
+                                    type="button"
+                                    className={`${styles.switchPickerItem} ${alreadyAdded ? styles.switchPickerItemAdded : ''}`}
+                                    onClick={() => !alreadyAdded && handleAddSwitch(sw)}
+                                    disabled={alreadyAdded}
+                                  >
+                                    <span className={styles.switchPickerItemIcon}>
+                                      {sw.type === 'light' ? '💡' : sw.type === 'venetian' ? '🪟' : '🪞'}
+                                    </span>
+                                    <span className={styles.switchPickerItemName}>{sw.name}</span>
+                                    <span className={styles.switchPickerItemPanel}>{sw.panelName}</span>
+                                    {alreadyAdded && <span className={styles.switchPickerItemCheck}>✓</span>}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
                         </div>
-                        <div className={styles.switchPickerSearchWrapper}>
-                          <input
-                            type="text"
-                            value={switchPickerSearch}
-                            onChange={(e) => setSwitchPickerSearch(e.target.value)}
-                            placeholder="Search... (e.g. Entr Spot)"
-                            className={styles.switchPickerSearchInput}
-                            autoFocus
-                          />
-                          {switchPickerSearch && (
-                            <button
-                              type="button"
-                              className={styles.switchPickerSearchClear}
-                              onClick={() => setSwitchPickerSearch('')}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                        <div className={styles.switchPickerList}>
-                          {availableDevices.length === 0 ? (
-                            <div className={styles.switchPickerEmpty}>
-                              Run discovery to find panels
-                            </div>
-                          ) : filteredAvailableSwitches.length === 0 ? (
-                            <div className={styles.switchPickerEmpty}>
-                              No matches for &quot;{switchPickerSearch}&quot;
-                            </div>
-                          ) : (
-                            filteredAvailableSwitches.map(sw => {
-                              const alreadyAdded = currentZoneSwitches.some(
-                                s => s.ip === sw.ip && s.index === sw.index && s.type === sw.type
-                              );
-                              return (
-                                <button
-                                  key={sw.id}
-                                  type="button"
-                                  className={`${styles.switchPickerItem} ${alreadyAdded ? styles.switchPickerItemAdded : ''}`}
-                                  onClick={() => !alreadyAdded && handleAddSwitch(sw)}
-                                  disabled={alreadyAdded}
-                                >
-                                  <span className={styles.switchPickerItemIcon}>
-                                    {sw.type === 'light' ? '💡' : sw.type === 'venetian' ? '🪟' : '🪞'}
-                                  </span>
-                                  <span className={styles.switchPickerItemName}>{sw.name}</span>
-                                  <span className={styles.switchPickerItemPanel}>{sw.panelName}</span>
-                                  {alreadyAdded && <span className={styles.switchPickerItemCheck}>✓</span>}
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.favAddItemCard}
-                        onClick={() => setShowSwitchPicker(true)}
-                        title="Add a switch to this zone"
-                      >
-                        <span className={styles.favAddItemIcon}>➕</span>
-                        <span className={styles.favAddItemText}>Add Switch</span>
-                      </button>
-                    )}
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.favAddItemCard}
+                          onClick={() => setShowSwitchPicker(true)}
+                          title="Add a switch to this zone"
+                        >
+                          <span className={styles.favAddItemIcon}>➕</span>
+                          <span className={styles.favAddItemText}>Add Switch</span>
+                        </button>
+                      )}
                   </div>
                 </div>
 

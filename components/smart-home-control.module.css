@@ -212,6 +212,16 @@
   color: white;
 }
 
+/* System zone (All) tab */
+.zoneTabSystem {
+  /* No special styles needed for now - uses default styles */
+}
+
+.zoneTabSystemIcon {
+  margin-right: 4px;
+  font-size: 0.85em;
+}
+
 
 /* ============================================
    Main Content
@@ -229,6 +239,15 @@
    Section Titles
    ============================================ */
 
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
 .sectionTitle {
   display: flex;
   align-items: center;
@@ -236,9 +255,70 @@
   font-size: 1rem;
   font-weight: 700;
   color: var(--muted);
-  margin: 0 0 16px 4px;
+  margin: 0 0 0 4px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+
+.sectionCount {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+
+.switchSearchWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.switchSearchInput {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 28px 5px 12px;
+  font-size: 0.8rem;
+  color: var(--foreground);
+  width: 140px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.switchSearchInput:focus {
+  border-color: var(--shc-accent);
+  box-shadow: 0 0 0 3px var(--shc-accent-glow);
+}
+
+.switchSearchInput::placeholder {
+  color: var(--muted);
+}
+
+.switchSearchClear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.switchSearchClear:hover {
+  color: var(--foreground);
+}
+
+.noSearchResults {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .sectionIcon {
