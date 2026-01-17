@@ -72,7 +72,7 @@ function isLinkDevice(name?: string): boolean {
 }
 
 // Sortable column types
-type SortColumn = "ip" | "name" | "status" | "version" | "signal" | "backlight" | "logging" | "longpress" | "touched" | null;
+type SortColumn = "ip" | "name" | "status" | "version" | "uptime" | "signal" | "backlight" | "logging" | "touched" | null;
 type SortDirection = "asc" | "desc";
 
 // Helper to get the base device name (strip -Link, _Link, etc. suffix)
@@ -649,10 +649,9 @@ export default function DiscoveryResults({
     return highest;
   })();
 
-  // Calculate most common logging value and long press time for color coding
-  const { mostCommonLogging, mostCommonLongPress } = (() => {
+  // Calculate most common logging value for color coding
+  const mostCommonLogging = (() => {
     const loggingCounts: Record<string, number> = { 'true': 0, 'false': 0 };
-    const longPressCounts: Record<number, number> = {};
     
     results.forEach(result => {
       if (result.status !== "panel" || !result.settings) return;
@@ -660,29 +659,13 @@ export default function DiscoveryResults({
       if (result.settings.logging !== undefined) {
         loggingCounts[String(result.settings.logging)]++;
       }
-      
-      if (result.settings.longPressMs !== undefined) {
-        longPressCounts[result.settings.longPressMs] = (longPressCounts[result.settings.longPressMs] || 0) + 1;
-      }
     });
     
     // Determine most common logging
-    let mostCommonLogging: boolean | null = null;
     if (loggingCounts['true'] > 0 || loggingCounts['false'] > 0) {
-      mostCommonLogging = loggingCounts['true'] >= loggingCounts['false'];
+      return loggingCounts['true'] >= loggingCounts['false'];
     }
-    
-    // Determine most common long press
-    let mostCommonLongPress: number | null = null;
-    let maxCount = 0;
-    for (const [time, count] of Object.entries(longPressCounts)) {
-      if (count > maxCount) {
-        maxCount = count;
-        mostCommonLongPress = parseInt(time, 10);
-      }
-    }
-    
-    return { mostCommonLogging, mostCommonLongPress };
+    return null;
   })();
 
   // Helper to check if a panel has at least one configured light relay that is ON
@@ -858,14 +841,11 @@ export default function DiscoveryResults({
         else comparison = (loggingA ? 1 : 0) - (loggingB ? 1 : 0);
         break;
       }
-      case "longpress": {
-        // Sort by longPressMs: numeric, unknown at end
-        const longPressA = a.settings?.longPressMs;
-        const longPressB = b.settings?.longPressMs;
-        if (longPressA === longPressB) comparison = 0;
-        else if (longPressA === undefined) comparison = 1;
-        else if (longPressB === undefined) comparison = -1;
-        else comparison = longPressA - longPressB;
+      case "uptime": {
+        // Sort by uptimeMs: numeric, unknown at end
+        const uptimeA = liveStateA?.fullState?.uptimeMs ?? -1;
+        const uptimeB = liveStateB?.fullState?.uptimeMs ?? -1;
+        comparison = uptimeA - uptimeB;
         break;
       }
       case "touched": {
@@ -1073,6 +1053,15 @@ export default function DiscoveryResults({
               </th>
               <th 
                 className={`${styles.sortableHeader} ${styles.centeredColumn}`} 
+                onClick={() => handleSort("uptime")}
+              >
+                Uptime
+                <span className={`${styles.sortIndicator} ${sortColumn === "uptime" ? styles.sortIndicatorActive : ""}`}>
+                  {sortColumn === "uptime" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                </span>
+              </th>
+              <th 
+                className={`${styles.sortableHeader} ${styles.centeredColumn}`} 
                 onClick={() => handleSort("signal")}
               >
                 Signal
@@ -1096,15 +1085,6 @@ export default function DiscoveryResults({
                 Log
                 <span className={`${styles.sortIndicator} ${sortColumn === "logging" ? styles.sortIndicatorActive : ""}`}>
                   {sortColumn === "logging" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
-                </span>
-              </th>
-              <th 
-                className={`${styles.sortableHeader} ${styles.centeredColumn}`} 
-                onClick={() => handleSort("longpress")}
-              >
-                LP
-                <span className={`${styles.sortIndicator} ${sortColumn === "longpress" ? styles.sortIndicatorActive : ""}`}>
-                  {sortColumn === "longpress" ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
                 </span>
               </th>
               <th className={`${styles.directLinkHeader} ${styles.resizableHeader}`} style={{ width: columnWidths.direct }}>
@@ -1135,7 +1115,7 @@ export default function DiscoveryResults({
           <tbody>
             {sortedResults.length === 0 ? (
               <tr>
-                <td colSpan={14}>No entries match that search.</td>
+                <td colSpan={13}>No entries match that search.</td>
               </tr>
             ) : (
               sortedResults.map((result) => {
@@ -1246,6 +1226,43 @@ export default function DiscoveryResults({
                         <span className={styles.versionUnknown}>—</span>
                       )}
                     </td>
+                    <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="Uptime">
+                      {liveState?.fullState?.uptimeMs != null ? (
+                        (() => {
+                          const uptimeMs = liveState.fullState.uptimeMs;
+                          const uptimeDays = uptimeMs / (1000 * 60 * 60 * 24);
+                          const uptimeHours = Math.floor(uptimeMs / (1000 * 60 * 60));
+                          const uptimeMinutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
+                          
+                          // Format display: show days if >= 1 day, otherwise hours:minutes
+                          let displayText: string;
+                          if (uptimeDays >= 1) {
+                            const days = Math.floor(uptimeDays);
+                            const hours = Math.floor((uptimeMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            displayText = `${days}d ${hours}h`;
+                          } else {
+                            displayText = `${uptimeHours}h ${uptimeMinutes}m`;
+                          }
+                          
+                          // Color coding: green > 4 days, orange > 2 days, red <= 2 days
+                          const uptimeClass = uptimeDays > 4
+                            ? styles.uptimeGood
+                            : uptimeDays > 2
+                            ? styles.uptimeMedium
+                            : styles.uptimeWeak;
+                          
+                          return (
+                            <span className={uptimeClass} title={`${uptimeDays.toFixed(2)} days`}>
+                              {displayText}
+                            </span>
+                          );
+                        })()
+                      ) : result.status === "panel" ? (
+                        <span className={styles.uptimeUnknown}>...</span>
+                      ) : (
+                        <span className={styles.uptimeUnknown}>—</span>
+                      )}
+                    </td>
                     <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="Signal">
                       {liveState?.fullState?.wifiQuality != null ? (
                         <span className={
@@ -1293,21 +1310,6 @@ export default function DiscoveryResults({
                             : styles.settingDifferent
                         }>
                           {result.settings.logging ? "On" : "Off"}
-                        </span>
-                      ) : result.status === "panel" ? (
-                        <span className={styles.settingUnknown}>—</span>
-                      ) : (
-                        <span className={styles.settingUnknown}>—</span>
-                      )}
-                    </td>
-                    <td className={`${styles.centeredColumn} ${styles.extraInfoCell}`} data-label="LP">
-                      {result.settings?.longPressMs !== undefined ? (
-                        <span className={
-                          result.settings.longPressMs === mostCommonLongPress
-                            ? styles.settingCommon
-                            : styles.settingDifferent
-                        }>
-                          {result.settings.longPressMs}
                         </span>
                       ) : result.status === "panel" ? (
                         <span className={styles.settingUnknown}>—</span>
