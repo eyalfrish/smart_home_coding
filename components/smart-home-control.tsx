@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import styles from './smart-home-control.module.css';
-import type { LivePanelState } from '@/lib/discovery/types';
+import type { LivePanelState, DiscoveryResult } from '@/lib/discovery/types';
 import { getRelayDeviceType, getCurtainDeviceType } from '@/lib/discovery/types';
 import { ALL_ZONE_NAME } from '@/lib/constants';
 import type {
@@ -24,6 +24,7 @@ export interface FavoriteSwitch {
   type: FavoriteType;
   originalName: string;
   alias: string;
+  panelName?: string; // Panel name for display context
 }
 
 export interface FavoritesData {
@@ -65,6 +66,7 @@ interface SmartHomeControlProps {
   profile: ProfileData | null;
   livePanelStates: Map<string, LivePanelState>;
   discoveredPanelIps: Set<string>;
+  discoveryResults: DiscoveryResult[];
   discoveryCompleted: boolean;
   isLoading: boolean;
   onSwitchToSetup: (openFavoritesFullscreen?: boolean) => void;
@@ -292,6 +294,7 @@ export default function SmartHomeControl({
   profile,
   livePanelStates,
   discoveredPanelIps,
+  discoveryResults,
   discoveryCompleted,
   isLoading,
   onSwitchToSetup,
@@ -366,6 +369,31 @@ export default function SmartHomeControl({
   // Check if current zone is the special "All" zone
   const isAllZone = effectiveActiveZone === ALL_ZONE_NAME;
 
+  // Create a lookup map from IP to panel name from discovery results
+  const panelNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const result of discoveryResults) {
+      if (result.status === 'panel' && result.name) {
+        map.set(result.ip, result.name);
+      }
+    }
+    return map;
+  }, [discoveryResults]);
+
+  // Helper to get panel name from IP (uses discovery results first, then live state as fallback)
+  const getPanelName = useCallback((ip: string): string => {
+    // First check discovery results (which have the actual panel name)
+    const discoveredName = panelNameMap.get(ip);
+    if (discoveredName) return discoveredName;
+    
+    // Fallback to live state
+    const panelState = livePanelStates.get(ip);
+    if (!panelState?.fullState) return ip;
+    return panelState.fullState.mqttDeviceName || 
+           panelState.fullState.hostname || 
+           ip;
+  }, [panelNameMap, livePanelStates]);
+
   // Get current zone data
   // For the "All" zone, generate FavoriteSwitch[] from all discovered panels
   const currentZoneSwitches = useMemo((): FavoriteSwitch[] => {
@@ -377,6 +405,9 @@ export default function SmartHomeControl({
       
       for (const [ip, panelState] of livePanelStates.entries()) {
         if (!panelState.fullState) continue;
+        
+        // Get panel name from discovery results (actual name) or fallback to live state
+        const panelName = getPanelName(ip);
         
         const relays = panelState.fullState.relays || [];
         const curtains = panelState.fullState.curtains || [];
@@ -396,6 +427,7 @@ export default function SmartHomeControl({
               type: 'light',
               originalName: relay.name || `Light ${relay.index + 1}`,
               alias: relay.name || `Light ${relay.index + 1}`,
+              panelName,
             });
           }
         }
@@ -412,6 +444,7 @@ export default function SmartHomeControl({
               type: deviceType === 'venetian' ? 'venetian' : 'shade',
               originalName: curtain.name || `Shade ${curtain.index + 1}`,
               alias: curtain.name || `Shade ${curtain.index + 1}`,
+              panelName,
             });
           }
         }
@@ -427,19 +460,34 @@ export default function SmartHomeControl({
       return allSwitches;
     }
     
-    // For regular zones, return from favorites data
-    return (favoritesData.zones || {})[effectiveActiveZone] ?? [];
-  }, [effectiveActiveZone, livePanelStates, favoritesData.zones]);
+    // For regular zones, enrich with panel names from live state
+    const zoneSwitches = (favoritesData.zones || {})[effectiveActiveZone] ?? [];
+    return zoneSwitches.map(sw => ({
+      ...sw,
+      panelName: sw.panelName || getPanelName(sw.ip),
+    }));
+  }, [effectiveActiveZone, livePanelStates, favoritesData.zones, getPanelName]);
   
-  // Filter switches by search term
+  // Filter switches by search term (smart multi-term search)
+  // Each space-separated term must match somewhere in alias, originalName, or panelName
   const filteredZoneSwitches = useMemo(() => {
     if (!switchSearch.trim()) return currentZoneSwitches;
     
-    const searchLower = switchSearch.toLowerCase().trim();
-    return currentZoneSwitches.filter(sw => 
-      sw.alias.toLowerCase().includes(searchLower) ||
-      sw.originalName.toLowerCase().includes(searchLower)
-    );
+    // Split search into individual terms and filter empty ones
+    const searchTerms = switchSearch.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
+    if (searchTerms.length === 0) return currentZoneSwitches;
+    
+    return currentZoneSwitches.filter(sw => {
+      // Build searchable text combining all fields
+      const searchableText = [
+        sw.alias,
+        sw.originalName,
+        sw.panelName || '',
+      ].join(' ').toLowerCase();
+      
+      // All terms must match somewhere in the combined text
+      return searchTerms.every(term => searchableText.includes(term));
+    });
   }, [currentZoneSwitches, switchSearch]);
   
   // The "All" zone doesn't have actions (only switches)
@@ -458,9 +506,8 @@ export default function SmartHomeControl({
     for (const [ip, panelState] of livePanelStates.entries()) {
       if (!panelState.fullState) continue;
       
-      const panelName = panelState.fullState.mqttDeviceName || 
-                        panelState.fullState.hostname || 
-                        ip;
+      // Get panel name from discovery results (actual name) or fallback to live state
+      const panelName = getPanelName(ip);
       
       // Check relays that are ON (excluding linked switches)
       for (const relay of panelState.fullState.relays) {
@@ -486,7 +533,7 @@ export default function SmartHomeControl({
       if (a.panelName !== b.panelName) return a.panelName.localeCompare(b.panelName);
       return a.name.localeCompare(b.name);
     });
-  }, [livePanelStates]);
+  }, [livePanelStates, getPanelName]);
 
   // Collapse state for Active Switches section - starts collapsed
   const [isActiveSwitchesExpanded, setIsActiveSwitchesExpanded] = useState(false);
@@ -921,7 +968,10 @@ export default function SmartHomeControl({
                     >
                       <div className={styles.cardHeader}>
                         <span className={styles.cardIcon}>💡</span>
-                        <span className={styles.cardName}>{sw.alias}</span>
+                        <span className={styles.cardName}>
+                          {sw.alias}
+                          {sw.panelName && <span className={styles.cardPanelName}> ({sw.panelName})</span>}
+                        </span>
                       </div>
                       <div className={styles.cardMeta}>
                         <span className={`${styles.statusIndicator} ${isOn ? styles.statusOn : styles.statusOff}`}>
@@ -944,7 +994,10 @@ export default function SmartHomeControl({
                     >
                       <div className={styles.cardHeader}>
                         <span className={styles.cardIcon}>{sw.type === 'venetian' ? '🪟' : '🪞'}</span>
-                        <span className={styles.cardName}>{sw.alias}</span>
+                        <span className={styles.cardName}>
+                          {sw.alias}
+                          {sw.panelName && <span className={styles.cardPanelName}> ({sw.panelName})</span>}
+                        </span>
                       </div>
                       <div className={styles.cardMeta}>
                         <span className={styles.statusIndicator}>

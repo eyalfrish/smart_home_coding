@@ -530,6 +530,7 @@ export default function Home() {
         } : null}
         livePanelStates={livePanelStates}
         discoveredPanelIps={discoveredPanelIpsSet}
+        discoveryResults={discoveryResults}
         discoveryCompleted={discoveryCompleted}
         isLoading={isDiscovering || isLoadingProfile}
         onSwitchToSetup={handleSwitchToSetup}
