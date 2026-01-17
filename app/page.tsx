@@ -224,10 +224,11 @@ export default function Home() {
     
     // Check if we have cached discovery for the default profile
     if (defaultProfileId === selectedProfile.id && defaultDiscoveryCompleted && defaultDiscoveredPanelIps.length > 0) {
-      console.log('[Home] Using cached default profile discovery:', defaultDiscoveredPanelIps.length, 'panels');
+      console.log('[Home] Using cached default profile discovery:', defaultDiscoveredPanelIps.length, 'panels', 'with settings:', defaultDiscoveryResults.filter(r => r.settings).length);
       // Use cached discovery - no need to re-discover
       setDiscoveredPanelIps(defaultDiscoveredPanelIps);
       setDiscoverySummary(defaultDiscoverySummary);
+      setDiscoveryResults([...defaultDiscoveryResults]); // Also restore full results with settings!
       setDiscoveryCompleted(true);
       lastDiscoveredProfileIdRef.current = selectedProfile.id;
       return;
@@ -256,6 +257,7 @@ export default function Home() {
       setIsDiscovering(true);
       setDiscoveredPanelIps([]);
       setDiscoverySummary(null);
+      setDiscoveryResults([]);
       setDiscoveryCompleted(false);
       
       // Close existing discovery connections
@@ -277,6 +279,8 @@ export default function Home() {
         }
         
         const foundPanels: string[] = [];
+        // Track full results with settings (keyed by IP for updates)
+        const resultsMap = new Map<string, DiscoveryResult>();
         let completedStreams = 0;
         // Aggregate summary across all IP ranges
         const aggregateSummary: DiscoverySummary = {
@@ -299,12 +303,23 @@ export default function Home() {
             try {
               const message = JSON.parse(event.data);
               
+              // Capture panel discovery (initial result)
               if (message.type === 'result' && message.data?.status === 'panel') {
                 const panelIp = message.data.ip;
                 if (!foundPanels.includes(panelIp)) {
                   foundPanels.push(panelIp);
                   setDiscoveredPanelIps([...foundPanels]);
                 }
+                // Store initial result
+                resultsMap.set(panelIp, message.data as DiscoveryResult);
+              }
+              
+              // Capture enriched results with settings (update events)
+              // These contain logging and longPressMs from panel settings fetch
+              if (message.type === 'update' && message.data?.status === 'panel') {
+                const panelIp = message.data.ip;
+                // Update with enriched data (includes settings)
+                resultsMap.set(panelIp, message.data as DiscoveryResult);
               }
               
               // Capture stats from complete message
@@ -325,18 +340,23 @@ export default function Home() {
             eventSource.close();
             completedStreams++;
             if (completedStreams >= requests.length) {
+              // Convert results map to array
+              const finalResults = Array.from(resultsMap.values());
+              
               setIsDiscovering(false);
               setDiscoveryCompleted(true);
               setDiscoverySummary({...aggregateSummary});
+              setDiscoveryResults(finalResults);
               lastDiscoveredProfileIdRef.current = selectedProfile.id;
               
-              console.log('[Home] Discovery complete, summary:', aggregateSummary);
+              console.log('[Home] Discovery complete, summary:', aggregateSummary, 'results with settings:', finalResults.filter(r => r.settings).length);
               
-              // If this is the default profile, cache the discovery results
+              // If this is the default profile, cache the discovery results (including full results with settings)
               if (defaultProfileId === selectedProfile.id) {
-                console.log('[Home] Caching discovery for default profile:', foundPanels.length, 'panels');
+                console.log('[Home] Caching discovery for default profile:', foundPanels.length, 'panels', 'with settings:', finalResults.filter(r => r.settings).length);
                 setDefaultDiscoveredPanelIps([...foundPanels]);
                 setDefaultDiscoverySummary({...aggregateSummary});
+                setDefaultDiscoveryResults([...finalResults]);
                 setDefaultDiscoveryCompleted(true);
               }
             }
@@ -352,7 +372,7 @@ export default function Home() {
     };
     
     startDiscovery();
-  }, [hasMounted, selectedProfile, isLoadingProfile, mode, discoveryCompleted, defaultProfileId, defaultDiscoveryCompleted, defaultDiscoveredPanelIps, defaultDiscoverySummary]);
+  }, [hasMounted, selectedProfile, isLoadingProfile, mode, discoveryCompleted, defaultProfileId, defaultDiscoveryCompleted, defaultDiscoveredPanelIps, defaultDiscoverySummary, defaultDiscoveryResults]);
 
   // State for opening favorites fullscreen
   const [openFavoritesFullscreen, setOpenFavoritesFullscreen] = useState(false);
@@ -397,17 +417,19 @@ export default function Home() {
       freshDefaultProfileId === defaultProfileId;
     
     if (cacheIsForDefaultProfile) {
-      console.log('[Home] Restoring default profile discovery:', defaultDiscoveredPanelIps.length, 'panels');
+      console.log('[Home] Restoring default profile discovery:', defaultDiscoveredPanelIps.length, 'panels', 'with settings:', defaultDiscoveryResults.filter(r => r.settings).length);
       setDiscoveredPanelIps(defaultDiscoveredPanelIps);
       setDiscoverySummary(defaultDiscoverySummary);
+      setDiscoveryResults([...defaultDiscoveryResults]); // Also restore full results with settings!
       setDiscoveryCompleted(true);
       lastDiscoveredProfileIdRef.current = freshDefaultProfileId;
     } else if (freshDefaultProfileId === lastDiscoveredProfileIdRef.current && discoveryCompleted && discoveredPanelIps.length > 0) {
       // The last discovery was for the new default profile - use it directly
-      console.log('[Home] Using last discovery for new default:', discoveredPanelIps.length, 'panels');
+      console.log('[Home] Using last discovery for new default:', discoveredPanelIps.length, 'panels', 'with settings:', discoveryResults.filter(r => r.settings).length);
       // Update the default cache with current discovery
       setDefaultDiscoveredPanelIps([...discoveredPanelIps]);
       setDefaultDiscoverySummary(discoverySummary);
+      setDefaultDiscoveryResults([...discoveryResults]); // Also cache full results with settings!
       setDefaultDiscoveryCompleted(true);
       setDefaultProfileId(freshDefaultProfileId);
     } else {
@@ -415,13 +437,14 @@ export default function Home() {
       console.log('[Home] No cached default discovery, will re-discover');
       setDiscoveredPanelIps([]);
       setDiscoverySummary(null);
+      setDiscoveryResults([]);
       setDiscoveryCompleted(false);
       lastDiscoveredProfileIdRef.current = null;
     }
     
     setMode('control');
     localStorage.setItem(STORAGE_KEY_MODE, 'control');
-  }, [defaultProfileId, defaultDiscoveryCompleted, defaultDiscoveredPanelIps, defaultDiscoverySummary, discoveryCompleted, discoveredPanelIps, discoverySummary]);
+  }, [defaultProfileId, defaultDiscoveryCompleted, defaultDiscoveredPanelIps, defaultDiscoverySummary, defaultDiscoveryResults, discoveryCompleted, discoveredPanelIps, discoverySummary, discoveryResults]);
 
   // Handle discovery completion from Setup mode - sync state
   const handleSetupDiscoveryComplete = useCallback((

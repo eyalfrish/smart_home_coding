@@ -108,7 +108,7 @@ export default function DiscoveryResults({
   cubixxPanelIps = [],
 }: DiscoveryResultsProps) {
   const [pendingCommands, setPendingCommands] = useState<Set<string>>(new Set());
-  const [sortColumn, setSortColumn] = useState<SortColumn>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>("ip");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [switchSearchQuery, setSwitchSearchQuery] = useState("");
   
