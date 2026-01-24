@@ -253,46 +253,56 @@ export default function DiscoveryDashboard({
       return;
     }
     
-    console.log('[Dashboard] Populating discovery from Control mode:', controlModeDiscoveredIps.length, 'panels', 'summary:', controlModeDiscoverySummary, 'results with settings from page.tsx:', controlModeDiscoveryResults.filter(r => r.settings).length);
+    console.log('[Dashboard] Populating discovery from Control mode:', controlModeDiscoveredIps.length, 'panels', 'summary:', controlModeDiscoverySummary, 'total results from page.tsx:', controlModeDiscoveryResults.length, 'with settings:', controlModeDiscoveryResults.filter(r => r.settings).length);
     lastPopulatedIpsRef.current = currentIpsFingerprint;
     
-    // Build a map of passed results from page.tsx (these have settings!)
+    // Build a map of passed results from page.tsx (these include ALL statuses: panel, no-response, not-panel, error)
     const passedResultsMap = new Map<string, DiscoveryResult>();
     for (const r of controlModeDiscoveryResults) {
       passedResultsMap.set(r.ip, r);
     }
     
-    // Create discovery results from the discovered IPs
-    // Prefer passed results (from page.tsx), fall back to existing, then create minimal
-    const results: DiscoveryResult[] = controlModeDiscoveredIps.map(ip => {
-      const liveState = controlModePanelStates?.get(ip);
-      const panelName = liveState?.fullState?.mqttDeviceName || null;
-      
-      // Try to get full result from passed results (best - has settings)
-      const passedResult = passedResultsMap.get(ip);
-      if (passedResult) {
+    // Use ALL results from controlModeDiscoveryResults as the primary source
+    // This includes panels, no-response, not-panel, and error entries
+    // Only enrich panel entries with live state names
+    const results: DiscoveryResult[] = controlModeDiscoveryResults.map(passedResult => {
+      // For panel entries, enrich with live state name if available
+      if (passedResult.status === 'panel') {
+        const liveState = controlModePanelStates?.get(passedResult.ip);
+        const panelName = liveState?.fullState?.mqttDeviceName || null;
         return {
           ...passedResult,
           name: panelName || passedResult.name, // Prefer live name
         };
       }
-      
-      // Fall back to existing result (may have settings)
-      const existingResult = existingResultsMap.get(ip);
-      if (existingResult) {
-        return {
-          ...existingResult,
-          name: panelName || existingResult.name,
-        };
-      }
-      
-      // Create minimal result (no settings)
-      return {
-        ip,
-        status: 'panel' as const,
-        name: panelName,
-      };
+      // For non-panel entries (no-response, not-panel, error), return as-is
+      return passedResult;
     });
+    
+    // If controlModeDiscoveryResults is empty but we have discovered IPs,
+    // fall back to creating minimal panel entries (backward compatibility)
+    if (results.length === 0 && controlModeDiscoveredIps.length > 0) {
+      for (const ip of controlModeDiscoveredIps) {
+        const liveState = controlModePanelStates?.get(ip);
+        const panelName = liveState?.fullState?.mqttDeviceName || null;
+        
+        // Check existing results first
+        const existingResult = existingResultsMap.get(ip);
+        if (existingResult) {
+          results.push({
+            ...existingResult,
+            name: panelName || existingResult.name,
+          });
+        } else {
+          // Create minimal panel result
+          results.push({
+            ip,
+            status: 'panel' as const,
+            name: panelName,
+          });
+        }
+      }
+    }
     
     // Use the summary from Control mode if available, otherwise create a basic one
     const summary = controlModeDiscoverySummary ? {

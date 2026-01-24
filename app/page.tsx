@@ -303,23 +303,28 @@ export default function Home() {
             try {
               const message = JSON.parse(event.data);
               
-              // Capture panel discovery (initial result)
-              if (message.type === 'result' && message.data?.status === 'panel') {
-                const panelIp = message.data.ip;
-                if (!foundPanels.includes(panelIp)) {
-                  foundPanels.push(panelIp);
-                  setDiscoveredPanelIps([...foundPanels]);
+              // Capture ALL discovery results (panels, no-response, not-panel, errors)
+              // This ensures AdminPage has the complete picture for filtering
+              if (message.type === 'result' && message.data?.ip) {
+                const resultIp = message.data.ip;
+                // Store the result (any status)
+                resultsMap.set(resultIp, message.data as DiscoveryResult);
+                
+                // Track panel IPs separately for live streaming
+                if (message.data.status === 'panel') {
+                  if (!foundPanels.includes(resultIp)) {
+                    foundPanels.push(resultIp);
+                    setDiscoveredPanelIps([...foundPanels]);
+                  }
                 }
-                // Store initial result
-                resultsMap.set(panelIp, message.data as DiscoveryResult);
               }
               
               // Capture enriched results with settings (update events)
               // These contain logging and longPressMs from panel settings fetch
-              if (message.type === 'update' && message.data?.status === 'panel') {
-                const panelIp = message.data.ip;
+              if (message.type === 'update' && message.data?.ip) {
+                const resultIp = message.data.ip;
                 // Update with enriched data (includes settings)
-                resultsMap.set(panelIp, message.data as DiscoveryResult);
+                resultsMap.set(resultIp, message.data as DiscoveryResult);
               }
               
               // Capture stats from complete message
